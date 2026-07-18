@@ -1,7 +1,9 @@
 mod commands;
+mod device_version;
 mod error;
 mod provider;
 mod state;
+mod tunnel;
 mod types;
 mod utils;
 

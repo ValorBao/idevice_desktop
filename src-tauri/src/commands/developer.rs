@@ -13,14 +13,140 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    device_version::{DeveloperGeneration, IosVersion, ios_version},
     error::{CommandError, CommandResult},
     provider::selected_provider,
     state::AppState,
+    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
     types::{DeveloperStatus, JitSession, OperationProgress, StreamStatus},
     utils::plist_to_json,
 };
 
-async fn product_major(provider: &impl IdeviceProvider) -> CommandResult<(u32, u64)> {
+#[cfg(target_os = "macos")]
+async fn run_devicectl(arguments: &[&str]) -> std::io::Result<std::process::Output> {
+    tokio::process::Command::new("/usr/bin/xcrun")
+        .arg("devicectl")
+        .args(arguments)
+        .output()
+        .await
+}
+
+#[cfg(target_os = "macos")]
+fn devicectl_output(output: &std::process::Output) -> String {
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    match (stdout.is_empty(), stderr.is_empty()) {
+        (false, false) => format!("{stdout}\n{stderr}"),
+        (false, true) => stdout,
+        (true, false) => stderr,
+        (true, true) => "devicectl did not return an error description".to_owned(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn emit_ddi_progress(app: &AppHandle, item: &str, percent: u64) {
+    let _ = app.emit(
+        "developer://ddi-progress",
+        OperationProgress {
+            operation: "mount-ddi".into(),
+            item: item.into(),
+            percent,
+        },
+    );
+}
+
+#[cfg(target_os = "macos")]
+async fn mount_ddi_with_devicectl(app: &AppHandle, udid: &str) -> CommandResult<()> {
+    let arguments = [
+        "device",
+        "info",
+        "ddiServices",
+        "--device",
+        udid,
+        "--auto-mount-ddis",
+    ];
+
+    emit_ddi_progress(app, "Connecting with Apple CoreDevice", 15);
+    let first = run_devicectl(&arguments).await.map_err(|error| {
+        CommandError::new(
+            "ddi",
+            format!("Unable to start Apple's DDI manager: {error}"),
+            false,
+        )
+    })?;
+    if first.status.success() {
+        emit_ddi_progress(app, "Developer Disk Image services ready", 100);
+        return Ok(());
+    }
+
+    let first_error = devicectl_output(&first);
+    let pairing_required = first_error.contains("must be paired")
+        || first_error.contains("RemotePairingError")
+        || first_error.contains("not paired");
+    if !pairing_required {
+        return Err(CommandError::new(
+            "ddi",
+            format!("Apple DDI manager failed: {first_error}"),
+            true,
+        ));
+    }
+
+    emit_ddi_progress(app, "Pairing with Apple CoreDevice", 40);
+    let pair = run_devicectl(&["manage", "pair", "--device", udid])
+        .await
+        .map_err(|error| {
+            CommandError::new(
+                "pairing",
+                format!("Unable to start CoreDevice pairing: {error}"),
+                true,
+            )
+        })?;
+    if !pair.status.success() {
+        return Err(CommandError::new(
+            "pairing",
+            format!(
+                "CoreDevice pairing failed. Keep the iPhone unlocked and accept the trust prompt, then retry. {}",
+                devicectl_output(&pair)
+            ),
+            true,
+        ));
+    }
+
+    emit_ddi_progress(app, "Mounting Developer Disk Image", 70);
+    let retry = run_devicectl(&arguments).await.map_err(|error| {
+        CommandError::new(
+            "ddi",
+            format!("Unable to restart Apple's DDI manager: {error}"),
+            true,
+        )
+    })?;
+    if !retry.status.success() {
+        return Err(CommandError::new(
+            "ddi",
+            format!(
+                "CoreDevice paired successfully, but DDI mounting failed: {}",
+                devicectl_output(&retry)
+            ),
+            true,
+        ));
+    }
+
+    emit_ddi_progress(app, "Developer Disk Image services ready", 100);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+async fn devicectl_ddi_is_usable(udid: &str) -> bool {
+    let output = run_devicectl(&["device", "info", "ddiServices", "--device", udid]).await;
+    match output {
+        Ok(output) if output.status.success() => {
+            devicectl_output(&output).contains("isUsable: true")
+        }
+        _ => false,
+    }
+}
+
+async fn product_details(provider: &impl IdeviceProvider) -> CommandResult<(IosVersion, u64)> {
     let mut lockdown = LockdownClient::connect(provider)
         .await
         .map_err(CommandError::from)?;
@@ -38,20 +164,19 @@ async fn product_major(provider: &impl IdeviceProvider) -> CommandResult<(u32, u
         .map_err(CommandError::from)?
         .into_string()
         .unwrap_or_default();
-    let major = version
-        .split('.')
-        .next()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(0);
+    let version = IosVersion::parse(&version).ok_or_else(|| {
+        CommandError::new("device", "Device returned an invalid iOS version", false)
+    })?;
     let chip_id = lockdown
         .get_value(Some("UniqueChipID"), None)
         .await
         .map_err(CommandError::from)?
         .as_unsigned_integer()
         .unwrap_or(0);
-    Ok((major, chip_id))
+    Ok((version, chip_id))
 }
 
+#[cfg(not(target_os = "macos"))]
 async fn product_type(provider: &impl IdeviceProvider) -> CommandResult<String> {
     let mut lockdown = LockdownClient::connect(provider)
         .await
@@ -72,10 +197,8 @@ async fn product_type(provider: &impl IdeviceProvider) -> CommandResult<String> 
         .ok_or_else(|| CommandError::new("ddi", "Device did not return ProductType", false))
 }
 
-fn manifest_component_path(
-    identity: &plist::Dictionary,
-    component: &str,
-) -> Option<String> {
+#[cfg(not(target_os = "macos"))]
+fn manifest_component_path(identity: &plist::Dictionary, component: &str) -> Option<String> {
     identity
         .get("Manifest")?
         .as_dictionary()?
@@ -88,17 +211,17 @@ fn manifest_component_path(
         .map(str::to_owned)
 }
 
-async fn automatic_ddi_files(
-    product_type: &str,
-) -> CommandResult<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-    let restore = std::path::Path::new(
-        "/Library/Developer/DeveloperDiskImages/iOS_DDI/Restore",
-    );
+#[cfg(not(target_os = "macos"))]
+async fn automatic_ddi_files(product_type: &str) -> CommandResult<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+    let restore = std::path::Path::new("/Library/Developer/DeveloperDiskImages/iOS_DDI/Restore");
     let manifest_path = restore.join("BuildManifest.plist");
     let manifest = tokio::fs::read(&manifest_path).await.map_err(|error| {
         CommandError::new(
             "ddi",
-            format!("Automatic DDI not found at {}: {error}", manifest_path.display()),
+            format!(
+                "Automatic DDI not found at {}: {error}",
+                manifest_path.display()
+            ),
             false,
         )
     })?;
@@ -139,7 +262,7 @@ pub async fn developer_status(
     state: State<'_, AppState>,
     udid: Option<String>,
 ) -> CommandResult<DeveloperStatus> {
-    let (_, provider) = selected_provider(&state, udid).await?;
+    let (selected_udid, provider) = selected_provider(&state, udid).await?;
     let developer_mode = match AmfiClient::connect(&provider).await {
         Ok(mut client) => client.get_developer_mode_status().await.ok(),
         Err(_) => None,
@@ -148,9 +271,28 @@ pub async fn developer_status(
         Ok(mut client) => client.copy_devices().await.unwrap_or_default(),
         Err(_) => Vec::new(),
     };
-    let ddi_mounted = !images.is_empty();
+    let mut ddi_mounted = !images.is_empty();
+    #[cfg(target_os = "macos")]
+    if !ddi_mounted
+        && matches!(
+            product_details(&provider).await,
+            Ok((version, _)) if version.developer_generation() != DeveloperGeneration::Legacy
+        )
+    {
+        ddi_mounted = devicectl_ddi_is_usable(&selected_udid).await;
+    }
     let ddi_images = plist_to_json(&plist::Value::Array(images));
-    let rsd_available = CoreDeviceProxy::connect(&provider).await.is_ok();
+    let generation = product_details(&provider)
+        .await
+        .map(|(version, _)| version.developer_generation())
+        .unwrap_or(DeveloperGeneration::Legacy);
+    let rsd_available = match generation {
+        DeveloperGeneration::Legacy => false,
+        DeveloperGeneration::CoreDeviceRemote => ddi_mounted,
+        DeveloperGeneration::CoreDeviceLockdown => {
+            CoreDeviceProxy::connect(&provider).await.is_ok()
+        }
+    };
     Ok(DeveloperStatus {
         developer_mode,
         ddi_mounted,
@@ -214,13 +356,13 @@ pub async fn ddi_mount(
     trust_cache_path: Option<String>,
 ) -> CommandResult<()> {
     let (_, provider) = selected_provider(&state, udid).await?;
-    let (major, chip_id) = product_major(&provider).await?;
+    let (version, chip_id) = product_details(&provider).await?;
     let image = tokio::fs::read(image_path).await?;
     let mut mounter = ImageMounter::connect(&provider)
         .await
         .map_err(CommandError::from)?;
 
-    if major < 17 {
+    if version.developer_generation() == DeveloperGeneration::Legacy {
         let signature_path = signature_path.ok_or_else(|| {
             CommandError::new("ddi", "A signature file is required before iOS 17", false)
         })?;
@@ -278,66 +420,85 @@ pub async fn ddi_mount_auto(
     state: State<'_, AppState>,
     udid: Option<String>,
 ) -> CommandResult<()> {
-    let (_, provider) = selected_provider(&state, udid).await?;
-    let (major, chip_id) = product_major(&provider).await?;
-    if major < 17 {
-        return Err(CommandError::new(
-            "ddi",
-            "Automatic DDI selection currently requires iOS 17 or later",
-            false,
-        ));
+    #[cfg(target_os = "macos")]
+    {
+        let (udid, provider) = selected_provider(&state, udid).await?;
+        let (version, _) = product_details(&provider).await?;
+        if version.developer_generation() == DeveloperGeneration::Legacy {
+            return Err(CommandError::new(
+                "ddi",
+                "Automatic CoreDevice DDI mounting requires iOS 17 or later. Use Choose files with a matching DeveloperDiskImage.dmg and signature for this iOS version.",
+                false,
+            ));
+        }
+        return mount_ddi_with_devicectl(&app, &udid).await;
     }
-    let product_type = product_type(&provider).await?;
-    let (image, trust_cache, manifest) = automatic_ddi_files(&product_type).await?;
-    let mut mounter = ImageMounter::connect(&provider)
-        .await
-        .map_err(CommandError::from)?;
-    let event_app = app.clone();
-    mounter
-        .mount_personalized_with_callback(
-            &provider,
-            image,
-            trust_cache,
-            &manifest,
-            None,
-            chip_id,
-            move |((current, total), ())| {
-                let app = event_app.clone();
-                async move {
-                    let percent = if total == 0 {
-                        0
-                    } else {
-                        ((current as f64 / total as f64) * 100.0).round() as u64
-                    };
-                    let _ = app.emit(
-                        "developer://ddi-progress",
-                        OperationProgress {
-                            operation: "mount-ddi".into(),
-                            item: "Automatic Developer Disk Image".into(),
-                            percent,
-                        },
-                    );
-                }
-            },
-            (),
-        )
-        .await
-        .map_err(CommandError::from)
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let (_, provider) = selected_provider(&state, udid).await?;
+        let (version, chip_id) = product_details(&provider).await?;
+        if version.developer_generation() == DeveloperGeneration::Legacy {
+            return Err(CommandError::new(
+                "ddi",
+                "Automatic DDI selection currently requires iOS 17 or later",
+                false,
+            ));
+        }
+        let product_type = product_type(&provider).await?;
+        let (image, trust_cache, manifest) = automatic_ddi_files(&product_type).await?;
+        let mut mounter = ImageMounter::connect(&provider)
+            .await
+            .map_err(CommandError::from)?;
+        let event_app = app.clone();
+        mounter
+            .mount_personalized_with_callback(
+                &provider,
+                image,
+                trust_cache,
+                &manifest,
+                None,
+                chip_id,
+                move |((current, total), ())| {
+                    let app = event_app.clone();
+                    async move {
+                        let percent = if total == 0 {
+                            0
+                        } else {
+                            ((current as f64 / total as f64) * 100.0).round() as u64
+                        };
+                        let _ = app.emit(
+                            "developer://ddi-progress",
+                            OperationProgress {
+                                operation: "mount-ddi".into(),
+                                item: "Automatic Developer Disk Image".into(),
+                                percent,
+                            },
+                        );
+                    }
+                },
+                (),
+            )
+            .await
+            .map_err(CommandError::from)
+    }
 }
 
 #[tauri::command]
 pub async fn ddi_unmount(state: State<'_, AppState>, udid: Option<String>) -> CommandResult<()> {
     let (_, provider) = selected_provider(&state, udid).await?;
-    let (major, _) = product_major(&provider).await?;
+    let (version, _) = product_details(&provider).await?;
     let mut mounter = ImageMounter::connect(&provider)
         .await
         .map_err(CommandError::from)?;
     mounter
-        .unmount_image(if major < 17 {
-            "/Developer"
-        } else {
-            "/System/Developer"
-        })
+        .unmount_image(
+            if version.developer_generation() == DeveloperGeneration::Legacy {
+                "/Developer"
+            } else {
+                "/System/Developer"
+            },
+        )
         .await
         .map_err(CommandError::from)
 }
@@ -353,6 +514,7 @@ pub async fn jit_start(
         .selected(udid)
         .await
         .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
+    let pairing_path = remote_pairing_path(&app, &udid)?;
     let token = CancellationToken::new();
     state.replace_task("jit", token.clone()).await;
     let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -374,21 +536,43 @@ pub async fn jit_start(
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
                     let provider = crate::provider::provider_for(&udid).await?;
-                    let proxy = CoreDeviceProxy::connect(&provider)
-                        .await
-                        .map_err(CommandError::from)?;
-                    let rsd_port = proxy.tunnel_info().server_rsd_port;
-                    let adapter = proxy
-                        .create_software_tunnel()
-                        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?;
-                    let mut adapter = adapter.to_async_handle();
-                    let stream = adapter
-                        .connect(rsd_port)
-                        .await
-                        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?;
-                    let mut handshake = RsdHandshake::new(stream)
-                        .await
-                        .map_err(CommandError::from)?;
+                    let generation = ios_version(&provider).await?.developer_generation();
+                    if generation == DeveloperGeneration::Legacy {
+                        return Err(CommandError::new(
+                            "jit",
+                            "JIT on iOS 16 and earlier requires the legacy debugserver transport",
+                            false,
+                        ));
+                    }
+                    let (mut adapter, mut handshake) = match generation {
+                        DeveloperGeneration::CoreDeviceRemote => {
+                            let tunnel = open_remote_pairing_tunnel(
+                                &provider,
+                                &pairing_path,
+                                "idevice-desktop",
+                            )
+                            .await?;
+                            (tunnel.adapter, tunnel.handshake)
+                        }
+                        DeveloperGeneration::CoreDeviceLockdown => {
+                            let proxy = CoreDeviceProxy::connect(&provider)
+                                .await
+                                .map_err(CommandError::from)?;
+                            let rsd_port = proxy.tunnel_info().server_rsd_port;
+                            let adapter = proxy.create_software_tunnel().map_err(|error| {
+                                CommandError::new("tunnel", error.to_string(), true)
+                            })?;
+                            let mut adapter = adapter.to_async_handle();
+                            let stream = adapter.connect(rsd_port).await.map_err(|error| {
+                                CommandError::new("tunnel", error.to_string(), true)
+                            })?;
+                            let handshake = RsdHandshake::new(stream)
+                                .await
+                                .map_err(CommandError::from)?;
+                            (adapter, handshake)
+                        }
+                        DeveloperGeneration::Legacy => unreachable!(),
+                    };
 
                     let mut remote_server =
                         RemoteServerClient::connect_rsd(&mut adapter, &mut handshake)

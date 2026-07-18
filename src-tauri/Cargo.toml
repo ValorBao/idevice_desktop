@@ -28,6 +28,7 @@ base64 = "0.22"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+mdns-sd = "0.19"
 
 [dependencies.idevice]
 git = "https://github.com/jkcoxson/idevice.git"
@@ -50,5 +51,6 @@ features = [
   "rsd",
   "dvt",
   "debug_proxy",
-  "tss"
+  "tss",
+  "remote_pairing"
 ]

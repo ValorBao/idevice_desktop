@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:8px;border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  @keyframes idv-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.82);}}
+  @keyframes idv-blink{0%,49%{opacity:1;}50%,100%{opacity:0;}}
+  @keyframes idv-fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes idv-ring{0%{transform:scale(.55);opacity:.55;}100%{transform:scale(1.45);opacity:0;}}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+  <div style="width:100%;max-width:1480px;height:calc(100vh - 36px);max-height:948px;margin:auto;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--border2);border-radius:var(--win-radius);box-shadow:var(--win-shadow);overflow:hidden;">
+
+    <!-- TITLE BAR -->
+    <div style="height:46px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border);">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);font-weight:600;letter-spacing:.2px;">
+        <span style="width:14px;height:14px;border-radius:4px;background:var(--accent);display:inline-block;"></span>
+        idevice
+        <span style="color:var(--faint);font-weight:500;">{{ titleDevice }}</span>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--faint);">
+        <span style="width:7px;height:7px;border-radius:50%;background:{{ connDot }};animation:idv-pulse 2s infinite;"></span>
+        {{ connText }}
+      </div>
+    </div>
+
+    <!-- BODY -->
+    <div style="flex:1;display:flex;min-height:0;">
+
+      <!-- SIDEBAR -->
+      <div style="width:252px;flex:none;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--border);">
+        <!-- device selector -->
+        <div style="padding:14px 12px 10px;position:relative;">
+          <button onClick="{{ toggleDeviceMenu }}" style="{{ dcCardStyle }}" style-hover="border-color:var(--border2)">
+            <div style="width:38px;height:38px;flex:none;border-radius:9px;background:{{ dc.soft }};display:flex;align-items:center;justify-content:center;color:{{ dc.iconColor }};position:relative;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+              <span style="position:absolute;right:-2px;bottom:-2px;width:9px;height:9px;border-radius:50%;background:{{ dc.dot }};border:2px solid var(--elev);"></span>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ dc.name }}</div>
+              <div style="font-size:11px;color:var(--dim);font-family:var(--mono);">{{ dc.sub }}</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg>
+          </button>
+
+          <sc-if value="{{ deviceMenuOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:12px;right:12px;top:62px;z-index:40;background:var(--elev);border:1px solid var(--border2);border-radius:calc(var(--radius));box-shadow:var(--win-shadow);padding:6px;animation:idv-fade .14s ease;">
+              <sc-for list="{{ devices }}" as="d" hint-placeholder-count="2">
+                <button onClick="{{ d.select }}" style="{{ d.rowStyle }}" style-hover="background:var(--hover)">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ d.dot }};flex:none;"></span>
+                  <span style="flex:1;min-width:0;">
+                    <span style="display:block;font-size:12.5px;font-weight:600;color:var(--text);">{{ d.name }}</span>
+                    <span style="display:block;font-size:10.5px;color:var(--dim);font-family:var(--mono);">{{ d.conn }} · iOS {{ d.ios }}</span>
+                  </span>
+                </button>
+              </sc-for>
+              <div style="height:1px;background:var(--border);margin:6px 4px;"></div>
+              <button onClick="{{ openPair }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;background:transparent;border:none;border-radius:8px;cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600;font-family:inherit;" style-hover="background:var(--hover)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Pair new device…
+              </button>
+              <button onClick="{{ disconnect }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;background:transparent;border:none;border-radius:8px;cursor:pointer;color:#ff5f57;font-size:12.5px;font-weight:600;font-family:inherit;" style-hover="background:rgba(255,95,87,.1)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.4 6.6A9 9 0 1 1 5.6 6.6"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                Disconnect device
+              </button>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- nav -->
+        <div style="{{ navWrapStyle }}">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--faint);padding:10px 8px 6px;text-transform:uppercase;">Device</div>
+          <button onClick="{{ nav.overview.go }}" style="{{ nav.overview.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><line x1="3" y1="20" x2="21" y2="20"/></svg>
+            <span style="flex:1;">Overview</span>
+          </button>
+          <button onClick="{{ nav.diagnostics.go }}" style="{{ nav.diagnostics.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+            <span style="flex:1;">Diagnostics</span>
+          </button>
+          <button onClick="{{ nav.files.go }}" style="{{ nav.files.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <span style="flex:1;">Files</span>
+            <span style="font-family:var(--mono);font-size:10px;color:var(--faint);">AFC</span>
+          </button>
+          <button onClick="{{ nav.apps.go }}" style="{{ nav.apps.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span style="flex:1;">Apps</span>
+          </button>
+          <button onClick="{{ nav.logs.go }}" style="{{ nav.logs.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="13" y2="17"/></svg>
+            <span style="flex:1;">Logs</span>
+          </button>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--faint);padding:14px 8px 6px;text-transform:uppercase;">Developer</div>
+          <button onClick="{{ nav.developer.go }}" style="{{ nav.developer.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8l4 4-4 4"/><line x1="12" y1="16" x2="19" y2="16"/></svg>
+            <span style="flex:1;">Debug Tools</span>
+          </button>
+          <button onClick="{{ nav.location.go }}" style="{{ nav.location.style }}" style-hover="background:var(--hover)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+            <span style="flex:1;">Location</span>
+          </button>
+        </div>
+
+        <!-- sidebar footer: trusted -->
+        <div style="padding:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#28c840;flex:none;"></span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:11.5px;color:var(--text);font-weight:600;">Trusted &amp; Paired</div>
+            <div style="font-size:10px;color:var(--faint);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ device.udidShort }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN -->
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg);position:relative;">
+        <!-- TOPBAR -->
+        <div style="height:62px;flex:none;display:flex;align-items:center;gap:14px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg);">
+          <div style="min-width:0;">
+            <div style="font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.2px;">{{ pageTitle }}</div>
+            <div style="font-size:11.5px;color:var(--dim);font-family:var(--mono);">{{ pageSub }}</div>
+          </div>
+          <div style="flex:1;"></div>
+
+          <!-- style switcher -->
+          <div style="display:flex;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;">
+            <button onClick="{{ setStyleClean }}" style="{{ segClean }}" style-hover="color:var(--text)">Clean</button>
+            <button onClick="{{ setStyleTerminal }}" style="{{ segTerminal }}" style-hover="color:var(--text)">Terminal</button>
+            <button onClick="{{ setStyleApple }}" style="{{ segApple }}" style-hover="color:var(--text)">Apple</button>
+          </div>
+
+          <!-- mode toggle -->
+          <button onClick="{{ toggleMode }}" title="Toggle appearance" style="width:38px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border);border-radius:9px;cursor:pointer;color:var(--dim);" style-hover="color:var(--text);border-color:var(--border2)">
+            <span style="{{ modeIcon }}"></span>
+          </button>
+        </div>
+
+        <!-- CONTENT -->
+        <div style="flex:1;overflow-y:auto;min-height:0;">
+
+          <!-- ===== OVERVIEW ===== -->
+          <sc-if value="{{ pageOverview }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:26px 28px;max-width:980px;">
+            <div style="display:flex;gap:24px;align-items:stretch;margin-bottom:22px;">
+              <!-- device visual -->
+              <div style="flex:none;width:200px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+                <div style="width:96px;height:188px;border-radius:22px;border:2px solid var(--border2);background:linear-gradient(160deg,var(--elev),var(--bg));position:relative;display:flex;align-items:flex-start;justify-content:center;padding-top:9px;box-shadow:var(--shadow);">
+                  <div style="width:34px;height:7px;border-radius:6px;background:var(--border2);"></div>
+                  <div style="position:absolute;bottom:11px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:9px;color:var(--faint);">{{ device.chip }}</div>
+                </div>
+                <div style="text-align:center;">
+                  <div style="font-size:13.5px;font-weight:700;color:var(--text);">{{ device.model }}</div>
+                  <div style="font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:2px;">{{ device.modelId }}</div>
+                </div>
+              </div>
+
+              <!-- key stats -->
+              <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">iOS Version</div>
+                  <div style="font-size:23px;font-weight:700;color:var(--text);margin-top:8px;letter-spacing:-.5px;">{{ device.ios }}</div>
+                  <div style="font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:2px;">build {{ device.build }}</div>
+                </div>
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">Battery</div>
+                  <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+                    <div style="width:46px;height:46px;border-radius:50%;background:{{ batteryRing }};display:flex;align-items:center;justify-content:center;flex:none;">
+                      <div style="width:34px;height:34px;border-radius:50%;background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text);font-family:var(--mono);">{{ device.battery }}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:13px;font-weight:600;color:var(--text);">{{ device.batteryHealth }}% health</div>
+                      <div style="font-size:11px;color:var(--dim);font-family:var(--mono);">{{ device.cycles }} cycles</div>
+                    </div>
+                  </div>
+                </div>
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">Connection</div>
+                  <div style="display:flex;align-items:center;gap:7px;margin-top:10px;">
+                    <span style="width:9px;height:9px;border-radius:50%;background:#28c840;animation:idv-pulse 2.2s infinite;"></span>
+                    <span style="font-size:16px;font-weight:700;color:var(--text);">{{ device.conn }}</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:4px;">RSD tunnel up</div>
+                </div>
+                <div style="grid-column:span 2;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                    <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">Storage</div>
+                    <div style="font-size:11px;color:var(--dim);font-family:var(--mono);">{{ device.storageUsed }} / {{ device.storageTotal }} GB</div>
+                  </div>
+                  <div style="height:8px;border-radius:6px;background:var(--elev);margin-top:12px;overflow:hidden;">
+                    <div style="height:100%;width:{{ storagePct }};background:var(--accent);border-radius:6px;"></div>
+                  </div>
+                  <div style="font-size:11px;color:var(--dim);margin-top:8px;">{{ storageFree }} GB available</div>
+                </div>
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">Pairing</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#28c840" stroke-width="2.4"><path d="M5 13l4 4L19 7"/></svg>
+                    <span style="font-size:14px;font-weight:600;color:var(--text);">Trusted</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:4px;">record valid</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- identity table -->
+            <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 18px;margin-bottom:22px;">
+              <sc-for list="{{ identity }}" as="row" hint-placeholder-count="5">
+                <div style="{{ row.style }}">
+                  <span style="font-size:12.5px;color:var(--dim);">{{ row.k }}</span>
+                  <span style="font-size:12.5px;color:var(--text);font-family:var(--mono);font-weight:500;">{{ row.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- quick actions -->
+            <div style="font-size:12px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">Quick actions</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+              <sc-for list="{{ quickActions }}" as="qa" hint-placeholder-count="4">
+                <button onClick="{{ qa.go }}" style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;text-align:left;padding:15px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:inherit;" style-hover="border-color:var(--accent);background:var(--accent-soft)">
+                  <span style="color:var(--accent);font-family:var(--mono);font-size:15px;font-weight:700;">{{ qa.glyph }}</span>
+                  <span style="font-size:13px;font-weight:600;color:var(--text);">{{ qa.title }}</span>
+                  <span style="font-size:11px;color:var(--dim);">{{ qa.sub }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ===== DIAGNOSTICS ===== -->
+          <sc-if value="{{ pageDiag }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:22px 28px;">
+            <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;">
+              <button onClick="{{ diagTabBattery }}" style="{{ dtab.battery }}">Battery</button>
+              <button onClick="{{ diagTabGestalt }}" style="{{ dtab.gestalt }}">MobileGestalt</button>
+              <button onClick="{{ diagTabIo }}" style="{{ dtab.io }}">IORegistry</button>
+              <button onClick="{{ diagTabSensors }}" style="{{ dtab.sensors }}">Sensors</button>
+            </div>
+
+            <sc-if value="{{ dtBattery }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+              <sc-for list="{{ batteryStats }}" as="b" hint-placeholder-count="4">
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">{{ b.k }}</div>
+                  <div style="font-size:22px;font-weight:700;color:var(--text);margin-top:8px;font-family:var(--mono);">{{ b.v }}</div>
+                  <div style="font-size:11px;color:{{ b.tc }};margin-top:2px;">{{ b.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px 18px 14px;">
+              <div style="font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:16px;">Capacity over last 30 charge cycles</div>
+              <div style="display:flex;align-items:flex-end;gap:4px;height:120px;">
+                <sc-for list="{{ chart }}" as="c" hint-placeholder-count="20">
+                  <div style="flex:1;height:{{ c.h }};background:var(--accent);border-radius:3px 3px 0 0;opacity:{{ c.op }};"></div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ dtGestalt }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                <input value="{{ gestaltQuery }}" onInput="{{ onGestaltSearch }}" placeholder="Filter keys…" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:13px;font-family:var(--mono);"/>
+                <span style="font-size:11px;color:var(--faint);font-family:var(--mono);">{{ gestaltCount }} keys</span>
+              </div>
+              <sc-for list="{{ gestaltRows }}" as="g" hint-placeholder-count="10">
+                <div style="{{ g.style }}">
+                  <span style="font-size:12.5px;color:var(--accent);font-family:var(--mono);flex:none;width:280px;">{{ g.k }}</span>
+                  <span style="font-size:12.5px;color:var(--text);font-family:var(--mono);">{{ g.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ dtIo }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;font-family:var(--mono);font-size:12.5px;">
+              <sc-for list="{{ ioTree }}" as="n" hint-placeholder-count="9">
+                <div style="{{ n.style }}">
+                  <span style="color:var(--faint);">{{ n.prefix }}</span><span style="color:var(--text);">{{ n.name }}</span><span style="color:var(--dim);">  {{ n.meta }}</span>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ dtSensors }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+              <sc-for list="{{ sensors }}" as="s" hint-placeholder-count="6">
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;">
+                  <div style="font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">{{ s.k }}</div>
+                  <div style="font-size:26px;font-weight:700;color:var(--text);margin-top:10px;font-family:var(--mono);">{{ s.v }}<span style="font-size:13px;color:var(--dim);font-weight:500;"> {{ s.unit }}</span></div>
+                  <div style="height:5px;border-radius:4px;background:var(--elev);margin-top:14px;overflow:hidden;"><div style="height:100%;width:{{ s.bar }};background:var(--accent);border-radius:4px;"></div></div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+          </div>
+          </sc-if>
+
+          <!-- ===== FILES ===== -->
+          <sc-if value="{{ pageFiles }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 24px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;font-family:var(--mono);font-size:12.5px;">
+              <span style="color:var(--faint);">com.apple.afc</span>
+              <span style="color:var(--faint);">›</span>
+              <sc-for list="{{ crumbs }}" as="cr" hint-placeholder-count="2">
+                <button onClick="{{ cr.go }}" style="background:transparent;border:none;cursor:pointer;font-family:var(--mono);font-size:12.5px;color:{{ cr.color }};padding:2px 4px;" style-hover="color:var(--accent)">{{ cr.label }}</button>
+                <span style="color:var(--faint);">{{ cr.sep }}</span>
+              </sc-for>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+              <div style="display:grid;grid-template-columns:1fr 130px 120px 80px;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">
+                <span>Name</span><span>Kind</span><span>Modified</span><span style="text-align:right;">Size</span>
+              </div>
+              <sc-for list="{{ currentFiles }}" as="f" hint-placeholder-count="6">
+                <button onClick="{{ f.open }}" style="{{ f.style }}" style-hover="background:var(--hover)">
+                  <span style="display:flex;align-items:center;gap:10px;min-width:0;">
+                    <span style="color:{{ f.iconColor }};flex:none;display:flex;">{{ f.icon }}</span>
+                    <span style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ f.n }}</span>
+                  </span>
+                  <span style="font-size:12px;color:var(--dim);font-family:var(--mono);">{{ f.kindLabel }}</span>
+                  <span style="font-size:12px;color:var(--dim);font-family:var(--mono);">{{ f.date }}</span>
+                  <span style="font-size:12px;color:var(--dim);font-family:var(--mono);text-align:right;">{{ f.size }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:11.5px;color:var(--faint);font-family:var(--mono);">
+              <span>{{ fileCount }} items</span>
+              <span>read · write · mkdir · rm enabled</span>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ===== APPS ===== -->
+          <sc-if value="{{ pageApps }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:20px 24px;display:flex;gap:20px;">
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;">
+                <div style="flex:1;display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px 13px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                  <input value="{{ appQuery }}" onInput="{{ onAppSearch }}" placeholder="Search installed apps…" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:13px;"/>
+                </div>
+                <button onClick="{{ onIpaClick }}" style="display:flex;align-items:center;gap:7px;padding:9px 15px;background:var(--accent);color:var(--ac);border:none;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;" style-hover="opacity:.9">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+                  Install .ipa
+                </button>
+              </div>
+              <div onClick="{{ onIpaClick }}" onDragOver="{{ onIpaOver }}" onDragLeave="{{ onIpaLeave }}" onDrop="{{ onIpaDrop }}" style="{{ ipaZoneStyle }}">
+                <span style="width:36px;height:36px;flex:none;border-radius:9px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--accent);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                </span>
+                <div style="flex:1;">
+                  <div style="font-size:13px;font-weight:600;color:var(--text);">Drop an .ipa here to sideload</div>
+                  <div style="font-size:11.5px;color:var(--dim);font-family:var(--mono);">installation_proxy · streams over AFC</div>
+                </div>
+              </div>
+              <sc-if value="{{ installing }}" hint-placeholder-val="{{ false }}">
+                <div style="background:var(--panel);border:1px solid var(--accent);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="font-size:13px;font-weight:600;color:var(--text);">{{ installing.name }}</span>
+                    <span style="font-size:12px;color:var(--accent);font-family:var(--mono);font-weight:600;">{{ installing.pct }}</span>
+                  </div>
+                  <div style="height:6px;border-radius:5px;background:var(--elev);overflow:hidden;"><div style="height:100%;width:{{ installing.pct }};background:var(--accent);border-radius:5px;transition:width .2s;"></div></div>
+                  <div style="font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:8px;">{{ installing.phase }}…</div>
+                </div>
+              </sc-if>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{ appList }}" as="a" hint-placeholder-count="6">
+                  <button onClick="{{ a.select }}" style="{{ a.style }}" style-hover="border-color:var(--border2)">
+                    <span style="width:44px;height:44px;flex:none;border-radius:11px;background:{{ a.c }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;">{{ a.letter }}</span>
+                    <span style="flex:1;min-width:0;text-align:left;">
+                      <span style="display:block;font-size:13.5px;font-weight:600;color:var(--text);">{{ a.name }}</span>
+                      <span style="display:block;font-size:11px;color:var(--dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.bundle }}</span>
+                    </span>
+                    <span style="font-size:11px;color:{{ a.tagColor }};font-family:var(--mono);flex:none;">{{ a.tag }}</span>
+                    <span style="font-size:12px;color:var(--dim);font-family:var(--mono);flex:none;width:64px;text-align:right;">{{ a.size }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <!-- detail -->
+            <div style="width:280px;flex:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px;align-self:flex-start;">
+              <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;">
+                <span style="width:70px;height:70px;border-radius:17px;background:{{ selApp.c }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:30px;font-weight:700;box-shadow:var(--shadow);">{{ selApp.letter }}</span>
+                <div>
+                  <div style="font-size:16px;font-weight:700;color:var(--text);">{{ selApp.name }}</div>
+                  <div style="font-size:11.5px;color:var(--dim);font-family:var(--mono);margin-top:3px;">{{ selApp.bundle }}</div>
+                </div>
+              </div>
+              <div style="margin-top:20px;display:flex;flex-direction:column;">
+                <sc-for list="{{ selAppMeta }}" as="m" hint-placeholder-count="4">
+                  <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);">
+                    <span style="font-size:12px;color:var(--dim);">{{ m.k }}</span>
+                    <span style="font-size:12px;color:var(--text);font-family:var(--mono);font-weight:500;">{{ m.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <button style="width:100%;margin-top:18px;padding:10px;background:transparent;border:1px solid #ff5f57;color:#ff5f57;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;" style-hover="background:#ff5f57;color:#fff">Uninstall</button>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ===== LOGS ===== -->
+          <sc-if value="{{ pageLogs }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px 20px;display:flex;flex-direction:column;height:100%;">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex:none;">
+              <sc-for list="{{ logChips }}" as="lc" hint-placeholder-count="5">
+                <button onClick="{{ lc.go }}" style="{{ lc.style }}">{{ lc.label }}</button>
+              </sc-for>
+              <div style="flex:1;"></div>
+              <span style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--dim);margin-right:4px;">
+                <span style="width:7px;height:7px;border-radius:50%;background:{{ logLiveDot }};animation:idv-pulse 1.6s infinite;"></span>{{ logLiveText }}
+              </span>
+              <button onClick="{{ toggleLog }}" style="display:flex;align-items:center;gap:6px;padding:7px 13px;background:var(--panel);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text);font-weight:600;font-family:inherit;" style-hover="border-color:var(--border2)">{{ logBtnLabel }}</button>
+              <button onClick="{{ clearLog }}" style="padding:7px 13px;background:var(--panel);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--dim);font-weight:600;font-family:inherit;" style-hover="color:var(--text)">Clear</button>
+            </div>
+            <div ref="{{ logScrollRef }}" style="flex:1;min-height:0;overflow-y:auto;background:var(--terminal-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.85;">
+              <sc-for list="{{ logLines }}" as="l" hint-placeholder-count="12">
+                <div style="display:flex;gap:12px;">
+                  <span style="color:var(--faint);flex:none;">{{ l.time }}</span>
+                  <span style="{{ l.levelStyle }}">{{ l.level }}</span>
+                  <span style="color:var(--accent);flex:none;">{{ l.proc }}</span>
+                  <span style="color:var(--term-text);">{{ l.msg }}</span>
+                </div>
+              </sc-for>
+              <div style="display:flex;gap:8px;align-items:center;color:var(--term-text);margin-top:2px;">
+                <span style="color:var(--accent);">›</span>
+                <span style="width:8px;height:15px;background:var(--accent);animation:idv-blink 1.1s steps(1) infinite;"></span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ===== DEVELOPER ===== -->
+          <sc-if value="{{ pageDev }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:24px 28px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+              <!-- JIT -->
+              <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">Enable JIT</div>
+                    <div style="font-size:12px;color:var(--dim);margin-top:4px;max-width:260px;">Attach debugserver to a process to grant just-in-time compilation entitlement.</div>
+                  </div>
+                  <button onClick="{{ toggleJit }}" style="{{ jitToggle }}">
+                    <span style="{{ jitKnob }}"></span>
+                  </button>
+                </div>
+                <div style="margin-top:16px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ jitDot }};"></span>
+                  <span style="color:var(--dim);">{{ jitStatus }}</span>
+                </div>
+              </div>
+              <!-- DDI -->
+              <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+                <div style="font-size:14px;font-weight:700;color:var(--text);">Developer Disk Image</div>
+                <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px;">
+                  <div style="display:flex;justify-content:space-between;"><span style="font-size:12px;color:var(--dim);">Status</span><span style="font-size:12px;color:#28c840;font-family:var(--mono);font-weight:600;">Mounted</span></div>
+                  <div style="display:flex;justify-content:space-between;"><span style="font-size:12px;color:var(--dim);">Image type</span><span style="font-size:12px;color:var(--text);font-family:var(--mono);">Personalized</span></div>
+                  <div style="display:flex;justify-content:space-between;"><span style="font-size:12px;color:var(--dim);">Signature</span><span style="font-size:12px;color:var(--text);font-family:var(--mono);">valid (TSS)</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- tunnel + instruments -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;">
+              <sc-for list="{{ devServices }}" as="ds" hint-placeholder-count="3">
+                <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+                  <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:{{ ds.dot }};"></span><span style="font-size:12.5px;font-weight:600;color:var(--text);">{{ ds.name }}</span></div>
+                  <div style="font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:8px;">{{ ds.detail }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- debugserver console -->
+            <div style="background:var(--terminal-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);">
+                <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;"></span>
+                <span style="font-size:12px;color:var(--dim);font-family:var(--mono);">debugserver · com.apple.debugserver.DVTSecureSocketProxy</span>
+              </div>
+              <div style="padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.9;">
+                <sc-for list="{{ gdbLines }}" as="gl" hint-placeholder-count="5">
+                  <div><span style="{{ gl.pc }}">{{ gl.p }}</span><span style="color:var(--term-text);">{{ gl.t }}</span></div>
+                </sc-for>
+                <div style="display:flex;gap:8px;align-items:center;margin-top:3px;"><span style="color:var(--accent);">(lldb)</span><span style="width:8px;height:14px;background:var(--accent);animation:idv-blink 1.1s steps(1) infinite;"></span></div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ===== LOCATION ===== -->
+          <sc-if value="{{ pageLoc }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:22px 24px;display:flex;gap:18px;">
+            <!-- control -->
+            <div style="width:300px;flex:none;">
+              <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;">
+                <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;">Simulated coordinates</div>
+                <div style="display:flex;flex-direction:column;gap:11px;">
+                  <div>
+                    <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:5px;">Latitude</div>
+                    <div style="font-family:var(--mono);font-size:15px;color:var(--text);background:var(--elev);border:1px solid var(--border);border-radius:8px;padding:9px 12px;">{{ loc.lat }}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:5px;">Longitude</div>
+                    <div style="font-family:var(--mono);font-size:15px;color:var(--text);background:var(--elev);border:1px solid var(--border);border-radius:8px;padding:9px 12px;">{{ loc.lng }}</div>
+                  </div>
+                </div>
+                <button onClick="{{ toggleSim }}" style="{{ simBtn }}">{{ simLabel }}</button>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11.5px;font-family:var(--mono);">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ simDot }};"></span>
+                  <span style="color:var(--dim);">{{ simStatus }}</span>
+                </div>
+              </div>
+              <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;margin:18px 0 10px;">Presets</div>
+              <div style="display:flex;flex-direction:column;gap:7px;">
+                <sc-for list="{{ presets }}" as="p" hint-placeholder-count="4">
+                  <button onClick="{{ p.select }}" style="{{ p.style }}" style-hover="border-color:var(--border2)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{ p.iconColor }}" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>
+                    <span style="flex:1;text-align:left;font-size:12.5px;color:var(--text);font-weight:500;">{{ p.name }}</span>
+                    <span style="font-size:10.5px;color:var(--faint);font-family:var(--mono);">{{ p.short }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <!-- map -->
+            <div onMouseDown="{{ mapDown }}" onMouseMove="{{ mapMove }}" onMouseUp="{{ mapUp }}" onMouseLeave="{{ mapUp }}" style="flex:1;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;position:relative;min-height:480px;cursor:crosshair;user-select:none;background:repeating-linear-gradient(0deg,var(--panel),var(--panel) 39px,var(--border) 39px,var(--border) 40px),repeating-linear-gradient(90deg,var(--panel),var(--panel) 39px,var(--border) 40px);">
+              <div style="position:absolute;inset:0;background:radial-gradient(circle at {{ loc.px }} {{ loc.py }},var(--accent-soft),transparent 60%);"></div>
+              <div style="position:absolute;left:{{ loc.px }};top:{{ loc.py }};width:14px;height:14px;transform:translate(-50%,-50%);border-radius:50%;background:var(--accent-soft);pointer-events:none;"><span style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--accent);animation:idv-ring 1.8s ease-out infinite;"></span></div>
+              <div style="position:absolute;left:{{ loc.px }};top:{{ loc.py }};transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3));">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--ac)" stroke-width="1.4"><path d="M12 22s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4" fill="var(--ac)" stroke="none"/></svg>
+              </div>
+              <div style="position:absolute;left:14px;bottom:14px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11.5px;color:var(--text);">
+                <div>{{ loc.name }} · {{ loc.lat }}, {{ loc.lng }}</div>
+                <div style="font-size:10px;color:var(--faint);margin-top:3px;">drag anywhere on the map to reposition</div>
+              </div>
+              <div style="position:absolute;right:14px;top:14px;font-family:var(--mono);font-size:10px;color:var(--faint);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 9px;">com.apple.dt.simulatelocation</div>
+            </div>
+          </div>
+          </sc-if>
+
+        </div>
+
+        <!-- ===== ONBOARDING OVERLAY ===== -->
+        <sc-if value="{{ showOnboard }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:30;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:40px;">
+
+          <sc-if value="{{ onboardNone }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:440px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;">
+            <div style="position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center;margin-bottom:26px;">
+              <span style="position:absolute;width:120px;height:120px;border-radius:50%;border:1.5px solid var(--accent);animation:idv-ring 2.2s ease-out infinite;"></span>
+              <span style="position:absolute;width:120px;height:120px;border-radius:50%;border:1.5px solid var(--accent);animation:idv-ring 2.2s ease-out infinite;animation-delay:1.1s;"></span>
+              <span style="width:64px;height:64px;border-radius:18px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;color:var(--accent);">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+              </span>
+            </div>
+            <div style="font-size:21px;font-weight:700;color:var(--text);letter-spacing:-.3px;">No device connected</div>
+            <div style="font-size:13.5px;color:var(--dim);margin-top:10px;line-height:1.6;max-width:360px;">Plug in an iPhone or iPad over USB, or pair one over the network with netmuxd. idevice is listening on usbmuxd for a handshake.</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:16px;font-family:var(--mono);font-size:11.5px;color:var(--faint);">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:idv-pulse 1.4s infinite;"></span>
+              scanning /var/run/usbmuxd…
+            </div>
+            <button onClick="{{ simulateConnect }}" style="margin-top:24px;display:flex;align-items:center;gap:9px;padding:12px 22px;background:var(--accent);color:var(--ac);border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;" style-hover="opacity:.9">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+              Simulate USB connection
+            </button>
+            <div style="display:flex;align-items:center;justify-content:center;margin-top:30px;font-size:11px;color:var(--faint);font-family:var(--mono);">
+              <span style="display:flex;align-items:center;gap:7px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></span>Detect</span>
+              <span style="width:26px;height:1px;background:var(--border2);margin:0 10px;"></span>
+              <span style="display:flex;align-items:center;gap:7px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--border2);"></span>Trust</span>
+              <span style="width:26px;height:1px;background:var(--border2);margin:0 10px;"></span>
+              <span style="display:flex;align-items:center;gap:7px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--border2);"></span>Ready</span>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ onboardDetected }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:420px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;">
+            <div style="width:64px;height:64px;border-radius:18px;background:rgba(254,188,46,.15);display:flex;align-items:center;justify-content:center;color:#febc2e;margin-bottom:20px;position:relative;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+              <span style="position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;background:#febc2e;border:2px solid var(--bg);display:flex;align-items:center;justify-content:center;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5"/></svg></span>
+            </div>
+            <div style="font-size:20px;font-weight:700;color:var(--text);">iPhone 15 Pro detected</div>
+            <div style="font-size:13px;color:var(--dim);margin-top:8px;">Trust this computer to open a lockdown session.</div>
+            <div style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:22px;text-align:left;">
+              <div style="display:flex;gap:11px;align-items:flex-start;margin-bottom:16px;">
+                <span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none;">1</span>
+                <div style="font-size:13px;color:var(--text);padding-top:2px;">Tap <b>Trust</b> on the device prompt</div>
+              </div>
+              <div style="display:flex;gap:11px;align-items:flex-start;">
+                <span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none;">2</span>
+                <div style="flex:1;">
+                  <div style="font-size:13px;color:var(--text);margin-bottom:10px;padding-top:2px;">Enter the device passcode</div>
+                  <div style="display:flex;gap:8px;">
+                    <span style="width:40px;height:48px;border:1px solid var(--accent);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text);font-family:var(--mono);">•</span>
+                    <span style="width:40px;height:48px;border:1px solid var(--accent);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text);font-family:var(--mono);">•</span>
+                    <span style="width:40px;height:48px;border:1px solid var(--accent);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text);font-family:var(--mono);">•</span>
+                    <span style="width:40px;height:48px;border:1px solid var(--border2);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--faint);font-family:var(--mono);"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button onClick="{{ doPair }}" style="width:100%;margin-top:16px;padding:12px;background:var(--accent);color:var(--ac);border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;" style-hover="opacity:.9">Trust &amp; generate pairing</button>
+            <button onClick="{{ disconnect }}" style="margin-top:10px;padding:8px;background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:12.5px;font-weight:500;font-family:inherit;" style-hover="color:var(--text)">Cancel</button>
+          </div>
+          </sc-if>
+
+        </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;left:50%;bottom:30px;transform:translateX(-50%);z-index:90;display:flex;align-items:center;gap:10px;background:var(--text);color:var(--bg);padding:11px 18px;border-radius:11px;box-shadow:0 12px 34px rgba(0,0,0,.34);font-size:13px;font-weight:600;animation:idv-fade .2s ease;">
+    <span style="width:18px;height:18px;border-radius:50%;background:#28c840;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4"><path d="M5 13l4 4L19 7"/></svg></span>
+    {{ toast.msg }}
+  </div>
+  </sc-if>
+
+  <!-- PAIR MODAL -->
+  <sc-if value="{{ pairOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;animation:idv-fade .16s ease;">
+    <div style="width:420px;background:var(--panel);border:1px solid var(--border2);border-radius:var(--win-radius);box-shadow:var(--win-shadow);overflow:hidden;">
+      <div style="padding:22px 24px 18px;border-bottom:1px solid var(--border);">
+        <div style="font-size:16px;font-weight:700;color:var(--text);">Pair new device</div>
+        <div style="font-size:12.5px;color:var(--dim);margin-top:4px;">Generate a lockdown pairing record over usbmuxd.</div>
+      </div>
+      <div style="padding:22px 24px;">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;">1</span>
+            <div><div style="font-size:13px;color:var(--text);font-weight:600;">Connect via USB</div><div style="font-size:12px;color:var(--dim);margin-top:2px;">A new device was detected on the muxer.</div></div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;">2</span>
+            <div><div style="font-size:13px;color:var(--text);font-weight:600;">Tap “Trust” on device</div><div style="font-size:12px;color:var(--dim);margin-top:2px;">Then enter the passcode below.</div></div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center;margin:4px 0;">
+            <span style="width:42px;height:52px;border:1px solid var(--border2);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text);font-family:var(--mono);">•</span>
+            <span style="width:42px;height:52px;border:1px solid var(--border2);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text);font-family:var(--mono);">•</span>
+            <span style="width:42px;height:52px;border:1px solid var(--accent);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text);font-family:var(--mono);">•</span>
+            <span style="width:42px;height:52px;border:1px solid var(--border2);border-radius:9px;background:var(--elev);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--faint);font-family:var(--mono);"></span>
+          </div>
+        </div>
+      </div>
+      <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;">
+        <button onClick="{{ closePair }}" style="padding:9px 18px;background:transparent;border:1px solid var(--border2);border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--text);font-family:inherit;" style-hover="background:var(--hover)">Cancel</button>
+        <button onClick="{{ closePair }}" style="padding:9px 18px;background:var(--accent);border:none;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ac);font-family:inherit;" style-hover="opacity:.9">Generate pairing</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;uiStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;clean&quot;,&quot;terminal&quot;,&quot;apple&quot;],&quot;default&quot;:&quot;clean&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;appearance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  logRef = React.createRef();
+  state = {
+    style: null, mode: null, page: 'overview', deviceId: 'd1',
+    deviceMenuOpen: false, pairOpen: false,
+    diagTab: 'battery', gestaltQuery: '',
+    filePath: [], appId: 'a1', appQuery: '',
+    logFilter: 'all', logPaused: false, clearedBase: false,
+    jit: true, presetId: 'sf', simOn: true,
+    conn: 'connected', streamLines: [], installing: null, installedExtra: [],
+    dragOver: false, customLoc: null, toast: null,
+  };
+
+  componentDidMount() {
+    this._tick = setInterval(() => {
+      const s = this.state;
+      if (s.toast && Date.now() - s.toast.t > 2600) this.setState({ toast: null });
+      if (s.page === 'logs' && !s.logPaused && s.conn === 'connected') {
+        const p = LIVELOG_POOL[Math.floor(Math.random() * LIVELOG_POOL.length)];
+        const d = new Date();
+        const pad = (n, l) => String(n).padStart(l || 2, '0');
+        const time = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.' + pad(d.getMilliseconds(), 3);
+        this.setState(st => ({ streamLines: st.streamLines.concat([{ ...p, time }]).slice(-140) }));
+      }
+    }, 1250);
+  }
+  componentDidUpdate() {
+    if (this.state.page === 'logs' && this.logRef.current) {
+      const el = this.logRef.current; el.scrollTop = el.scrollHeight;
+    }
+  }
+  componentWillUnmount() { clearInterval(this._tick); clearInterval(this._inst); }
+
+  startInstall(name) {
+    if (this.state.installing) return;
+    const nm = name && /\.ipa$/i.test(name) ? name : (name ? name + '.ipa' : 'Sideloaded.ipa');
+    this.setState({ installing: { name: nm, progress: 0, phase: 'Verifying signature' }, dragOver: false });
+    clearInterval(this._inst);
+    this._inst = setInterval(() => {
+      this.setState(st => {
+        if (!st.installing) return {};
+        const prog = st.installing.progress + (Math.random() * 9 + 5);
+        const phase = prog < 28 ? 'Verifying signature' : prog < 64 ? 'Transferring package' : prog < 94 ? 'Installing' : 'Finalizing';
+        if (prog >= 100) {
+          clearInterval(this._inst);
+          const base = nm.replace(/\.ipa$/i, '');
+          const palette = ['#7c6cff', '#ff7a59', '#34d399', '#0a84ff', '#f0a020', '#e0566f', '#1bb8c4'];
+          const app = { id: 'x' + Date.now(), name: base, bundle: 'com.sideload.' + base.toLowerCase().replace(/[^a-z0-9]/g, '') || 'com.sideload.app', ver: '1.0.0', size: (Math.random() * 40 + 9).toFixed(1) + ' MB', c: palette[Math.floor(Math.random() * palette.length)], sys: false, fresh: true };
+          return { installing: null, installedExtra: [app, ...st.installedExtra], appId: app.id, toast: { msg: base + ' installed', t: Date.now() } };
+        }
+        return { installing: { ...st.installing, progress: prog, phase } };
+      });
+    }, 240);
+  }
+
+  mapPoint(e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const cx = Math.min(98, Math.max(2, (e.clientX - r.left) / r.width * 100));
+    const cy = Math.min(95, Math.max(4, (e.clientY - r.top) / r.height * 100));
+    const lng = cx / 100 * 360 - 180;
+    const lat = 84 - cy / 100 * 168;
+    this.setState({ customLoc: { px: cx.toFixed(2) + '%', py: cy.toFixed(2) + '%', lat, lng, name: 'Dropped pin' }, simOn: true });
+  }
+  mapDown(e) { this._mapDrag = true; this.mapPoint(e); }
+  mapMove(e) { if (this._mapDrag) this.mapPoint(e); }
+  mapUp() { this._mapDrag = false; }
+
+  // ----- THEME -----
+  theme() {
+    const style = this.state.style || this.props.uiStyle || 'clean';
+    const mode = this.state.mode || this.props.appearance || 'dark';
+    const dark = mode === 'dark';
+    const sans = "system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif";
+    const mono = "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+    let t;
+    if (style === 'terminal') {
+      t = dark ? {
+        bg:'#080b0c', panel:'#0d1213', elev:'#121a1b', border:'#1a2426', border2:'#28383b',
+        text:'#d2e9da', dim:'#6f9281', faint:'#46615400'.slice(0,7), accent:'#34d399', ac:'#04140d',
+        accentSoft:'rgba(52,211,153,.14)', hover:'rgba(52,211,153,.07)', active:'rgba(52,211,153,.13)',
+        shadow:'none', desktop:'#05080a', termBg:'#06090a', termText:'#b7d6c3',
+      } : {
+        bg:'#e7eae1', panel:'#f3f5ee', elev:'#fbfcf7', border:'#d3d9c9', border2:'#bcc6ad',
+        text:'#1b2a20', dim:'#4d6354', faint:'#86977f', accent:'#1f8a4c', ac:'#ffffff',
+        accentSoft:'rgba(31,138,76,.12)', hover:'rgba(31,138,76,.08)', active:'rgba(31,138,76,.14)',
+        shadow:'0 1px 2px rgba(40,60,40,.08)', desktop:'#dde1d4', termBg:'#0d1213', termText:'#b7d6c3',
+      };
+      t.font = mono; t.radius = '4px'; t.radiusSm = '4px'; t.winRadius = '6px';
+    } else if (style === 'apple') {
+      t = dark ? {
+        bg:'#161618', panel:'#1f1f22', elev:'#2a2a2e', border:'rgba(255,255,255,.09)', border2:'rgba(255,255,255,.15)',
+        text:'#f5f5f7', dim:'#9b9ba1', faint:'#6a6a70', accent:'#0a84ff', ac:'#ffffff',
+        accentSoft:'rgba(10,132,255,.18)', hover:'rgba(255,255,255,.06)', active:'rgba(255,255,255,.1)',
+        shadow:'0 4px 14px rgba(0,0,0,.4)', desktop:'linear-gradient(135deg,#2a1a3e,#10131f 45%,#0a1a24)', termBg:'#131316', termText:'#dcdce0',
+      } : {
+        bg:'#ececf0', panel:'#ffffff', elev:'#f5f5f7', border:'rgba(0,0,0,.07)', border2:'rgba(0,0,0,.13)',
+        text:'#1d1d1f', dim:'#86868b', faint:'#aeaeb4', accent:'#0071e3', ac:'#ffffff',
+        accentSoft:'rgba(0,113,227,.1)', hover:'rgba(0,0,0,.04)', active:'rgba(0,0,0,.06)',
+        shadow:'0 4px 16px rgba(0,0,0,.08)', desktop:'linear-gradient(135deg,#dfe7f5,#eef0f5 50%,#f4ece9)', termBg:'#1d1d1f', termText:'#dcdce0',
+      };
+      t.font = sans; t.radius = '14px'; t.radiusSm = '10px'; t.winRadius = '16px';
+    } else {
+      t = dark ? {
+        bg:'#0c0c0f', panel:'#141417', elev:'#1a1a1f', border:'#242429', border2:'#33333b',
+        text:'#f3f3f5', dim:'#9a9aa4', faint:'#60606a', accent:'#7c6cff', ac:'#ffffff',
+        accentSoft:'rgba(124,108,255,.16)', hover:'rgba(255,255,255,.04)', active:'rgba(255,255,255,.07)',
+        shadow:'0 1px 2px rgba(0,0,0,.4)', desktop:'radial-gradient(1100px 560px at 72% -12%,#1a1626,#0c0c0f)', termBg:'#08080b', termText:'#cfcfe0',
+      } : {
+        bg:'#f6f6f8', panel:'#ffffff', elev:'#fafafb', border:'#ebebef', border2:'#dcdce2',
+        text:'#18181c', dim:'#6c6c76', faint:'#a0a0aa', accent:'#6d5cff', ac:'#ffffff',
+        accentSoft:'rgba(109,92,255,.1)', hover:'rgba(0,0,0,.035)', active:'rgba(0,0,0,.06)',
+        shadow:'0 1px 2px rgba(0,0,0,.06)', desktop:'radial-gradient(1100px 560px at 72% -12%,#efeefa,#e9e9ef)', termBg:'#0e0e13', termText:'#cfcfe0',
+      };
+      t.font = sans; t.radius = '9px'; t.radiusSm = '7px'; t.winRadius = '12px';
+    }
+    if (this.props.accent) t.accent = this.props.accent;
+    t.mono = mono;
+    t.winShadow = dark ? '0 30px 80px -20px rgba(0,0,0,.7)' : '0 30px 80px -28px rgba(0,0,0,.32)';
+    return t;
+  }
+
+  // ----- helpers -----
+  set(k, v) { this.setState({ [k]: v }); }
+  curStyle() { return this.state.style || this.props.uiStyle || 'clean'; }
+  curMode() { return this.state.mode || this.props.appearance || 'dark'; }
+  device() {
+    const d = DEVICES.find(x => x.id === this.state.deviceId) || DEVICES[0];
+    return { ...d, udidShort: d.udid.slice(0, 8) + '…' + d.udid.slice(-6) };
+  }
+
+  navStyle(id) {
+    const a = this.state.page === id;
+    return {
+      display:'flex', alignItems:'center', gap:'11px', padding:'8px 10px', width:'100%',
+      border:'1px solid transparent', borderRadius:'var(--radius-sm)', cursor:'pointer',
+      fontFamily:'inherit', fontSize:'13px', textAlign:'left',
+      fontWeight: a ? '600' : '500',
+      color: a ? 'var(--text)' : 'var(--dim)',
+      background: a ? 'var(--active)' : 'transparent',
+      boxShadow: a ? 'inset 2px 0 0 var(--accent)' : 'none',
+    };
+  }
+  seg(id, cur) {
+    const a = id === cur;
+    return {
+      padding:'5px 12px', border:'none', borderRadius:'6px', cursor:'pointer',
+      fontFamily:'inherit', fontSize:'12px', fontWeight:'600',
+      background: a ? 'var(--accent)' : 'transparent',
+      color: a ? 'var(--ac)' : 'var(--dim)',
+    };
+  }
+  tabStyle(id) {
+    const a = this.state.diagTab === id;
+    return {
+      padding:'9px 4px', marginRight:'18px', border:'none', background:'transparent', cursor:'pointer',
+      fontFamily:'inherit', fontSize:'13px', fontWeight: a ? '700' : '500',
+      color: a ? 'var(--text)' : 'var(--dim)',
+      borderBottom: a ? '2px solid var(--accent)' : '2px solid transparent',
+      marginBottom:'-1px',
+    };
+  }
+  rowZebra(i, cols) {
+    return {
+      display: cols || 'flex', justifyContent:'space-between', gap:'12px', alignItems:'center',
+      padding:'11px 0', borderBottom: '1px solid var(--border)',
+    };
+  }
+
+  renderVals() {
+    const t = this.theme();
+    const cs = this.curStyle(), cm = this.curMode();
+    const dev = this.device();
+
+    const conn = this.state.conn;
+    const connected = conn === 'connected';
+    const dc = connected
+      ? { name: dev.name, sub: dev.model, dot: 'var(--accent)', iconColor: 'var(--accent)', soft: 'var(--accent-soft)' }
+      : conn === 'detected'
+      ? { name: dev.model, sub: 'Awaiting trust…', dot: '#febc2e', iconColor: '#febc2e', soft: 'rgba(254,188,46,.15)' }
+      : { name: 'No device', sub: 'Connect to begin', dot: 'var(--faint)', iconColor: 'var(--faint)', soft: 'var(--elev)' };
+    const dcCardStyle = { width: '100%', display: 'flex', alignItems: 'center', gap: '11px', padding: '10px', background: 'var(--elev)', border: conn === 'none' ? '1px dashed var(--border2)' : '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' };
+    const navWrapStyle = { padding: '6px 10px', flex: '1', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px', opacity: connected ? 1 : 0.4, pointerEvents: connected ? 'auto' : 'none', filter: connected ? 'none' : 'grayscale(1)' };
+    const connDot = connected ? '#28c840' : conn === 'detected' ? '#febc2e' : 'var(--faint)';
+    const connText = connected ? 'lockdownd · usbmuxd' : conn === 'detected' ? 'device detected · awaiting trust' : 'no device · scanning usbmuxd';
+    const titleDevice = connected ? '— ' + dev.name : conn === 'detected' ? '— ' + dev.model + ' (untrusted)' : '— no device';
+
+    const rootStyle = {
+      '--bg':t.bg,'--panel':t.panel,'--elev':t.elev,'--border':t.border,'--border2':t.border2,
+      '--text':t.text,'--dim':t.dim,'--faint':t.faint,'--accent':t.accent,'--ac':t.ac,
+      '--accent-soft':t.accentSoft,'--hover':t.hover,'--active':t.active,
+      '--radius':t.radius,'--radius-sm':t.radiusSm,'--win-radius':t.winRadius,
+      '--font':t.font,'--mono':t.mono,'--shadow':t.shadow,'--win-shadow':t.winShadow,
+      '--terminal-bg':t.termBg,'--term-text':t.termText,
+      minHeight:'100vh', width:'100%', padding:'18px', background:t.desktop,
+      fontFamily:t.font, color:t.text, display:'flex', boxSizing:'border-box',
+    };
+
+    // page meta
+    const meta = {
+      overview:['Overview','idevice · lockdown query'],
+      diagnostics:['Diagnostics','com.apple.mobile.diagnostics_relay'],
+      files:['Files','com.apple.afc'],
+      apps:['Apps','com.apple.mobile.installation_proxy'],
+      logs:['Logs','com.apple.syslog_relay'],
+      developer:['Debug Tools','com.apple.dt.* services'],
+      location:['Location','com.apple.dt.simulatelocation'],
+    }[this.state.page];
+
+    // identity rows
+    const identity = [
+      ['UDID', dev.udid],['Serial number', dev.serial],['ECID', dev.ecid],
+      ['Hardware model', dev.modelId],['Chip', dev.chip],['Wi-Fi address', dev.wifi],
+    ].map((r,i,arr)=>({k:r[0], v:r[1], style:{display:'flex',justifyContent:'space-between',gap:'12px',padding:'11px 0',borderBottom: i===arr.length-1?'none':'1px solid var(--border)'}}));
+
+    // battery ring + storage
+    const batteryRing = `conic-gradient(var(--accent) ${dev.battery*3.6}deg, var(--elev) 0deg)`;
+    const storagePct = Math.round(dev.storageUsed/dev.storageTotal*100)+'%';
+    const storageFree = dev.storageTotal-dev.storageUsed;
+
+    // devices menu
+    const devices = DEVICES.map(d=>({
+      ...d, dot: d.id===this.state.deviceId?'var(--accent)':'var(--faint)',
+      select: ()=>this.setState({deviceId:d.id, deviceMenuOpen:false}),
+      rowStyle:{display:'flex',alignItems:'center',gap:'10px',width:'100%',padding:'8px 10px',background:'transparent',border:'none',borderRadius:'8px',cursor:'pointer',textAlign:'left',fontFamily:'inherit'},
+    }));
+
+    // quick actions
+    const qa = (g,ti,su,p)=>({glyph:g,title:ti,sub:su,go:()=>this.set('page',p)});
+    const quickActions=[qa('▤','Browse files','AFC filesystem','files'),qa('◇','Manage apps','install · uninstall','apps'),qa('≣','Stream logs','live syslog','logs'),qa('◆','Debug tools','JIT · GDB · DDI','developer')];
+
+    // diagnostics
+    const batteryStats=[
+      {k:'Health',v:dev.batteryHealth+'%',note:'Good',tc:'#28c840'},
+      {k:'Cycle count',v:dev.cycles,note:'within spec',tc:'var(--dim)'},
+      {k:'Temperature',v:'31.2°',note:'nominal',tc:'var(--dim)'},
+      {k:'Voltage',v:'4.18V',note:'charging',tc:'var(--accent)'},
+    ];
+    const chart=Array.from({length:24},(_,i)=>{const v=72+Math.round(Math.sin(i/2)*8+i*0.4+Math.random()*4);return {h:Math.min(100,v)+'%',op:(0.45+i*0.022).toFixed(2)};});
+    const gq=this.state.gestaltQuery.toLowerCase();
+    const gFiltered=GESTALT.filter(g=>!gq||g[0].toLowerCase().includes(gq)||g[1].toLowerCase().includes(gq));
+    const gestaltRows=gFiltered.map((g,i)=>({k:g[0],v:g[1],style:{display:'flex',gap:'16px',padding:'10px 16px',borderBottom:i===gFiltered.length-1?'none':'1px solid var(--border)'}}));
+    const ioTree=IO.map(n=>({prefix:n[0],name:n[1],meta:n[2],style:{padding:'3px 0',whiteSpace:'pre'}}));
+    const sensors=[
+      {k:'Accelerometer',v:'0.02',unit:'g',bar:'12%'},{k:'Gyroscope',v:'0.5',unit:'°/s',bar:'8%'},
+      {k:'Ambient light',v:'420',unit:'lux',bar:'55%'},{k:'Barometer',v:'1013',unit:'hPa',bar:'68%'},
+      {k:'Proximity',v:'far',unit:'',bar:'5%'},{k:'Magnetometer',v:'48',unit:'µT',bar:'40%'},
+    ];
+
+    // files
+    const path=this.state.filePath;
+    const key='/'+path.join('/');
+    const list=(FS[key]||[]);
+    const folderIcon=React.createElement('svg',{width:17,height:17,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8},React.createElement('path',{d:'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'}));
+    const fileIcon=React.createElement('svg',{width:17,height:17,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8},React.createElement('path',{d:'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z'}),React.createElement('path',{d:'M14 3v5h5'}));
+    const currentFiles=list.map((f,i)=>({
+      n:f.n, size:f.folder?'—':f.size, date:f.date, kindLabel:f.folder?'Folder':(f.kind||'Document'),
+      icon: f.folder?folderIcon:fileIcon, iconColor: f.folder?'var(--accent)':'var(--faint)',
+      open: f.folder?()=>this.set('filePath',[...path,f.n]):()=>{},
+      style:{display:'grid',gridTemplateColumns:'1fr 130px 120px 80px',gap:'12px',alignItems:'center',padding:'11px 16px',width:'100%',border:'none',borderBottom:i===list.length-1?'none':'1px solid var(--border)',background:'transparent',cursor:f.folder?'pointer':'default',fontFamily:'inherit'},
+    }));
+    const crumbAll=['Media',...path];
+    const crumbs=crumbAll.map((c,i)=>({
+      label:c, sep:i<crumbAll.length-1?'›':'', color:i===crumbAll.length-1?'var(--text)':'var(--dim)',
+      go:()=>this.set('filePath',path.slice(0,i)),
+    }));
+
+    // apps
+    const aq=this.state.appQuery.toLowerCase();
+    const allApps=this.state.installedExtra.concat(APPS);
+    const appsF=allApps.filter(a=>!aq||a.name.toLowerCase().includes(aq)||a.bundle.toLowerCase().includes(aq));
+    const appList=appsF.map(a=>({
+      ...a, letter:a.name[0], tag:a.fresh?'new':(a.sys?'system':'user'),
+      tagColor:a.fresh?'var(--accent)':'var(--faint)',
+      select:()=>this.set('appId',a.id),
+      style:{display:'flex',alignItems:'center',gap:'13px',padding:'12px',width:'100%',background:'var(--panel)',border:'1px solid '+(a.id===this.state.appId?'var(--accent)':'var(--border)'),borderRadius:'var(--radius)',cursor:'pointer',fontFamily:'inherit'},
+    }));
+    const selApp=allApps.find(a=>a.id===this.state.appId)||allApps[0];
+    const inst=this.state.installing;
+    const installing=inst?{name:inst.name,phase:inst.phase,pct:Math.min(100,Math.round(inst.progress))+'%'}:null;
+    const ipaZoneStyle={display:'flex',alignItems:'center',gap:'13px',padding:'15px 16px',borderRadius:'var(--radius)',border:'1.5px dashed '+(this.state.dragOver?'var(--accent)':'var(--border2)'),background:this.state.dragOver?'var(--accent-soft)':'var(--panel)',cursor:'pointer',marginBottom:'12px',transition:'all .15s'};
+    const selAppMeta=[['Version',selApp.ver],['Size',selApp.size],['Type',selApp.sys?'System':'User'],['Bundle',selApp.bundle.split('.').slice(-1)[0]]].map(m=>({k:m[0],v:m[1]}));
+
+    // logs
+    const levelColors={ERROR:'#ff5f57',WARN:'#febc2e',INFO:'#28c840',DEBUG:'var(--faint)',NOTICE:'var(--accent)'};
+    let lines=(this.state.clearedBase?[]:LOGS).concat(this.state.streamLines);
+    if(this.state.logFilter!=='all') lines=lines.filter(l=>l.level.toLowerCase()===this.state.logFilter);
+    const logLines=lines.map(l=>({...l,levelStyle:{color:levelColors[l.level]||'var(--dim)',fontWeight:'600',flex:'none',width:'58px'}}));
+    const chipsDef=[['all','All'],['error','Error'],['warn','Warn'],['info','Info'],['debug','Debug']];
+    const logChips=chipsDef.map(c=>{const a=this.state.logFilter===c[0];return{label:c[1],go:()=>this.set('logFilter',c[0]),style:{padding:'7px 13px',border:'1px solid '+(a?'var(--accent)':'var(--border)'),background:a?'var(--accent-soft)':'var(--panel)',color:a?'var(--accent)':'var(--dim)',borderRadius:'8px',cursor:'pointer',fontSize:'12px',fontWeight:'600',fontFamily:'inherit'}};});
+
+    // developer
+    const jit=this.state.jit;
+    const jitToggle={width:'44px',height:'26px',borderRadius:'14px',border:'none',cursor:'pointer',background:jit?'var(--accent)':'var(--border2)',position:'relative',transition:'background .2s',flex:'none'};
+    const jitKnob={position:'absolute',top:'3px',left:jit?'21px':'3px',width:'20px',height:'20px',borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.3)'};
+    const devServices=[
+      {name:'RSD Tunnel',dot:'#28c840',detail:'fd00:0:0:0::1 · port 49152'},
+      {name:'CoreDevice',dot:'#28c840',detail:'remoted handshake ok'},
+      {name:'Instruments',dot:'#febc2e',detail:'idle · ready to attach'},
+    ];
+    const gdbLines=[
+      {p:'process ',t:'attach --name "CrossCode"'},
+      {p:'',t:'Attaching to process 1294...'},
+      {p:'',t:'Process 1294 stopped'},
+      {p:'thread ',t:'#1: tid=0x4f2, 0x000000018a2c stop reason = signal SIGSTOP'},
+      {p:'',t:'memory region info → granted jit entitlement ✓'},
+    ].map(g=>({p:g.p,t:g.t,pc:{color:'var(--accent)',fontWeight:'600'}}));
+
+    // location
+    const cl=this.state.customLoc;
+    const preset=PRESETS.find(p=>p.id===this.state.presetId)||PRESETS[0];
+    const presets=PRESETS.map(p=>{const act=!cl&&p.id===this.state.presetId;return{
+      ...p, short:p.lat.toFixed(2)+','+p.lng.toFixed(2),
+      iconColor:act?'var(--accent)':'var(--faint)',
+      select:()=>this.setState({presetId:p.id,customLoc:null,simOn:true}),
+      style:{display:'flex',alignItems:'center',gap:'10px',width:'100%',padding:'10px 12px',background:'var(--panel)',border:'1px solid '+(act?'var(--accent)':'var(--border)'),borderRadius:'9px',cursor:'pointer',fontFamily:'inherit'},
+    };});
+    const loc= cl
+      ? {lat:cl.lat.toFixed(4),lng:cl.lng.toFixed(4),name:cl.name,px:cl.px,py:cl.py}
+      : {lat:preset.lat.toFixed(4),lng:preset.lng.toFixed(4),name:preset.name,px:preset.px,py:preset.py};
+    const simOn=this.state.simOn;
+
+    // mode icon
+    const modeIcon=this.curMode()==='dark'
+      ? "display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--dim);box-shadow:5px 0 0 -2px var(--panel) inset, 5px 0 0 var(--dim);"
+      : "display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);";
+
+    return {
+      rootStyle, device:dev,
+      pageTitle:meta[0], pageSub:meta[1],
+      pageOverview:this.state.page==='overview', pageDiag:this.state.page==='diagnostics',
+      pageFiles:this.state.page==='files', pageApps:this.state.page==='apps',
+      pageLogs:this.state.page==='logs', pageDev:this.state.page==='developer', pageLoc:this.state.page==='location',
+      nav:{
+        overview:{go:()=>this.set('page','overview'),style:this.navStyle('overview')},
+        diagnostics:{go:()=>this.set('page','diagnostics'),style:this.navStyle('diagnostics')},
+        files:{go:()=>this.set('page','files'),style:this.navStyle('files')},
+        apps:{go:()=>this.set('page','apps'),style:this.navStyle('apps')},
+        logs:{go:()=>this.set('page','logs'),style:this.navStyle('logs')},
+        developer:{go:()=>this.set('page','developer'),style:this.navStyle('developer')},
+        location:{go:()=>this.set('page','location'),style:this.navStyle('location')},
+      },
+      // switchers
+      setStyleClean:()=>this.set('style','clean'), setStyleTerminal:()=>this.set('style','terminal'), setStyleApple:()=>this.set('style','apple'),
+      segClean:this.seg('clean',cs), segTerminal:this.seg('terminal',cs), segApple:this.seg('apple',cs),
+      toggleMode:()=>this.set('mode',cm==='dark'?'light':'dark'), modeIcon,
+      // device menu
+      deviceMenuOpen:this.state.deviceMenuOpen, devices,
+      toggleDeviceMenu:()=>this.set('deviceMenuOpen',!this.state.deviceMenuOpen),
+      openPair:()=>this.setState({pairOpen:true,deviceMenuOpen:false}),
+      pairOpen:this.state.pairOpen, closePair:()=>this.set('pairOpen',false),
+      // overview
+      identity, batteryRing, storagePct, storageFree, quickActions,
+      // diagnostics
+      diagTabBattery:()=>this.set('diagTab','battery'), diagTabGestalt:()=>this.set('diagTab','gestalt'),
+      diagTabIo:()=>this.set('diagTab','io'), diagTabSensors:()=>this.set('diagTab','sensors'),
+      dtab:{battery:this.tabStyle('battery'),gestalt:this.tabStyle('gestalt'),io:this.tabStyle('io'),sensors:this.tabStyle('sensors')},
+      dtBattery:this.state.diagTab==='battery', dtGestalt:this.state.diagTab==='gestalt', dtIo:this.state.diagTab==='io', dtSensors:this.state.diagTab==='sensors',
+      batteryStats, chart, gestaltRows, gestaltQuery:this.state.gestaltQuery, gestaltCount:gFiltered.length,
+      onGestaltSearch:(e)=>this.set('gestaltQuery',e.target.value), ioTree, sensors,
+      // files
+      currentFiles, crumbs, fileCount:list.length,
+      // connection / onboarding
+      conn, connected, showOnboard:!connected, onboardNone:conn==='none', onboardDetected:conn==='detected',
+      dc, dcCardStyle, navWrapStyle, connDot, connText, titleDevice,
+      simulateConnect:()=>this.set('conn','detected'),
+      doPair:()=>this.setState({conn:'connected',toast:{msg:dev.name+' paired',t:Date.now()}}),
+      disconnect:()=>this.setState({conn:'none',deviceMenuOpen:false,page:'overview'}),
+      toast:this.state.toast,
+      // apps
+      appList, appQuery:this.state.appQuery, onAppSearch:(e)=>this.set('appQuery',e.target.value),
+      selApp:{...selApp,letter:selApp.name[0]}, selAppMeta, installing, ipaZoneStyle,
+      onIpaDrop:(e)=>{e.preventDefault();const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];this.startInstall(f?f.name:'Sideloaded.ipa');},
+      onIpaOver:(e)=>{e.preventDefault();if(!this.state.dragOver)this.set('dragOver',true);},
+      onIpaLeave:()=>this.set('dragOver',false),
+      onIpaClick:()=>this.startInstall('Sideloaded.ipa'),
+      // logs
+      logLines, logChips, logScrollRef:this.logRef,
+      toggleLog:()=>this.set('logPaused',!this.state.logPaused),
+      logBtnLabel:this.state.logPaused?'Resume':'Pause',
+      logLiveDot:this.state.logPaused?'var(--faint)':'#28c840', logLiveText:this.state.logPaused?'paused':'live',
+      clearLog:()=>this.setState({clearedBase:true,streamLines:[]}),
+      // developer
+      toggleJit:()=>this.set('jit',!jit), jitToggle, jitKnob,
+      jitDot:jit?'#28c840':'var(--faint)', jitStatus:jit?'debugserver attached · JIT granted to 1 process':'no process attached',
+      devServices, gdbLines,
+      // location
+      presets, loc, toggleSim:()=>this.set('simOn',!simOn),
+      mapDown:(e)=>this.mapDown(e), mapMove:(e)=>this.mapMove(e), mapUp:()=>this.mapUp(),
+      simBtn:{width:'100%',marginTop:'16px',padding:'11px',borderRadius:'9px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:'700',fontFamily:'inherit',background:simOn?'#ff5f57':'var(--accent)',color:'#fff'},
+      simLabel:simOn?'Stop simulation':'Start simulation',
+      simDot:simOn?'#28c840':'var(--faint)', simStatus:simOn?'Location override active':'Using real GPS',
+    };
+  }
+}
+
+const DEVICES=[
+  {id:'d1',name:"Jackson's iPhone",model:'iPhone 15 Pro',modelId:'iPhone16,1',ios:'17.5.1',build:'21F90',udid:'00008130-001A2D3C1E88001C',serial:'F2LX9K3PQ1NM',ecid:'0x1A2D3C1E88001C',chip:'A17 Pro',wifi:'F0:18:98:2A:6B:C4',conn:'USB',battery:87,batteryHealth:94,cycles:212,storageUsed:142,storageTotal:256},
+  {id:'d2',name:'Test iPad',model:'iPad Pro 11"',modelId:'iPad14,3',ios:'17.4',build:'21E219',udid:'00008027-000C5D2E1488002E',serial:'DMPX5K9LQ2',ecid:'0x0C5D2E1488002E',chip:'M2',wifi:'A4:83:E7:11:09:2D',conn:'Network',battery:63,batteryHealth:100,cycles:48,storageUsed:88,storageTotal:512},
+];
+const GESTALT=[
+  ['ProductName','iPhone OS'],['ProductVersion','17.5.1'],['BuildVersion','21F90'],['DeviceClass','iPhone'],
+  ['HardwareModel','D83AP'],['ChipID','0x8130'],['BoardId','0x08'],['ProductType','iPhone16,1'],
+  ['RegionInfo','LL/A'],['DeviceColor','1 (Natural Titanium)'],['CPUArchitecture','arm64e'],['HasSEP','true'],
+  ['DeviceName',"Jackson's iPhone"],['TotalSystemAvailable','8192 MB'],['SupportsForceTouch','false'],['DeviceSupportsHDRDisplay','true'],
+];
+const IO=[
+  ['','AppleARMPE',''],['├─ ','arm-io','@200000000'],['│  ├─ ','AppleT8130CLPC',''],['│  └─ ','AppleH13CamIn',''],
+  ['├─ ','AppleSmartBatteryManager',''],['│  └─ ','AppleSmartBattery','Capacity 94%'],
+  ['├─ ','IOThunderboltFamily',''],['├─ ','AppleBCMWLANCore','en0'],['└─ ','AppleEmbeddedNVMeController','1TB'],
+];
+const FS={
+  '/':[
+    {n:'DCIM',folder:true,date:'May 2, 2026'},{n:'Downloads',folder:true,date:'Apr 28, 2026'},
+    {n:'Books',folder:true,date:'Mar 14, 2026'},{n:'PhotoData',folder:true,date:'May 1, 2026'},
+    {n:'iTunes_Control',folder:true,date:'Jan 9, 2026'},{n:'Purchases',folder:true,date:'Feb 2, 2026'},
+    {n:'info.plist',kind:'Property List',size:'1.2 KB',date:'Mar 11, 2026'},
+  ],
+  '/DCIM':[
+    {n:'100APPLE',folder:true,date:'May 2, 2026'},{n:'101APPLE',folder:true,date:'Apr 19, 2026'},{n:'.MISC',folder:true,date:'Jan 1, 2026'},
+  ],
+  '/DCIM/100APPLE':[
+    {n:'IMG_0001.HEIC',kind:'HEIF Image',size:'2.4 MB',date:'May 2, 2026'},
+    {n:'IMG_0002.HEIC',kind:'HEIF Image',size:'3.1 MB',date:'May 2, 2026'},
+    {n:'IMG_0003.MOV',kind:'QuickTime',size:'48.2 MB',date:'May 1, 2026'},
+    {n:'IMG_0004.HEIC',kind:'HEIF Image',size:'2.0 MB',date:'Apr 30, 2026'},
+  ],
+};
+const APPS=[
+  {id:'a1',name:'StikDebug',bundle:'com.stik.debug',ver:'1.4.2',size:'24.1 MB',c:'#7c6cff',sys:false},
+  {id:'a2',name:'CrossCode',bundle:'app.crosscode.ios',ver:'0.9.0',size:'88.7 MB',c:'#ff7a59',sys:false},
+  {id:'a3',name:'Protokolle',bundle:'de.protokolle.app',ver:'2.1.0',size:'12.3 MB',c:'#34d399',sys:false},
+  {id:'a4',name:'SideStore',bundle:'com.SideStore.SideStore',ver:'0.6.1',size:'31.5 MB',c:'#0a84ff',sys:false},
+  {id:'a5',name:'Safari',bundle:'com.apple.mobilesafari',ver:'17.5',size:'104 MB',c:'#1d9bf0',sys:true},
+  {id:'a6',name:'Settings',bundle:'com.apple.Preferences',ver:'17.5',size:'48 MB',c:'#8e8e93',sys:true},
+  {id:'a7',name:'Files',bundle:'com.apple.DocumentsApp',ver:'17.5',size:'22 MB',c:'#2a87ff',sys:true},
+];
+const LOGS=[
+  {time:'18:42:01.221',level:'INFO',proc:'lockdownd',msg:'StartSession with host 6F3A… succeeded'},
+  {time:'18:42:01.398',level:'DEBUG',proc:'usbmuxd',msg:'Connecting device 0x130 to port 62078'},
+  {time:'18:42:02.014',level:'NOTICE',proc:'CoreDevice',msg:'RSD handshake complete, 38 services advertised'},
+  {time:'18:42:02.551',level:'INFO',proc:'installd',msg:'Verifying code signature for app.crosscode.ios'},
+  {time:'18:42:03.102',level:'WARN',proc:'thermalmonitord',msg:'Thermal pressure level moved to Nominal→Fair'},
+  {time:'18:42:03.770',level:'INFO',proc:'mobile_assertion',msg:'heartbeat ack (seq 4821)'},
+  {time:'18:42:04.233',level:'DEBUG',proc:'afcd',msg:'OPEN /DCIM/100APPLE/IMG_0003.MOV mode=r'},
+  {time:'18:42:04.901',level:'ERROR',proc:'symptomsd',msg:'Failed to read pref domain com.apple.xpc.activity'},
+  {time:'18:42:05.412',level:'INFO',proc:'debugserver',msg:'Attached to pid 1294, granting JIT entitlement'},
+  {time:'18:42:06.008',level:'NOTICE',proc:'locationd',msg:'Simulated location override engaged'},
+  {time:'18:42:06.642',level:'DEBUG',proc:'backboardd',msg:'Display wake reason: 0x4 (USB attach)'},
+  {time:'18:42:07.110',level:'INFO',proc:'lockdownd',msg:'GetValue ProductVersion → 17.5.1'},
+];
+const LIVELOG_POOL=[
+  {level:'INFO',proc:'lockdownd',msg:'GetValue BatteryCurrentCapacity → 87'},
+  {level:'DEBUG',proc:'usbmuxd',msg:'rx 64 bytes on session 0x4 (plist)'},
+  {level:'NOTICE',proc:'CoreDevice',msg:'service com.apple.instruments.server advertised'},
+  {level:'INFO',proc:'mobile_assertion',msg:'heartbeat ack ok'},
+  {level:'DEBUG',proc:'afcd',msg:'READDIR /DCIM/100APPLE entries=4'},
+  {level:'WARN',proc:'thermalmonitord',msg:'pressure level Nominal'},
+  {level:'INFO',proc:'installd',msg:'LSApplicationWorkspace refresh complete'},
+  {level:'DEBUG',proc:'backboardd',msg:'display brightness 0.62'},
+  {level:'ERROR',proc:'symptomsd',msg:'NWConcrete_nw_endpoint resolve timeout'},
+  {level:'INFO',proc:'locationd',msg:'CLClient location override accepted'},
+  {level:'DEBUG',proc:'debugserver',msg:'qSupported handshake ok'},
+  {level:'NOTICE',proc:'remoted',msg:'RSD tunnel keepalive (seq 91)'},
+  {level:'INFO',proc:'lockdownd',msg:'GetValue ProductVersion → 17.5.1'},
+  {level:'DEBUG',proc:'diagnosticd',msg:'IORegistry poll AppleSmartBattery'},
+];
+const PRESETS=[
+  {id:'sf',name:'San Francisco, CA',lat:37.7749,lng:-122.4194,px:'42%',py:'48%'},
+  {id:'cupertino',name:'Apple Park',lat:37.3349,lng:-122.0090,px:'40%',py:'56%'},
+  {id:'nyc',name:'New York, NY',lat:40.7128,lng:-74.0060,px:'68%',py:'42%'},
+  {id:'london',name:'London, UK',lat:51.5074,lng:-0.1278,px:'56%',py:'30%'},
+  {id:'tokyo',name:'Tokyo, JP',lat:35.6762,lng:139.6503,px:'80%',py:'52%'},
+];
+</script>
+</body>
+</html>

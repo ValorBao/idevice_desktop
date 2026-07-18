@@ -1,0 +1,54 @@
+[package]
+name = "idevice-desktop"
+version = "0.1.0"
+description = "Desktop UI for jkcoxson/idevice"
+authors = ["idevice desktop contributors"]
+edition = "2024"
+
+[lib]
+name = "idevice_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+futures-util = "0.3"
+plist = "1.8"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dependencies.idevice]
+git = "https://github.com/jkcoxson/idevice.git"
+rev = "8eed181f39a16ea70380ec8c3cff6bed07a1ef69"
+default-features = false
+features = [
+  "ring",
+  "usbmuxd",
+  "pair",
+  "afc",
+  "diagnostics_relay",
+  "installation_proxy",
+  "syslog_relay",
+  "screenshotr",
+  "amfi",
+  "mobile_image_mounter",
+  "location_simulation",
+  "core_device_proxy",
+  "tunnel_tcp_stack",
+  "rsd",
+  "dvt",
+  "debug_proxy",
+  "tss"
+]

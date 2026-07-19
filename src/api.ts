@@ -58,6 +58,8 @@ export type RemoteFileEntry = {
   modified: string
 }
 
+export type FileSharingApp = { bundleId: string; name: string }
+
 export type InstalledApp = {
   bundleId: string
   name: string
@@ -111,11 +113,12 @@ export const api = {
     if (kind === 'nand') return call<unknown>('diagnostics_nand', { udid })
     return call<unknown>('diagnostics_wifi', { udid })
   },
-  afcList: (path: string, udid?: string) => call<RemoteFileEntry[]>('afc_list', { udid, path }),
-  afcMkdir: (path: string, udid?: string) => call<void>('afc_mkdir', { udid, path }),
-  afcRemove: (path: string, recursive: boolean, udid?: string) => call<void>('afc_remove', { udid, path, recursive }),
-  afcUpload: (localPath: string, remotePath: string, udid?: string) => call<void>('afc_upload', { udid, localPath, remotePath }),
-  afcDownload: (remotePath: string, localPath: string, udid?: string) => call<void>('afc_download', { udid, remotePath, localPath }),
+  afcList: (path: string, udid?: string, bundleId?: string) => call<RemoteFileEntry[]>('afc_list', { udid, path, bundleId: bundleId ?? null }),
+  afcMkdir: (path: string, udid?: string, bundleId?: string) => call<void>('afc_mkdir', { udid, path, bundleId: bundleId ?? null }),
+  afcRemove: (path: string, recursive: boolean, udid?: string, bundleId?: string) => call<void>('afc_remove', { udid, path, recursive, bundleId: bundleId ?? null }),
+  afcUpload: (localPath: string, remotePath: string, udid?: string, bundleId?: string) => call<void>('afc_upload', { udid, localPath, remotePath, bundleId: bundleId ?? null }),
+  afcDownload: (remotePath: string, localPath: string, udid?: string, bundleId?: string) => call<void>('afc_download', { udid, remotePath, localPath, bundleId: bundleId ?? null }),
+  fileSharingApps: (udid?: string) => call<FileSharingApp[]>('file_sharing_apps', { udid }),
   appsList: (udid?: string) => call<InstalledApp[]>('apps_list', { udid }),
   appInstall: (localPath: string, udid?: string) => call<void>('app_install', { udid, localPath }),
   appUninstall: (bundleId: string, udid?: string) => call<void>('app_uninstall', { udid, bundleId }),

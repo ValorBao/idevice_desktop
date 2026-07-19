@@ -11,7 +11,7 @@ import {
 } from './data'
 import {
   api, dialogs, errorMessage, events, isDesktopRuntime,
-  type DeveloperStatus, type DeviceOverview, type DeviceSummary, type InstalledApp,
+  type DeveloperStatus, type DeviceOverview, type DeviceSummary, type FileSharingApp, type InstalledApp,
   type RemoteFileEntry,
 } from './api'
 
@@ -451,34 +451,95 @@ function Diagnostics({ device, desktop, onError }: { device: Device; desktop: bo
   )
 }
 
+type FileSource = 'media' | 'app'
+
+const protectedMediaRoots = new Set(['Books', 'DCIM', 'PhotoData', 'Purchases', 'iTunes_Control'])
+const mediaFolderDescriptions: Record<string, string> = {
+  Books: 'Synced books · iOS managed',
+  DCIM: 'Photos and camera videos · iOS managed',
+  Downloads: 'Device media downloads',
+  PhotoData: 'Photos database and thumbnails · iOS managed',
+  Purchases: 'Purchased media data · iOS managed',
+  iTunes_Control: 'Synced music library data · iOS managed',
+}
+const demoAppDocumentEntries: RemoteFileEntry[] = [
+  { name: 'Exports', path: '/Exports', kind: 'Folder', isDirectory: true, size: 0, modified: '2026-07-18 10:32:00' },
+  { name: 'settings.json', path: '/settings.json', kind: 'JSON', isDirectory: false, size: 14682, modified: '2026-07-17 21:08:14' },
+  { name: 'session.log', path: '/session.log', kind: 'LOG', isDirectory: false, size: 32768, modified: '2026-07-18 09:46:03' },
+]
+
+const mediaPathIsProtected = (path: string) => protectedMediaRoots.has(path.split('/').filter(Boolean)[0] ?? '')
+
 function Files({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
+  const demoSharingApps: FileSharingApp[] = installedApps.filter((app) => !app.system).slice(0, 3).map((app) => ({ bundleId: app.bundle, name: app.name }))
+  const [source, setSource] = useState<FileSource>('media')
   const [path, setPath] = useState<string[]>([])
-  const key = `/${path.join('/')}`
   const [remoteEntries, setRemoteEntries] = useState<RemoteFileEntry[]>([])
+  const [remoteSharingApps, setRemoteSharingApps] = useState<FileSharingApp[]>([])
+  const sharingApps = desktop ? remoteSharingApps : demoSharingApps
+  const [selectedBundle, setSelectedBundle] = useState(desktop ? '' : demoSharingApps[0]?.bundleId ?? '')
   const [selected, setSelected] = useState<RemoteFileEntry | null>(null)
-  const currentPath = key
+  const currentPath = `/${path.join('/')}`
+  const selectedApp = sharingApps.find((app) => app.bundleId === selectedBundle)
+  const bundleId = source === 'app' ? selectedBundle || undefined : undefined
+  const sourceAvailable = source === 'media' || Boolean(bundleId)
+  const currentReadOnly = source === 'media' && mediaPathIsProtected(currentPath)
+  const selectedReadOnly = source === 'media' && Boolean(selected && mediaPathIsProtected(selected.path))
+
+  useEffect(() => {
+    if (!desktop) return
+    void api.fileSharingApps(udid).then((apps) => {
+      setRemoteSharingApps(apps)
+      setSelectedBundle((current) => apps.some((app) => app.bundleId === current) ? current : apps[0]?.bundleId ?? '')
+    }).catch((error) => onToast(errorMessage(error)))
+  }, [desktop, udid, onToast])
+
   const refresh = useCallback(async () => {
     if (!desktop) return
+    if (!sourceAvailable) {
+      setRemoteEntries([])
+      setSelected(null)
+      return
+    }
     try {
-      setRemoteEntries(await api.afcList(currentPath, udid))
+      setRemoteEntries(await api.afcList(currentPath, udid, bundleId))
       setSelected(null)
     } catch (error) {
+      setRemoteEntries([])
       onToast(errorMessage(error))
     }
-  }, [desktop, currentPath, udid, onToast])
+  }, [desktop, sourceAvailable, currentPath, udid, bundleId, onToast])
   useEffect(() => { void refresh() }, [refresh])
-  const entries: RemoteFileEntry[] = desktop ? remoteEntries : (fileSystem[key] ?? []).map((entry) => ({
-    name: entry.name, path: `${currentPath === '/' ? '' : currentPath}/${entry.name}`, kind: entry.folder ? 'Folder' : entry.kind ?? 'Document',
-    isDirectory: Boolean(entry.folder), size: displaySizeToBytes(entry.size), modified: entry.date,
-  }))
+
+  const entries: RemoteFileEntry[] = desktop
+    ? remoteEntries
+    : source === 'app'
+      ? currentPath === '/' ? demoAppDocumentEntries : []
+      : (fileSystem[currentPath] ?? []).map((entry) => ({
+        name: entry.name, path: `${currentPath === '/' ? '' : currentPath}/${entry.name}`, kind: entry.folder ? 'Folder' : entry.kind ?? 'Document',
+        isDirectory: Boolean(entry.folder), size: displaySizeToBytes(entry.size), modified: entry.date,
+      }))
+
+  const selectSource = (nextSource: FileSource) => {
+    setSource(nextSource)
+    setPath([])
+    setSelected(null)
+  }
+  const selectApp = (nextBundle: string) => {
+    setSelectedBundle(nextBundle)
+    setPath([])
+    setSelected(null)
+  }
+  const remoteChild = (name: string) => `${currentPath === '/' ? '' : currentPath}/${name}`
 
   const uploadFile = async () => {
     if (!desktop) return onToast('File operations are available in the desktop app')
+    if (!sourceAvailable || currentReadOnly) return
     try {
       const chosen = await dialogs.anyFile()
       if (!chosen || Array.isArray(chosen)) return
       const name = chosen.split(/[\\/]/).pop() ?? 'upload.bin'
-      await api.afcUpload(chosen, `${currentPath === '/' ? '' : currentPath}/${name}`, udid)
+      await api.afcUpload(chosen, remoteChild(name), udid, bundleId)
       onToast(`${name} uploaded`)
       await refresh()
     } catch (error) { onToast(errorMessage(error)) }
@@ -488,37 +549,56 @@ function Files({ desktop, udid, onToast }: { desktop: boolean; udid: string; onT
     try {
       const target = await dialogs.saveFile(selected.name)
       if (!target) return
-      await api.afcDownload(selected.path, target, udid)
+      await api.afcDownload(selected.path, target, udid, bundleId)
       onToast(`${selected.name} downloaded`)
     } catch (error) { onToast(errorMessage(error)) }
   }
   const makeDirectory = async () => {
     if (!desktop) return onToast('Folder creation is available in the desktop app')
+    if (!sourceAvailable || currentReadOnly) return
     const name = window.prompt('Folder name')?.trim()
-    if (!name || name.includes('/')) return
+    if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) return
     try {
-      await api.afcMkdir(`${currentPath === '/' ? '' : currentPath}/${name}`, udid)
+      await api.afcMkdir(remoteChild(name), udid, bundleId)
       onToast(`${name} created`)
       await refresh()
     } catch (error) { onToast(errorMessage(error)) }
   }
   const removeEntry = async () => {
-    if (!desktop || !selected || !window.confirm(`Delete ${selected.name}?`)) return
+    if (!desktop || !selected || selectedReadOnly || !window.confirm(`Delete ${selected.name}?`)) return
     try {
-      await api.afcRemove(selected.path, selected.isDirectory, udid)
+      await api.afcRemove(selected.path, selected.isDirectory, udid, bundleId)
       onToast(`${selected.name} removed`)
       await refresh()
     } catch (error) { onToast(errorMessage(error)) }
   }
+
+  const rootLabel = source === 'media' ? 'iPhone Media' : 'Documents'
+  const displayedPath = source === 'media'
+    ? `/var/mobile/Media${currentPath === '/' ? '' : currentPath}`
+    : `${selectedApp?.name ?? 'App'} sandbox/Documents${currentPath === '/' ? '' : currentPath}`
+
   return (
     <section className="files-page page-padding compact-padding">
-      <div className="breadcrumbs"><span>com.apple.afc</span><ChevronRight size={13} /><button onClick={() => setPath([])}>Media</button>{path.map((part, index) => <span className="crumb-pair" key={`${part}-${index}`}><ChevronRight size={13} /><button onClick={() => setPath(path.slice(0, index + 1))}>{part}</button></span>)}</div>
-      <div className="file-actions"><button className="primary-button" onClick={() => void uploadFile()}><Upload size={14} />Upload</button><button onClick={() => void downloadFile()} disabled={!selected || selected.isDirectory}>Download</button><button onClick={() => void makeDirectory()}><Plus size={14} />New folder</button><button className="danger-action" onClick={() => void removeEntry()} disabled={!selected}>Delete</button></div>
+      <div className="file-source-bar">
+        <div className="file-source-tabs" role="tablist" aria-label="iPhone file source">
+          <button role="tab" aria-selected={source === 'media'} className={source === 'media' ? 'active' : ''} onClick={() => selectSource('media')}><HardDrive size={15} />Device Media</button>
+          <button role="tab" aria-selected={source === 'app'} className={source === 'app' ? 'active' : ''} onClick={() => selectSource('app')}><AppWindow size={15} />App Documents</button>
+        </div>
+        {source === 'app' && <label className="file-app-select"><span>File-sharing app</span><select value={selectedBundle} onChange={(event) => selectApp(event.target.value)} disabled={!sharingApps.length}>{sharingApps.length ? sharingApps.map((app) => <option key={app.bundleId} value={app.bundleId}>{app.name} · {app.bundleId}</option>) : <option value="">No compatible apps</option>}</select></label>}
+        <div className="file-source-copy"><b>{source === 'media' ? 'AFC media storage' : 'Shared app documents'}</b><small>{source === 'media' ? 'Maps to /var/mobile/Media; this is not the iOS system root.' : 'Only apps that enable iOS File Sharing appear here.'}</small></div>
+      </div>
+      <div className="breadcrumbs"><span>{source === 'media' ? 'com.apple.afc' : 'house_arrest'}</span><ChevronRight size={13} /><button onClick={() => setPath([])}>{rootLabel}</button>{path.map((part, index) => <span className="crumb-pair" key={`${part}-${index}`}><ChevronRight size={13} /><button onClick={() => setPath(path.slice(0, index + 1))}>{part}</button></span>)}{currentReadOnly && <em className="read-only-badge">Read only</em>}</div>
+      <div className="file-actions"><button className="primary-button" onClick={() => void uploadFile()} disabled={!sourceAvailable || currentReadOnly}><Upload size={14} />Upload</button><button onClick={() => void downloadFile()} disabled={!selected || selected.isDirectory}>Download</button><button onClick={() => void makeDirectory()} disabled={!sourceAvailable || currentReadOnly}><Plus size={14} />New folder</button><button className="danger-action" onClick={() => void removeEntry()} disabled={!selected || selectedReadOnly}>Delete</button></div>
       <div className="file-table card">
         <div className="file-head"><span>Name</span><span>Kind</span><span>Modified</span><span>Size</span></div>
-        {entries.map((entry) => <button key={entry.name} className={selected?.path === entry.path ? 'selected' : ''} onClick={() => setSelected(entry)} onDoubleClick={() => entry.isDirectory && setPath([...path, entry.name])}><span>{entry.isDirectory ? <Folder size={17} /> : <File size={17} />}<b>{entry.name}</b></span><small>{entry.kind}</small><small>{entry.modified}</small><small>{entry.isDirectory ? '—' : bytes(entry.size)}</small></button>)}
+        {!sourceAvailable ? <div className="empty-card">No installed apps currently expose Documents through iOS File Sharing.</div> : !entries.length ? <div className="empty-card">This folder is empty.</div> : entries.map((entry) => {
+          const description = source === 'media' && currentPath === '/' ? mediaFolderDescriptions[entry.name] : ''
+          const readOnlyEntry = source === 'media' && mediaPathIsProtected(entry.path)
+          return <button key={entry.name} className={selected?.path === entry.path ? 'selected' : ''} onClick={() => setSelected(entry)} onDoubleClick={() => entry.isDirectory && setPath([...path, entry.name])}><span>{entry.isDirectory ? <Folder size={17} /> : <File size={17} />}<span className="file-name-copy"><b>{entry.name}</b>{description && <small>{description}</small>}</span></span><small>{readOnlyEntry ? `${entry.kind} · read only` : entry.kind}</small><small>{entry.modified}</small><small>{entry.isDirectory ? '—' : bytes(entry.size)}</small></button>
+        })}
       </div>
-      <div className="table-footer"><span>{entries.length} items</span><span>select once · open folders twice</span></div>
+      <div className="table-footer"><span>{entries.length} items</span><span>{displayedPath}</span></div>
     </section>
   )
 }
@@ -619,8 +699,8 @@ function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: string; onTo
   return (
     <section className="apps-page page-padding compact-padding">
       <div className="apps-list-panel">
-        <div className="apps-toolbar"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search installed apps…" /></label><button className="primary-button" onClick={() => void startInstall()}><Upload size={15} />Install .ipa</button></div>
-        <div className={`drop-zone ${dragging ? 'dragging' : ''}`} onClick={() => void startInstall()} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}><span><Upload size={19} /></span><div><b>Drop an .ipa here to sideload</b><small>installation_proxy · streams over AFC</small></div></div>
+        <div className="apps-toolbar"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search installed apps…" /></label><button className="primary-button" onClick={() => void startInstall()}><Upload size={15} />Install signed .ipa</button></div>
+        <div className={`drop-zone ${dragging ? 'dragging' : ''}`} onClick={() => void startInstall()} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}><span><Upload size={19} /></span><div><b>Drop a signed .ipa here to sideload</b><small>Code signature required · verified before transfer</small></div></div>
         {install && <div className="install-card card"><div><b>{install.name}</b><code>{install.progress}%</code></div><div className="progress"><span style={{ width: `${install.progress}%` }} /></div><small>{install.phase}…</small></div>}
         <div className="app-list">{filtered.map((app) => <button key={app.id} className={selectedId === app.id ? 'active' : ''} onClick={() => setSelectedId(app.id)}><AppIcon app={app} /><span><b>{app.name}</b><small>{app.bundle}</small></span><code className={app.fresh ? 'fresh' : ''}>{app.fresh ? 'new' : app.system ? 'system' : 'user'}</code><small className="app-size">{app.size}</small></button>)}</div>
       </div>
@@ -636,6 +716,8 @@ function AppIcon({ app, large }: { app: AppInfo; large?: boolean }) {
 function Logs({ connected, desktop, udid, onError }: { connected: boolean; desktop: boolean; udid: string; onError: (message: string) => void }) {
   const [logs, setLogs] = useState<LogLine[]>(desktop ? [] : initialLogs)
   const [filter, setFilter] = useState<'all' | 'error' | 'warn' | 'info' | 'debug'>('all')
+  const [query, setQuery] = useState('')
+  const [useRegex, setUseRegex] = useState(false)
   const [paused, setPaused] = useState(false)
   const pausedRef = useRef(paused)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -666,10 +748,32 @@ function Logs({ connected, desktop, udid, onError }: { connected: boolean; deskt
     return () => window.clearInterval(timer)
   }, [paused, connected, desktop])
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [logs])
-  const shown = filter === 'all' ? logs : logs.filter((line) => line.level.toLowerCase() === filter)
+  const regexResult = useMemo(() => {
+    if (!useRegex || !query) return { expression: null, error: '' }
+    try {
+      return { expression: new RegExp(query, 'i'), error: '' }
+    } catch (error) {
+      return { expression: null, error: error instanceof Error ? error.message : 'Invalid regular expression' }
+    }
+  }, [query, useRegex])
+  const shown = useMemo(() => {
+    const levelMatches = filter === 'all' ? logs : logs.filter((line) => line.level.toLowerCase() === filter)
+    if (!query) return levelMatches
+    if (useRegex && !regexResult.expression) return []
+    const plainQuery = query.toLowerCase()
+    return levelMatches.filter((line) => {
+      const searchable = `${line.time} ${line.level} ${line.process} ${line.message}`
+      return regexResult.expression ? regexResult.expression.test(searchable) : searchable.toLowerCase().includes(plainQuery)
+    })
+  }, [filter, logs, query, regexResult.expression, useRegex])
   return (
     <section className="logs-page">
       <div className="log-toolbar">{(['all', 'error', 'warn', 'info', 'debug'] as const).map((item) => <button key={item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}<span className="toolbar-spacer" /><small className={paused ? 'paused' : ''}><i />{paused ? 'paused' : 'live'}</small><button onClick={() => setPaused((value) => !value)}>{paused ? <Play size={13} /> : <Pause size={13} />}{paused ? 'Resume' : 'Pause'}</button><button onClick={() => setLogs([])}>Clear</button></div>
+      <div className={`log-search ${regexResult.error ? 'invalid' : ''}`}>
+        <label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={useRegex ? 'Filter logs with a regular expression…' : 'Filter logs…'} aria-invalid={Boolean(regexResult.error)} />{query && <button className="log-search-clear" onClick={() => setQuery('')} aria-label="Clear log filter"><X size={14} /></button>}</label>
+        <button className={useRegex ? 'active' : ''} onClick={() => setUseRegex((value) => !value)} aria-pressed={useRegex} title="Use regular expression matching"><code>.*</code> Regex</button>
+        <small title={regexResult.error || undefined}>{regexResult.error ? 'Invalid regular expression' : `${shown.length} / ${logs.length}`}</small>
+      </div>
       <div className="log-console" ref={scrollRef}>{shown.map((line, index) => <div key={`${line.time}-${index}`}><time>{line.time}</time><b className={`level-${line.level.toLowerCase()}`}>{line.level}</b><code>{line.process}</code><span>{line.message}</span></div>)}<div className="terminal-cursor"><code>›</code><i /></div></div>
     </section>
   )

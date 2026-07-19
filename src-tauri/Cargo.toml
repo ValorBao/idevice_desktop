@@ -29,6 +29,7 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 mdns-sd = "0.19"
+zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 
 [dependencies.idevice]
 git = "https://github.com/jkcoxson/idevice.git"
@@ -41,6 +42,7 @@ features = [
   "afc",
   "diagnostics_relay",
   "installation_proxy",
+  "house_arrest",
   "syslog_relay",
   "screenshotr",
   "amfi",

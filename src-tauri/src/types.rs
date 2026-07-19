@@ -78,6 +78,13 @@ pub struct RemoteFileEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FileSharingApp {
+    pub bundle_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InstalledApp {
     pub bundle_id: String,
     pub name: String,

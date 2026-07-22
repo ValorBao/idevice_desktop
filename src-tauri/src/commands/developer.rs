@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use idevice::{
     IdeviceService, RsdService,
     amfi::AmfiClient,
@@ -8,6 +10,7 @@ use idevice::{
     mobile_image_mounter::ImageMounter,
     provider::IdeviceProvider,
     rsd::RsdHandshake,
+    tcp::handle::AdapterHandle,
 };
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
@@ -21,6 +24,50 @@ use crate::{
     types::{DeveloperStatus, JitSession, OperationProgress, StreamStatus},
     utils::plist_to_json,
 };
+
+const JIT_STEP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+async fn jit_step<T, F>(label: &str, future: F) -> CommandResult<T>
+where
+    F: Future<Output = CommandResult<T>>,
+{
+    tokio::time::timeout(JIT_STEP_TIMEOUT, future)
+        .await
+        .map_err(|_| CommandError::new("jit", format!("Timed out while {label}"), true))?
+}
+
+async fn cleanup_jit_process(
+    adapter: &mut AdapterHandle,
+    handshake: &mut RsdHandshake,
+    pid: u64,
+) -> CommandResult<()> {
+    let mut remote_server = jit_step("connecting to the remote server for cleanup", async {
+        RemoteServerClient::connect_rsd(adapter, handshake)
+            .await
+            .map_err(CommandError::from)
+    })
+    .await?;
+    jit_step("reading the cleanup handshake", async {
+        remote_server
+            .read_message(0)
+            .await
+            .map_err(CommandError::from)
+    })
+    .await?;
+    let mut process_control = jit_step("connecting to process control for cleanup", async {
+        ProcessControlClient::new(&mut remote_server)
+            .await
+            .map_err(CommandError::from)
+    })
+    .await?;
+    jit_step("terminating the launched app", async {
+        process_control
+            .kill_app(pid)
+            .await
+            .map_err(CommandError::from)
+    })
+    .await
+}
 
 #[cfg(target_os = "macos")]
 async fn run_devicectl(arguments: &[&str]) -> std::io::Result<std::process::Output> {
@@ -137,7 +184,15 @@ async fn mount_ddi_with_devicectl(app: &AppHandle, udid: &str) -> CommandResult<
 
 #[cfg(target_os = "macos")]
 async fn devicectl_ddi_is_usable(udid: &str) -> bool {
-    let output = run_devicectl(&["device", "info", "ddiServices", "--device", udid]).await;
+    let output = run_devicectl(&[
+        "device",
+        "info",
+        "ddiServices",
+        "--device",
+        udid,
+        "--no-auto-mount-ddis",
+    ])
+    .await;
     match output {
         Ok(output) if output.status.success() => {
             devicectl_output(&output).contains("isUsable: true")
@@ -521,6 +576,7 @@ pub async fn jit_start(
 
     std::thread::Builder::new()
         .name("idevice-jit".into())
+        .stack_size(8 * 1024 * 1024)
         .spawn(move || {
             let runtime = match tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -535,8 +591,14 @@ pub async fn jit_start(
             runtime.block_on(async move {
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
-                    let provider = crate::provider::provider_for(&udid).await?;
-                    let generation = ios_version(&provider).await?.developer_generation();
+                    let provider = jit_step(
+                        "connecting to the device",
+                        crate::provider::provider_for(&udid),
+                    )
+                    .await?;
+                    let generation = jit_step("reading the iOS version", ios_version(&provider))
+                        .await?
+                        .developer_generation();
                     if generation == DeveloperGeneration::Legacy {
                         return Err(CommandError::new(
                             "jit",
@@ -544,45 +606,57 @@ pub async fn jit_start(
                             false,
                         ));
                     }
-                    let (mut adapter, mut handshake) = match generation {
-                        DeveloperGeneration::CoreDeviceRemote => {
-                            let tunnel = open_remote_pairing_tunnel(
-                                &provider,
-                                &pairing_path,
-                                "idevice-desktop",
-                            )
-                            .await?;
-                            (tunnel.adapter, tunnel.handshake)
-                        }
-                        DeveloperGeneration::CoreDeviceLockdown => {
-                            let proxy = CoreDeviceProxy::connect(&provider)
-                                .await
-                                .map_err(CommandError::from)?;
-                            let rsd_port = proxy.tunnel_info().server_rsd_port;
-                            let adapter = proxy.create_software_tunnel().map_err(|error| {
-                                CommandError::new("tunnel", error.to_string(), true)
-                            })?;
-                            let mut adapter = adapter.to_async_handle();
-                            let stream = adapter.connect(rsd_port).await.map_err(|error| {
-                                CommandError::new("tunnel", error.to_string(), true)
-                            })?;
-                            let handshake = RsdHandshake::new(stream)
-                                .await
-                                .map_err(CommandError::from)?;
-                            (adapter, handshake)
-                        }
-                        DeveloperGeneration::Legacy => unreachable!(),
-                    };
+                    let (mut adapter, mut handshake) =
+                        jit_step("opening the developer tunnel", async {
+                            let result = match generation {
+                                DeveloperGeneration::CoreDeviceRemote => {
+                                    let tunnel = open_remote_pairing_tunnel(
+                                        &provider,
+                                        &pairing_path,
+                                        "idevice-desktop",
+                                    )
+                                    .await?;
+                                    (tunnel.adapter, tunnel.handshake)
+                                }
+                                DeveloperGeneration::CoreDeviceLockdown => {
+                                    let proxy = CoreDeviceProxy::connect(&provider)
+                                        .await
+                                        .map_err(CommandError::from)?;
+                                    let rsd_port = proxy.tunnel_info().server_rsd_port;
+                                    let adapter =
+                                        proxy.create_software_tunnel().map_err(|error| {
+                                            CommandError::new("tunnel", error.to_string(), true)
+                                        })?;
+                                    let mut adapter = adapter.to_async_handle();
+                                    let stream =
+                                        adapter.connect(rsd_port).await.map_err(|error| {
+                                            CommandError::new("tunnel", error.to_string(), true)
+                                        })?;
+                                    let handshake = RsdHandshake::new(stream)
+                                        .await
+                                        .map_err(CommandError::from)?;
+                                    (adapter, handshake)
+                                }
+                                DeveloperGeneration::Legacy => unreachable!(),
+                            };
+                            Ok(result)
+                        })
+                        .await?;
 
-                    let mut remote_server =
+                    let mut remote_server = jit_step("connecting to the remote server", async {
                         RemoteServerClient::connect_rsd(&mut adapter, &mut handshake)
                             .await
-                            .map_err(CommandError::from)?;
-                    remote_server
-                        .read_message(0)
-                        .await
-                        .map_err(CommandError::from)?;
-                    let pid = {
+                            .map_err(CommandError::from)
+                    })
+                    .await?;
+                    jit_step("reading the remote-server handshake", async {
+                        remote_server
+                            .read_message(0)
+                            .await
+                            .map_err(CommandError::from)
+                    })
+                    .await?;
+                    let pid = jit_step("launching the app", async {
                         let mut process_control = ProcessControlClient::new(&mut remote_server)
                             .await
                             .map_err(CommandError::from)?;
@@ -590,18 +664,46 @@ pub async fn jit_start(
                             .launch_app(bundle_id.clone(), None, None, false, false)
                             .await
                             .map_err(CommandError::from)?;
-                        let _ = process_control.disable_memory_limit(pid).await;
-                        pid
-                    };
+                        let _ = jit_step("disabling the app memory limit", async {
+                            process_control
+                                .disable_memory_limit(pid)
+                                .await
+                                .map_err(CommandError::from)
+                        })
+                        .await;
+                        Ok(pid)
+                    })
+                    .await?;
                     drop(remote_server);
 
-                    let mut debug = DebugProxyClient::connect_rsd(&mut adapter, &mut handshake)
-                        .await
-                        .map_err(CommandError::from)?;
-                    let response = debug
-                        .send_command(format!("vAttach;{pid:x}").into())
-                        .await
-                        .map_err(CommandError::from)?;
+                    let mut debug = match jit_step("connecting to the debug server", async {
+                        DebugProxyClient::connect_rsd(&mut adapter, &mut handshake)
+                            .await
+                            .map_err(CommandError::from)
+                    })
+                    .await
+                    {
+                        Ok(debug) => debug,
+                        Err(error) => {
+                            let _ = cleanup_jit_process(&mut adapter, &mut handshake, pid).await;
+                            return Err(error);
+                        }
+                    };
+                    let response = match jit_step("attaching to the app", async {
+                        debug
+                            .send_command(format!("vAttach;{pid:x}").into())
+                            .await
+                            .map_err(CommandError::from)
+                    })
+                    .await
+                    {
+                        Ok(response) => response,
+                        Err(error) => {
+                            drop(debug);
+                            let _ = cleanup_jit_process(&mut adapter, &mut handshake, pid).await;
+                            return Err(error);
+                        }
+                    };
                     let _ = app.emit(
                         "jit://status",
                         StreamStatus {

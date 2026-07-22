@@ -1,9 +1,10 @@
 [package]
 name = "idevice-desktop"
-version = "0.1.0"
+version = "0.0.1"
 description = "Desktop UI for jkcoxson/idevice"
 authors = ["idevice desktop contributors"]
 edition = "2024"
+license = "MIT"
 
 [lib]
 name = "idevice_desktop_lib"
@@ -43,6 +44,7 @@ features = [
   "diagnostics_relay",
   "installation_proxy",
   "house_arrest",
+  "springboardservices",
   "syslog_relay",
   "screenshotr",
   "amfi",

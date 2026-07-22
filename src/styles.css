@@ -292,10 +292,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .app-list button.active { border-color: var(--accent); }
 .app-icon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; color: #fff; font-size: 18px; font-style: normal; font-weight: 700; border-radius: 11px; }
 .app-icon.large { width: 70px; height: 70px; font-size: 30px; border-radius: 17px; box-shadow: var(--shadow); }
-.app-list button > span { flex: 1; min-width: 0; }
-.app-list button > span b, .app-list button > span small { display: block; }
-.app-list button > span b { font-size: 13.5px; }
-.app-list button > span small { overflow: hidden; color: var(--dim); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.app-icon img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: inherit; }
+.app-list button > span:not(.app-icon) { flex: 1; min-width: 0; }
+.app-list button > span:not(.app-icon) b, .app-list button > span:not(.app-icon) small { display: block; }
+.app-list button > span:not(.app-icon) b { font-size: 13.5px; }
+.app-list button > span:not(.app-icon) small { overflow: hidden; color: var(--dim); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .app-list button > code { color: var(--faint); font: 11px var(--mono); }
 .app-list button > code.fresh { color: var(--accent); }
 .app-size { width: 64px; color: var(--dim); font: 12px var(--mono); text-align: right; }
@@ -397,14 +398,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .preset-list button.active svg { color: var(--accent); }
 .preset-list button span { flex: 1; font-size: 12.5px; font-weight: 500; text-align: left; }
 .preset-list button small { color: var(--faint); font: 10.5px var(--mono); }
-.map-grid { position: relative; min-height: 480px; flex: 1; overflow: hidden; cursor: crosshair; user-select: none; border: 1px solid var(--border); border-radius: var(--radius); background-color: var(--panel); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg,var(--border) 1px,transparent 1px); background-size: 40px 40px; }
-.map-glow { position: absolute; width: 55%; aspect-ratio: 1; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle,var(--accent-soft),transparent 68%); pointer-events: none; }
-.map-pin { position: absolute; color: var(--accent); fill: var(--accent); transform: translate(-50%,-100%); filter: drop-shadow(0 4px 6px rgba(0,0,0,.3)); pointer-events: none; }
-.map-caption { position: absolute; bottom: 14px; left: 14px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font: 11.5px var(--mono); }
+.map-grid { position: relative; min-height: 480px; flex: 1; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.location-map-marker { background: transparent; border: 0; }
+.location-map-marker span { width: 28px; height: 28px; display: block; background: var(--accent); border: 3px solid #fff; border-radius: 50% 50% 50% 0; box-shadow: 0 4px 12px rgba(0,0,0,.38); transform: rotate(-45deg); }
+.map-caption { position: absolute; z-index: 500; bottom: 14px; left: 14px; padding: 8px 12px; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font: 11.5px var(--mono); }
 .map-caption b, .map-caption small { display: block; }
 .map-caption b { font-weight: 500; }
 .map-caption small { margin-top: 3px; color: var(--faint); font-size: 10px; }
-.map-service { position: absolute; top: 14px; right: 14px; padding: 5px 9px; color: var(--faint); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; font: 10px var(--mono); }
+.map-service { position: absolute; z-index: 500; top: 14px; right: 14px; padding: 5px 9px; pointer-events: none; color: var(--faint); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; font: 10px var(--mono); }
+.map-grid .leaflet-control-attribution { color: #555; font-size: 10px; }
 
 .onboarding { position: absolute; z-index: 30; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; background: var(--bg); }
 .onboarding > h2 { margin: 0; font-size: 21px; letter-spacing: -.3px; }

@@ -19,4 +19,4 @@ The design medium is **HTML/CSS/JS** — these are prototypes, not production co
 ## Bundle contents
 
 - `idevice/README.md` — this file
-- `idevice/project/` — the `idevice 前端界面设计` project files (HTML prototypes, assets, components)
+- `idevice/project/` — the exported design project files (HTML prototypes, assets, components)

@@ -1,46 +1,64 @@
 # idevice desktop
 
-基于 React、Tauri 2 和 [`jkcoxson/idevice`](https://github.com/jkcoxson/idevice) 的 iPhone / iPad 桌面管理工具。Rust 依赖固定在提交 `8eed181f39a16ea70380ec8c3cff6bed07a1ef69`，避免上游接口变化直接破坏构建。
+A macOS developer tool for iPhone and iPad, built with React, Tauri 2, and [`jkcoxson/idevice`](https://github.com/jkcoxson/idevice). The Rust dependency is pinned to commit `8eed181f39a16ea70380ec8c3cff6bed07a1ef69` so upstream API changes cannot break the build unexpectedly.
 
-## 已接入的真实功能
+The project aims to make device operations that currently require the `idevice-tools` command line discoverable, configurable, executable, and understandable through a graphical interface.
 
-- usbmuxd 设备发现、热插拔监听、设备选择、配对、取消配对和断开
-- Lockdown 设备概览、配对信息、电池与 AFC 存储容量
-- Diagnostics Relay：电池、MobileGestalt、IORegistry、NAND、Wi-Fi
-- AFC 文件浏览、上传、下载、新建目录和递归删除
-- Installation Proxy 应用列表、IPA 安装、卸载及进度事件
-- OS Trace 实时结构化日志、暂停、筛选和清空
-- Developer Mode、Developer Disk Image 挂载与卸载
-- iOS 17+ CoreDevice/RSD 软件隧道、应用启动、debug proxy 附加和 JIT 会话
-- DVT/RSD 与旧版 Lockdown 两套定位模拟通道
+This is an independent project and is not an official `jkcoxson/idevice` application.
 
-直接在普通浏览器里运行时会自动使用设计演示数据；通过 Tauri 启动时会自动切换到真实设备命令。
+## Documentation
 
-## 开发运行
+- [Project overview and architecture](docs/PROJECT.md)
+- [Development progress and roadmap](docs/PROGRESS.md)
+- [`idevice-tools` GUI coverage matrix](docs/CAPABILITY_MATRIX.md)
 
-需要 Node.js、Rust、系统的 usbmuxd 服务，以及 Tauri 对应平台的系统开发工具。
+## Integrated Device Features
+
+- usbmuxd device discovery, hot-plug monitoring, selection, pairing, unpairing, and disconnect
+- Lockdown device overview, pairing information, battery information, and AFC storage capacity
+- Diagnostics Relay queries for battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data
+- AFC file browsing, upload, download, directory creation, and recursive removal
+- Installation Proxy application listing, IPA installation, uninstallation, and progress events
+- Live structured OS Trace logs with pause, filter, and clear controls
+- Developer Mode and Developer Disk Image mounting and unmounting
+- iOS 17+ CoreDevice/RSD software tunnels, application launch, debug proxy attachment, and JIT sessions
+- DVT/RSD and legacy Lockdown location simulation transports
+
+Running the project in a regular browser automatically uses design demonstration data. Running it through Tauri automatically switches to commands backed by a real device.
+
+## Development
+
+Requirements include Node.js, Rust, a working usbmuxd service, and the platform development tools required by Tauri.
 
 ```bash
 npm install
 npm run desktop:dev
 ```
 
-只预览前端设计：
+To preview only the frontend design:
 
 ```bash
 npm run dev
 ```
 
-## 构建
+## Build
 
 ```bash
 npm run build
 npm run desktop:build
 ```
 
-## 开发者功能说明
+## Developer Feature Notes
 
-- 初次配对必须使用 USB，并在设备上点按“信任”。
-- iOS 16 及更早版本挂载 DDI 需要 `DeveloperDiskImage.dmg` 和对应 `.signature`。
-- iOS 17 及更高版本个性化挂载需要镜像、`BuildManifest.plist` 和 trust cache。
-- JIT 会启动所选应用并维持 debug proxy 附加；关闭开关、切换设备或退出页面会结束会话。
+- Initial pairing requires USB and approval of the trust prompt on the device.
+- iOS 16 and earlier require a matching `DeveloperDiskImage.dmg` and `.signature` file.
+- Personalized mounting on iOS 17 and later requires an image, `BuildManifest.plist`, and trust cache.
+- A JIT session launches the selected application and keeps the debug proxy attached. Disabling JIT, changing devices, or leaving the page ends the session.
+
+## Credits
+
+Core device communication is provided by [`jkcoxson/idevice`](https://github.com/jkcoxson/idevice), maintained by Jackson Coxson and its contributors. Their continued research and open-source work on modern iOS device protocols and developer services makes this project possible.
+
+## Licensing
+
+idevice desktop is available under the [MIT License](LICENSE). `idevice` is also available under the MIT License; its separate copyright and license notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -4,7 +4,11 @@ use std::{
     path::Path,
 };
 
-use idevice::{IdeviceService, installation_proxy::InstallationProxyClient, utils::installation};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use idevice::{
+    IdeviceService, installation_proxy::InstallationProxyClient,
+    springboardservices::SpringBoardServicesClient, utils::installation,
+};
 use tauri::{AppHandle, Emitter, State};
 use zip::ZipArchive;
 
@@ -295,31 +299,47 @@ pub async fn apps_list(
         .await
         .map_err(CommandError::from)?;
     let apps = client
-        .get_apps(Some("Any"), None)
+        .get_apps(Some("User"), None)
         .await
         .map_err(CommandError::from)?;
     let mut result = apps
         .into_iter()
         .filter_map(|(bundle_id, value)| {
             let dict = value.as_dictionary()?;
+            let system = dict_string(dict, &["ApplicationType"])
+                .is_some_and(|value| value.eq_ignore_ascii_case("system"));
+            if system {
+                return None;
+            }
             let name = dict_string(dict, &["CFBundleDisplayName", "CFBundleName"])
                 .unwrap_or_else(|| bundle_id.clone());
             let version = dict_string(dict, &["CFBundleShortVersionString", "CFBundleVersion"])
                 .unwrap_or_default();
             let size_bytes = dict_u64(dict, &["StaticDiskUsage"]).unwrap_or(0)
                 + dict_u64(dict, &["DynamicDiskUsage"]).unwrap_or(0);
-            let system = dict_string(dict, &["ApplicationType"])
-                .is_some_and(|value| value.eq_ignore_ascii_case("system"));
             Some(InstalledApp {
                 bundle_id,
                 name,
                 version,
                 size_bytes,
-                system,
+                system: false,
+                icon_data_url: None,
                 raw: plist_to_json(&value),
             })
         })
         .collect::<Vec<_>>();
+
+    if let Ok(mut springboard) = SpringBoardServicesClient::connect(&provider).await {
+        for installed_app in &mut result {
+            if let Ok(icon) = springboard
+                .get_icon_pngdata(installed_app.bundle_id.clone())
+                .await
+            {
+                installed_app.icon_data_url =
+                    Some(format!("data:image/png;base64,{}", STANDARD.encode(icon)));
+            }
+        }
+    }
     result.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
     Ok(result)
 }

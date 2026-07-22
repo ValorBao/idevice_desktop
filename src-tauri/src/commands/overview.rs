@@ -17,26 +17,23 @@ use crate::{
 };
 
 fn health_percent(dict: &plist::Dictionary) -> Option<u64> {
-    dict_u64(
-        dict,
-        &["MaximumCapacityPercent", "BatteryHealthMetric"],
-    )
-    .filter(|value| *value <= 100)
-    .or_else(|| {
-        let maximum = dict_u64(
-            dict,
-            &[
-                "AppleRawMaxCapacity",
-                "NominalChargeCapacity",
-                "FullChargeCapacity",
-                "MaxCapacity",
-            ],
-        )?;
-        let design = dict_u64(dict, &["DesignCapacity"])?;
-        (maximum > 100 && design > 0)
-            .then(|| ((maximum as f64 / design as f64) * 100.0).round() as u64)
-            .filter(|value| *value <= 100)
-    })
+    dict_u64(dict, &["MaximumCapacityPercent", "BatteryHealthMetric"])
+        .filter(|value| *value <= 100)
+        .or_else(|| {
+            let maximum = dict_u64(
+                dict,
+                &[
+                    "AppleRawMaxCapacity",
+                    "NominalChargeCapacity",
+                    "FullChargeCapacity",
+                    "MaxCapacity",
+                ],
+            )?;
+            let design = dict_u64(dict, &["DesignCapacity"])?;
+            (maximum > 100 && design > 0)
+                .then(|| ((maximum as f64 / design as f64) * 100.0).round() as u64)
+                .filter(|value| *value <= 100)
+        })
 }
 
 fn nested_dict<'a>(dict: &'a plist::Dictionary, key: &str) -> &'a plist::Dictionary {

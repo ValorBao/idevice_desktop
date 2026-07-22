@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import L, { type Map as LeafletMap, type Marker as LeafletMarker } from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import {
   Activity, AppWindow, BatteryCharging, Check, ChevronDown, ChevronRight, CircleStop,
   Code2, File, Folder, FolderOpen, HardDrive, MapPin, Moon, Pause, Play, Plus,
@@ -86,6 +88,8 @@ const appColor = (bundleId: string) => {
   return `hsl(${Math.abs(hash) % 360} 68% 55%)`
 }
 
+const deviceScreenCache = new Map<string, string>()
+
 const installedToApp = (app: InstalledApp): AppInfo => ({
   id: app.bundleId,
   name: app.name,
@@ -93,6 +97,7 @@ const installedToApp = (app: InstalledApp): AppInfo => ({
   version: app.version || '—',
   size: bytes(app.sizeBytes),
   color: appColor(app.bundleId),
+  icon: app.iconDataUrl ?? undefined,
   system: app.system,
 })
 
@@ -320,23 +325,26 @@ function TitleBar({ device, connection }: { device: Device; connection: Connecti
 
 function Overview({ device, desktop, onNavigate, onError }: { device: Device; desktop: boolean; onNavigate: (page: Page) => void; onError: (message: string) => void }) {
   const [overview, setOverview] = useState<DeviceOverview | null>(null)
-  const [screenImage, setScreenImage] = useState('')
+  const [screenImage, setScreenImage] = useState(() => deviceScreenCache.get(device.udid) ?? '')
   const [screenError, setScreenError] = useState('')
   const [screenLoading, setScreenLoading] = useState(false)
-  const autoScreenDeviceRef = useRef('')
   const refreshScreen = useCallback(async (mountIfNeeded = false) => {
     if (!desktop) return
     setScreenLoading(true)
     setScreenError('')
     try {
-      setScreenImage(await api.screenshot(device.udid))
+      const image = await api.screenshot(device.udid)
+      deviceScreenCache.set(device.udid, image)
+      setScreenImage(image)
     } catch (error) {
       if (!mountIfNeeded) {
         setScreenError(errorMessage(error))
       } else {
         try {
           await api.ddiMountAuto(device.udid)
-          setScreenImage(await api.screenshot(device.udid))
+          const image = await api.screenshot(device.udid)
+          deviceScreenCache.set(device.udid, image)
+          setScreenImage(image)
         } catch (setupError) {
           setScreenError(errorMessage(setupError))
         }
@@ -351,8 +359,12 @@ function Overview({ device, desktop, onNavigate, onError }: { device: Device; de
     void api.overview(device.udid).then(setOverview).catch((error) => onError(errorMessage(error)))
   }, [desktop, device.udid, onError])
   useEffect(() => {
-    if (autoScreenDeviceRef.current === device.udid) return
-    autoScreenDeviceRef.current = device.udid
+    const cached = deviceScreenCache.get(device.udid)
+    if (cached) {
+      setScreenImage(cached)
+      setScreenError('')
+      return
+    }
     setScreenImage('')
     void refreshScreen(true)
   }, [device.udid, refreshScreen])
@@ -615,7 +627,7 @@ function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: string; onTo
   const loadApps = useCallback(async () => {
     if (!desktop) return
     try {
-      const loaded = (await api.appsList(udid)).map(installedToApp)
+      const loaded = (await api.appsList(udid)).filter((app) => !app.system).map(installedToApp)
       setApps(loaded)
       setSelectedId((current) => loaded.some((app) => app.id === current) ? current : loaded[0]?.id ?? '')
     } catch (error) { onToast(errorMessage(error)) }
@@ -710,7 +722,7 @@ function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: string; onTo
 }
 
 function AppIcon({ app, large }: { app: AppInfo; large?: boolean }) {
-  return <i className={`app-icon ${large ? 'large' : ''}`} style={{ background: app.color }}>{app.name[0]}</i>
+  return <span className={`app-icon ${large ? 'large' : ''}`} style={{ background: app.color }}>{app.icon ? <img src={app.icon} alt="" /> : app.name[0]}</span>
 }
 
 function Logs({ connected, desktop, udid, onError }: { connected: boolean; desktop: boolean; udid: string; onError: (message: string) => void }) {
@@ -893,24 +905,27 @@ function Developer({ desktop, device, onToast }: { desktop: boolean; device: Dev
 function Location({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
   const [presetId, setPresetId] = useState('sf')
   const [simulating, setSimulating] = useState(!desktop)
-  const [custom, setCustom] = useState<{ x: number; y: number; lat: number; lng: number } | null>(null)
-  const [dragging, setDragging] = useState(false)
+  const [custom, setCustom] = useState<{ lat: number; lng: number } | null>(null)
   const [transport, setTransport] = useState(desktop ? '' : 'DVT/RSD')
   const simulatingRef = useRef(simulating)
+  const mapElementRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<LeafletMap | null>(null)
+  const markerRef = useRef<LeafletMarker | null>(null)
   const preset = presets.find((item) => item.id === presetId) ?? presets[0]
-  const loc = custom ? { ...custom, name: 'Dropped pin' } : preset
-  const updatePoint = (event: MouseEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = Math.min(98, Math.max(2, (event.clientX - rect.left) / rect.width * 100))
-    const y = Math.min(95, Math.max(4, (event.clientY - rect.top) / rect.height * 100))
-    setCustom({ x, y, lng: x / 100 * 360 - 180, lat: 84 - y / 100 * 168 })
+  const loc = custom ? { ...custom, name: 'Selected location' } : preset
+  const locationChanged = useCallback(() => {
     if (!desktop) setSimulating(true)
     else if (simulatingRef.current) {
       void api.locationStop()
       setSimulating(false)
       setTransport('')
     }
-  }
+  }, [desktop])
+  const selectPoint = useCallback((lat: number, lng: number) => {
+    const wrappedLongitude = ((lng + 180) % 360 + 360) % 360 - 180
+    setCustom({ lat: Math.max(-90, Math.min(90, lat)), lng: wrappedLongitude })
+    locationChanged()
+  }, [locationChanged])
   const toggleSimulation = async () => {
     if (!desktop) return setSimulating((value) => !value)
     try {
@@ -929,13 +944,39 @@ function Location({ desktop, udid, onToast }: { desktop: boolean; udid: string; 
   }
   useEffect(() => { simulatingRef.current = simulating }, [simulating])
   useEffect(() => () => { if (desktop && simulatingRef.current) void api.locationStop() }, [desktop])
+  useEffect(() => {
+    if (!mapElementRef.current || mapRef.current) return
+    const initial = presets[0]
+    const map = L.map(mapElementRef.current, { zoomControl: true }).setView([initial.lat, initial.lng], 13)
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map)
+    const markerIcon = L.divIcon({ className: 'location-map-marker', html: '<span></span>', iconSize: [30, 40], iconAnchor: [15, 40] })
+    const marker = L.marker([initial.lat, initial.lng], { icon: markerIcon }).addTo(map)
+    map.on('click', ({ latlng }) => selectPoint(latlng.lat, latlng.lng))
+    mapRef.current = map
+    markerRef.current = marker
+    window.setTimeout(() => map.invalidateSize(), 0)
+    return () => {
+      map.remove()
+      mapRef.current = null
+      markerRef.current = null
+    }
+  }, [selectPoint])
+  useEffect(() => { markerRef.current?.setLatLng([loc.lat, loc.lng]) }, [loc.lat, loc.lng])
+  const selectPreset = (item: typeof presets[number]) => {
+    setPresetId(item.id)
+    setCustom(null)
+    markerRef.current?.setLatLng([item.lat, item.lng])
+    mapRef.current?.flyTo([item.lat, item.lng], 13)
+    locationChanged()
+  }
   return (
     <section className="location-page page-padding compact-padding">
-      <div className="location-controls"><div className="card coordinate-card"><h2>Simulated coordinates</h2><label>Latitude<strong>{loc.lat.toFixed(4)}</strong></label><label>Longitude<strong>{loc.lng.toFixed(4)}</strong></label><button className={simulating ? 'stop-button' : 'primary-button'} onClick={() => void toggleSimulation()}>{simulating ? 'Stop simulation' : 'Start simulation'}</button><small><i className={simulating ? 'good-dot' : ''} />{simulating ? `Location override active${transport ? ` · ${transport}` : ''}` : 'Using real GPS'}</small></div><h3 className="section-label">Presets</h3><div className="preset-list">{presets.map((item) => <button key={item.id} className={!custom && presetId === item.id ? 'active' : ''} onClick={() => { setPresetId(item.id); setCustom(null); if (!desktop) setSimulating(true); else if (simulatingRef.current) { void api.locationStop(); setSimulating(false); setTransport('') } }}><MapPin size={14} /><span>{item.name}</span><small>{item.lat.toFixed(2)},{item.lng.toFixed(2)}</small></button>)}</div></div>
-      <div className="map-grid" onMouseDown={(event) => { setDragging(true); updatePoint(event) }} onMouseMove={(event) => dragging && updatePoint(event)} onMouseUp={() => setDragging(false)} onMouseLeave={() => setDragging(false)}>
-        <div className="map-glow" style={{ left: `${loc.x}%`, top: `${loc.y}%` }} />
-        <MapPin className="map-pin" size={34} style={{ left: `${loc.x}%`, top: `${loc.y}%` }} />
-        <div className="map-caption"><b>{loc.name} · {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</b><small>drag anywhere on the map to reposition</small></div>
+      <div className="location-controls"><div className="card coordinate-card"><h2>Simulated coordinates</h2><label>Latitude<strong>{loc.lat.toFixed(4)}</strong></label><label>Longitude<strong>{loc.lng.toFixed(4)}</strong></label><button className={simulating ? 'stop-button' : 'primary-button'} onClick={() => void toggleSimulation()}>{simulating ? 'Stop simulation' : 'Start simulation'}</button><small><i className={simulating ? 'good-dot' : ''} />{simulating ? `Location override active${transport ? ` · ${transport}` : ''}` : 'Using real GPS'}</small></div><h3 className="section-label">Presets</h3><div className="preset-list">{presets.map((item) => <button key={item.id} className={!custom && presetId === item.id ? 'active' : ''} onClick={() => selectPreset(item)}><MapPin size={14} /><span>{item.name}</span><small>{item.lat.toFixed(2)},{item.lng.toFixed(2)}</small></button>)}</div></div>
+      <div className="map-grid" ref={mapElementRef}>
+        <div className="map-caption"><b>{loc.name} · {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</b><small>drag to pan · scroll to zoom · click to select</small></div>
         <code className="map-service">com.apple.dt.simulatelocation</code>
       </div>
     </section>

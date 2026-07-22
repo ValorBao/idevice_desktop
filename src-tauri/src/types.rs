@@ -91,6 +91,7 @@ pub struct InstalledApp {
     pub version: String,
     pub size_bytes: u64,
     pub system: bool,
+    pub icon_data_url: Option<String>,
     pub raw: serde_json::Value,
 }
 

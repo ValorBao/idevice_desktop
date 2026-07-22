@@ -66,6 +66,7 @@ export type InstalledApp = {
   version: string
   sizeBytes: number
   system: boolean
+  iconDataUrl: string | null
   raw: unknown
 }
 

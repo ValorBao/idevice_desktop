@@ -56,7 +56,7 @@ export const fileSystem: Record<string, FileEntry[]> = {
   ],
 }
 
-export type AppInfo = { id: string; name: string; bundle: string; version: string; size: string; color: string; system?: boolean; fresh?: boolean }
+export type AppInfo = { id: string; name: string; bundle: string; version: string; size: string; color: string; icon?: string; system?: boolean; fresh?: boolean }
 export const installedApps: AppInfo[] = [
   { id: 'a1', name: 'StikDebug', bundle: 'com.stik.debug', version: '1.4.2', size: '24.1 MB', color: '#7c6cff' },
   { id: 'a2', name: 'CrossCode', bundle: 'app.crosscode.ios', version: '0.9.0', size: '88.7 MB', color: '#ff7a59' },

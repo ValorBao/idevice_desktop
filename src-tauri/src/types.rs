@@ -292,6 +292,17 @@ mod contract {
         }
     }
 
+    /// `CommandError` lives in `error.rs` rather than here, which is how it was
+    /// missed when the other cross-boundary types were covered. Every failed
+    /// command returns it, so a drift here breaks error reporting everywhere.
+    #[test]
+    fn command_error_matches_typescript() {
+        assert_matches(
+            "CommandError",
+            &crate::error::CommandError::new("", "", false),
+        );
+    }
+
     #[test]
     fn device_summary_matches_typescript() {
         assert_matches("DeviceSummary", &device_summary());

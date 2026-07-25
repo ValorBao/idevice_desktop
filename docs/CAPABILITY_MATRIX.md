@@ -17,7 +17,7 @@ This matrix records capability coverage, not real-device compatibility. Real-dev
 
 | Capability group | Upstream command or service | GUI status | Current entry point or gap |
 | --- | --- | --- | --- |
-| Device discovery and selection | Provider and UDID selection | Partial | Unified catalog, physical USB/network transitions, device-targeted RemotePairing, and paired Bonjour TCP Lockdown fallback are integrated; cold-start association and multiple-device coverage remain pending |
+| Device discovery and selection | Provider and UDID selection | Partial | Unified catalog, physical USB/network transitions, device-targeted RemotePairing, paired Bonjour TCP Lockdown fallback, and keeping several attached devices apart are integrated; cold-start association remains pending |
 | USB pairing | `pair` | Partial | Pair and unpair are available; advanced pairing information is incomplete |
 | RemotePairing | `rppairing` | Partial | iOS 17.0–17.3 tunnels use the selected device's discovered endpoint; no dedicated pairing-management interface |
 | Lockdown information | `ideviceinfo`, `lockdown`, `device_info` | Partial | Overview and Diagnostics show common fields |
@@ -33,7 +33,7 @@ This matrix records capability coverage, not real-device compatibility. Real-dev
 | Screen streaming | `screencapture`, `screencaptureservice` | Not covered | Planned as a dedicated live-screen tool |
 | Developer Mode | `amfi` | Covered | Reveal, enable, and accept Developer Mode |
 | DDI management | `mounter` | Covered | Manual and automatic mounting, unmounting, and progress |
-| Debug and JIT | `debug_proxy`, `process_control` | Partial | Launch and persistent JIT are available; general process control is pending |
+| Debug and JIT | `debug_proxy`, `process_control` | Partial | JIT covers both generations: iOS 17 and later launch the app and attach by pid, while iOS 16 and earlier attach by process name to an app the user opened. General process control is pending |
 | Location simulation | `location_simulation`, `location` | Covered | Presets, map selection, DVT/RSD, and Lockdown transports |
 | SpringBoard | `springboard`, `rotate` | Partial | App icons are used; wallpaper, orientation, and other controls are not exposed |
 | CoreDevice pasteboard | `pasteboard` | Not covered | Text and image read/write plus privacy guidance need design |

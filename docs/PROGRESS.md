@@ -92,7 +92,7 @@ Implemented the unified device-discovery layer:
 - Prefer USB while preserving Bonjour presence after USB disconnects.
 - Route a known paired device through direct Bonjour TCP Lockdown when its usbmuxd record disappears.
 - Route iOS 17.0–17.3 screenshot, location, and JIT tunnels to the RemotePairing endpoint associated with the selected device instead of the first service found.
-- Keep unidentified Bonjour-only devices visible with a clear “network route unavailable” state until they can be associated with a pairing record.
+- Keep mobdev2 and manual RemotePairing Bonjour-only devices visible with a clear “network route unavailable” state until they can be associated with a pairing record.
 
 Commit: `b9883f6 feat: add crash reports and unified device discovery`
 

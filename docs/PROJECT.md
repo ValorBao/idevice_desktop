@@ -191,7 +191,18 @@ npm run desktop:build
 - `src/api.ts` is the frontend-backend contract. Any Rust response-type change must be reflected in its TypeScript counterpart.
 - Switching or disconnecting a device must cancel tasks that depend on the previous device so log, JIT, and location sessions cannot leak.
 - Features that use iOS developer services must select a transport through `device_version.rs` instead of assuming one protocol for every system version.
-- The upstream `idevice` dependency is pinned to `8eed181f39a16ea70380ec8c3cff6bed07a1ef69`. Upgrades require dedicated API and real-device validation.
+- The upstream `idevice` dependency is pinned to `8eed181f39a16ea70380ec8c3cff6bed07a1ef69`. Upgrades follow the process below.
+
+### Upgrading the pinned `idevice` revision
+
+The dependency is a git revision rather than a released version, so an upgrade can change behaviour without any signal from the version number. Each upgrade runs the same sequence:
+
+1. Compare upstream commits for changed or removed services, renamed types, and new capabilities. Record new capabilities in `CAPABILITY_MATRIX.md` before scheduling work on them.
+2. Move the pin, then run `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, and `cargo test`. The contract tests catch response-shape drift; the transport tests catch changes in how a generation is selected.
+3. Re-run the harnesses in `src-tauri/examples/` against at least one device per generation that hardware allows, currently iOS 14.2 and iOS 17 or later. Record the results in the verification log in `PROGRESS.md`.
+4. Regenerate `THIRD_PARTY_NOTICES.md` if the dependency graph changed.
+
+An upgrade that cannot be validated on hardware for a generation is recorded as a coverage gap for that generation rather than assumed to work.
 - Browser demo data and real desktop data must remain clearly separated.
 - Destructive operations such as file removal, application uninstallation, and unpairing must provide clear confirmation and error feedback.
 

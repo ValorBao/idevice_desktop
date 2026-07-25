@@ -19,14 +19,14 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-25 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-25: 15 passed, 0 failed |
+| Rust unit tests | Passed on 2026-07-25: 22 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
-| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
+| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, and debuggable-application filtering; no frontend, integration, or automated real-device tests yet |
 | Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
-| Validation branch | `agent/network-crash-report`, pending merge |
-| Worktree | The next patch includes the iOS 17 network crash-report route and legacy location cleanup fixes; both have passed targeted real-device verification |
+| Branches | All validation branches are merged; `master` is at the 2026-07-25 JIT and pairing cycle |
+| Worktree | Clean. The merged patch carries the iOS 17 network crash-report route, the legacy location cleanup, the JIT attach-failure fix, the JIT selector fix, and the frontend split |
 
 ## 3. Feature Progress
 
@@ -42,7 +42,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 14.2 and 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
-| JIT | Integrated at the backend; not reachable from the interface | iOS 17.0 passes the full sequence against a TrollStore-installed app: tunnel, RSD, DVT handshake, launch, memory-limit removal, `vAttach`, detach, and cleanup. A rejected attach is reported as a failure | Expose debuggable applications in the JIT selector, then verify `jit_stop` and device-switch cleanup |
+| JIT | Integrated | iOS 17.0 passes the full sequence against a TrollStore-installed app: tunnel, RSD, DVT handshake, launch, memory-limit removal, `vAttach`, detach, and cleanup. A rejected attach is reported as a failure, and the selector now offers debuggable applications | Verify `jit_stop` from the interface, device-switch cleanup, and JIT on iOS 16 and earlier |
 | Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
@@ -146,11 +146,11 @@ Remaining acceptance gaps are multiple simultaneously visible devices, a sleepin
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
 - Publish the RSD crash-report fix in the next patch, then prioritize device console workflows, performance monitoring, packet capture, and process control.
 
-### P0: Make JIT Reachable from the Interface
+### P0: JIT Reach and Coverage
 
-- List debuggable applications in the JIT selector instead of user applications. `get-task-allow` is the property that decides whether `vAttach` can succeed, and it is independent of the `User` and `System` application type.
-- Keep the Apps page unchanged: it should continue to show user applications rather than all 209 registered bundles.
-- Consider whether iOS 16 and earlier deserve a legacy debugserver JIT path, since TrollStore is most widely used on those versions.
+- ~~List debuggable applications in the JIT selector instead of user applications.~~ Done on 2026-07-25: `apps_debuggable` filters on `get-task-allow` across every application type, and the Apps page still lists user applications.
+- Implement JIT for iOS 16 and earlier through the legacy debugserver transport. It is currently refused outright, which excludes the TrollStore audience, since TrollStore is most widely used on exactly those versions.
+- Verify `jit_stop` from the interface and confirm that switching or disconnecting a device tears down an active JIT session.
 
 ### P1: Testing and Stability
 

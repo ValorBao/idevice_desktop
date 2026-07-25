@@ -109,6 +109,8 @@ flowchart LR
 | System version | Transport | DDI approach |
 | --- | --- | --- |
 | iOS 16 and earlier | Legacy Lockdown developer services | Matching `DeveloperDiskImage.dmg` and `.signature` |
+
+JIT differs between generations beyond transport. iOS 17 and later launch the application through the DVT instruments server and attach by pid. On iOS 16 and earlier that service accepts `StartService` but never responds on the socket it returns, so JIT attaches by process name to an application the user has already opened, and never terminates it.
 | iOS 17.0–17.3.x | RemotePairing and RSD/DVT | Personalized DDI |
 | iOS 17.4 and later | Lockdown CoreDeviceProxy and RSD/DVT | Personalized DDI, with automatic mounting available on macOS |
 

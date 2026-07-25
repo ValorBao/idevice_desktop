@@ -17,9 +17,17 @@ use std::time::Duration;
 use idevice::{IdeviceService, mobile_image_mounter::ImageMounter};
 use idevice_desktop_lib::{
     device_version::{DeveloperGeneration, IosVersion, ios_version},
-    provider::{RoutedProvider, routed_provider_for},
+    provider::{RoutedProvider, lockdown_service_socket, routed_provider_for},
     tunnel::open_remote_pairing_tunnel,
 };
+
+/// Developer services iOS 16 and earlier publish over lockdown once a DDI is
+/// mounted. These stand in for the RSD service list on those systems, which do
+/// not have RSD at all.
+const LEGACY_DEVELOPER_SERVICES: [&str; 2] = [
+    "com.apple.debugserver.DVTSecureSocketProxy",
+    "com.apple.instruments.remoteserver.DVTSecureSocketProxy",
+];
 
 const STEP_TIMEOUT: Duration = Duration::from_secs(20);
 /// Opening a tunnel right after an unmount has been observed to stall well past
@@ -34,7 +42,12 @@ fn mount_point(version: IosVersion) -> &'static str {
     }
 }
 
-async fn report_state(provider: &RoutedProvider, udid: &str, label: &str) {
+async fn report_state(
+    provider: &RoutedProvider,
+    udid: &str,
+    generation: DeveloperGeneration,
+    label: &str,
+) {
     println!("\n== {label} ==");
 
     match tokio::time::timeout(STEP_TIMEOUT, async {
@@ -63,8 +76,23 @@ async fn report_state(provider: &RoutedProvider, udid: &str, label: &str) {
         }
     }
 
-    // The RSD service list is the ground truth: the debug proxy only exists once
-    // a DDI is mounted.
+    // iOS 16 and earlier have no RSD. Their equivalent ground truth is whether
+    // the lockdown developer services answer, which they only do once a DDI is
+    // mounted.
+    if generation == DeveloperGeneration::Legacy {
+        for service in LEGACY_DEVELOPER_SERVICES {
+            let short = service.trim_start_matches("com.apple.");
+            match tokio::time::timeout(STEP_TIMEOUT, lockdown_service_socket(provider, service))
+                .await
+            {
+                Ok(Ok(_)) => println!("  {short}: available"),
+                Ok(Err(error)) => println!("  {short}: {}", error.message),
+                Err(_) => println!("  {short}: timed out"),
+            }
+        }
+        return;
+    }
+
     let pairing_path = std::path::PathBuf::from(std::env::var("HOME").expect("HOME")).join(
         format!("Library/Application Support/dev.idevice.desktop/remote-pairing-{udid}.plist"),
     );
@@ -106,7 +134,13 @@ async fn main() {
         version.developer_generation()
     );
 
-    report_state(&provider, &udid, "current state").await;
+    report_state(
+        &provider,
+        &udid,
+        version.developer_generation(),
+        "current state",
+    )
+    .await;
 
     if !unmount {
         return;
@@ -125,5 +159,11 @@ async fn main() {
         Err(_) => println!("  timed out"),
     }
 
-    report_state(&provider, &udid, "after unmount").await;
+    report_state(
+        &provider,
+        &udid,
+        version.developer_generation(),
+        "after unmount",
+    )
+    .await;
 }

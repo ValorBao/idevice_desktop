@@ -8,6 +8,9 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   const [jitInfo, setJitInfo] = useState<{ bundleId: string; pid: number } | null>(desktop ? null : { bundleId: 'app.crosscode.ios', pid: 1294 })
   const [status, setStatus] = useState<DeveloperStatus>({ developerMode: desktop ? null : true, ddiMounted: !desktop, ddiImages: null, rsdAvailable: !desktop })
   const [apps, setApps] = useState<InstalledApp[]>([])
+  // iOS 16 and earlier cannot launch the app for you: the instruments service
+  // that would do it never answers, so JIT attaches to a running process.
+  const attachesToRunningApp = Number.parseInt(device.ios.split('.')[0] ?? '0', 10) < 17
   const [bundleId, setBundleId] = useState('')
   const [ddiProgress, setDdiProgress] = useState<number | null>(null)
   const jitRef = useRef(jit)
@@ -103,7 +106,7 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   return (
     <section className="developer-page page-padding">
       <div className="dev-top-grid">
-        <div className="card jit-card"><div><h2>Enable JIT</h2><p>Launch a debuggable app, attach debugserver, and keep its JIT entitlement active.</p>{desktop && (apps.length
+        <div className="card jit-card"><div><h2>Enable JIT</h2><p>{attachesToRunningApp ? 'Open the app on the device first, then attach debugserver to keep its JIT entitlement active.' : 'Launch a debuggable app, attach debugserver, and keep its JIT entitlement active.'}</p>{desktop && (apps.length
           ? <select value={bundleId} onChange={(event) => setBundleId(event.target.value)}>{apps.map((app) => <option key={app.bundleId} value={app.bundleId}>{app.name} · {app.bundleId}</option>)}</select>
           : <p className="jit-empty">No installed app allows debugging. Attaching requires the <code>get-task-allow</code> entitlement, which App Store and TestFlight builds never carry. Install a development-signed or sideloaded build to use JIT.</p>)}</div><button className={`toggle ${jit ? 'on' : ''}`} onClick={() => void toggleJit()} disabled={desktop && !jit && !apps.length}><span /></button><small><i className={jit ? 'good-dot' : ''} />{jit ? `debugserver attached${jitInfo ? ` · pid ${jitInfo.pid}` : ''}` : 'no process attached'}</small></div>
         <div className="card ddi-card"><h2>Developer Disk Image</h2><p><span>Status</span><b className={status.ddiMounted ? 'good' : ''}>{status.ddiMounted ? 'Mounted' : 'Not mounted'}</b></p><p><span>Developer Mode</span><b>{status.developerMode === null ? 'Unknown' : status.developerMode ? 'Enabled' : 'Disabled'}</b></p><p><span>RSD</span><b>{status.rsdAvailable ? 'Available' : 'Unavailable'}</b></p>{ddiProgress !== null && <div className="progress"><span style={{ width: `${ddiProgress}%` }} /></div>}<div className="dev-actions"><button className="primary-button" onClick={() => void autoMountDdi()}>Auto Mount DDI</button><button onClick={() => void mountDdi()}>Choose files</button><button onClick={() => void unmountDdi()} disabled={!status.ddiMounted}>Unmount</button></div></div>

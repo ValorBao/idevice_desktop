@@ -209,42 +209,71 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
         }
     })
     .await?;
-    if let Transport::Rsd { handshake, .. } = &transport {
-        println!("     RSD services: {}", handshake.services.len());
+    match &transport {
+        Transport::Rsd { handshake, .. } => {
+            println!("     RSD services: {}", handshake.services.len())
+        }
+        // iOS 16 and earlier have no RSD; each service is opened on demand.
+        Transport::Lockdown => println!("     lockdown developer services"),
     }
 
+    let mut launched_pid: Option<u64> = None;
     let Some(bundle_id) = bundle_id else {
         list_candidates(&provider).await?;
-        println!("\nRESULT: PASS (tunnel only) — re-run with a bundle id to attach");
+        println!("\nRESULT: PASS (transport only) — re-run with a bundle id to attach");
         return Ok(());
     };
 
-    let mut remote_server = step(
-        "connecting to the remote server",
-        transport.remote_server(&provider),
-    )
-    .await?;
-    step("reading the remote-server handshake", async {
-        Ok(remote_server.read_message(0).await?)
-    })
-    .await?;
+    // On iOS 16 and earlier the instruments server never answers, so the user
+    // opens the app and this attaches by process name instead of launching it.
+    let attach_command = if matches!(transport, Transport::Lockdown) {
+        let executable = step("reading the app details", async {
+            let mut client = InstallationProxyClient::connect(&provider).await?;
+            let apps = client.get_apps(None, None).await?;
+            apps.get(&bundle_id)
+                .and_then(|value| value.as_dictionary())
+                .and_then(|dict| dict.get("CFBundleExecutable"))
+                .and_then(|value| value.as_string())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| CommandError::new("jit", "not installed", false))
+        })
+        .await?;
+        println!("     attaching by name: {executable} (must already be running)");
+        let encoded: String = executable
+            .bytes()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        format!("vAttachName;{encoded}")
+    } else {
+        let mut remote_server = step(
+            "connecting to the remote server",
+            transport.remote_server(&provider),
+        )
+        .await?;
+        step("reading the remote-server handshake", async {
+            Ok(remote_server.read_message(0).await?)
+        })
+        .await?;
 
-    let pid = step("launching the app", async {
+        let pid = step("launching the app", async {
+            let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
+            let pid = process_control
+                .launch_app(bundle_id.clone(), None, None, false, false)
+                .await?;
+            Ok(pid)
+        })
+        .await?;
+        println!("     pid: {pid}");
+
         let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
-        let pid = process_control
-            .launch_app(bundle_id.clone(), None, None, false, false)
-            .await?;
-        Ok(pid)
-    })
-    .await?;
-    println!("     pid: {pid}");
-
-    let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
-    let _ = step("disabling the app memory limit", async {
-        Ok(process_control.disable_memory_limit(pid).await?)
-    })
-    .await;
-    drop(remote_server);
+        let _ = step("disabling the app memory limit", async {
+            Ok(process_control.disable_memory_limit(pid).await?)
+        })
+        .await;
+        drop(remote_server);
+        launched_pid = Some(pid);
+        format!("vAttach;{pid:x}")
+    };
 
     let mut debug = match step(
         "connecting to the debug server",
@@ -254,17 +283,17 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     {
         Ok(debug) => debug,
         Err(error) => {
-            // Production `jit_start` terminates the launched app before returning.
-            println!("  -- exercising the failure cleanup path --");
-            cleanup(&mut transport, &provider, pid).await;
+            // Production `jit_start` terminates the app only if it launched it.
+            if let Some(pid) = launched_pid {
+                println!("  -- exercising the failure cleanup path --");
+                cleanup(&mut transport, &provider, pid).await;
+            }
             return Err(error);
         }
     };
 
     let response = step("attaching to the app", async {
-        Ok(debug
-            .send_command(format!("vAttach;{pid:x}").into())
-            .await?)
+        Ok(debug.send_command(attach_command.clone().into()).await?)
     })
     .await?;
     println!("     vAttach response: {response:?}");
@@ -274,7 +303,11 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     if let Some(detail) = attach_failure(response.as_deref()) {
         println!("     attach REJECTED: {detail}");
         drop(debug);
-        cleanup(&mut transport, &provider, pid).await;
+        if let Some(pid) = launched_pid {
+            cleanup(&mut transport, &provider, pid).await;
+        } else {
+            println!("     (nothing to clean up: the app was launched by the user)");
+        }
         return Err(idevice_desktop_lib::error::CommandError::new(
             "jit",
             format!("Unable to attach to {bundle_id}: {detail}"),
@@ -288,9 +321,13 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     .await;
     drop(debug);
 
-    cleanup(&mut transport, &provider, pid).await;
-
-    println!("\nRESULT: PASS — launched, attached, detached, and cleaned up {bundle_id}");
+    if let Some(pid) = launched_pid {
+        cleanup(&mut transport, &provider, pid).await;
+        println!("\nRESULT: PASS — launched, attached, detached, and cleaned up {bundle_id}");
+    } else {
+        // The process belongs to the user; detaching is the whole cleanup.
+        println!("\nRESULT: PASS — attached to and detached from {bundle_id} (left running)");
+    }
     Ok(())
 }
 

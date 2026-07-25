@@ -19,7 +19,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-25 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-25: 39 passed, 0 failed |
+| Rust unit tests | Passed on 2026-07-25: 43 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
@@ -32,7 +32,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Module | Code status | Current assessment | Next verification |
 | --- | --- | --- | --- |
-| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | iOS 17.0 USB/Bonjour merging and physical transitions pass; iOS 14.2 USB discovery, pairing state, catalog entry, and routing pass | Verify multiple devices, sleeping-device behavior, and cold-start association |
+| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | iOS 17.0 USB/Bonjour merging and physical transitions pass; iOS 14.2 USB discovery and routing pass; two devices attached at once stay separate with the correct transport each | Verify sleeping-device behavior and cold-start association |
 | Pair, unpair, select, and disconnect | Integrated | iOS 14.2 unpair and re-pair pass end to end; the USB-only guard correctly refuses a network record on iOS 17.0 | First-time trust prompt on an untrusted host, trust rejected, and stale pairing records |
 | Overview | Integrated | iOS 17.0 Lockdown, storage, battery, and RSD screenshot paths pass; iOS 14.2 legacy screenshot returned a valid 379,466-byte PNG | Missing fields and DDI retry failure behavior |
 | Diagnostics | Five query categories integrated | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi request paths pass on iOS 14.2; battery also passes on iOS 17.0 | Permission failures and payload differences across more iOS versions |
@@ -42,7 +42,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 14.2 and 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | A full mount and unmount cycle passes on iOS 17.0, and every mounted-image signal the project reads agrees with the RSD service list | Devices from iOS 16 and 17.4+, and mounting through Choose files rather than devicectl |
-| JIT | Integrated for both generations | iOS 17.0 passes launch, `vAttach`, detach, and cleanup; iOS 14.2 passes attach-by-name to a running app and detach, leaving the app running. A rejected attach is reported as a failure, and the selector offers debuggable applications | Verify `jit_stop` from the interface and device-switch cleanup |
+| JIT | Integrated for both generations | iOS 17.0 passes launch, `vAttach`, detach, and cleanup; iOS 14.2 passes attach-by-name and detach. Ending a session leaves the application running, and the task registry cancels a session on device switch. A rejected attach is reported as a failure | Exercise the full sequence through the interface rather than a harness |
 | Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
@@ -152,7 +152,7 @@ Remaining acceptance gaps are multiple simultaneously visible devices, a sleepin
 
 - ~~List debuggable applications in the JIT selector instead of user applications.~~ Done on 2026-07-25: `apps_debuggable` filters on `get-task-allow` across every application type, and the Apps page still lists user applications.
 - ~~Implement JIT for iOS 16 and earlier through the legacy debugserver transport.~~ Done on 2026-07-25 and verified on iPhone10,1 / iOS 14.2. The instruments server is unusable on that system, so the legacy path attaches by process name to an app the user opened rather than launching it.
-- Verify `jit_stop` from the interface and confirm that switching or disconnecting a device tears down an active JIT session.
+- ~~Verify `jit_stop` and confirm that switching or disconnecting a device tears down an active JIT session.~~ Done on 2026-07-25: four tests cover the task registry, and a real-device check confirms ending a session detaches without closing the application.
 
 ### P1: Testing and Stability
 
@@ -205,6 +205,8 @@ Append future validation results using this format:
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | DDI mount and debug-proxy availability | Pass | `devicectl --auto-mount-ddis` failed with `ExistingTransferInProgress` until the device was rebooted, then mounted DDI 17E202; RSD services went from 57 to 69 and exposed `com.apple.internal.dt.remote.debugproxy`, confirming the earlier "service not found" was a missing DDI rather than a routing defect |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | JIT attach round trip | Pass (attach rejected as expected) | The debug server connected and `vAttach` returned `E96;…` decoding to "attach failed (Not allowed to attach to process…)" for an App Store build. This exposed a defect: the reply was previously reported as an attached session. Attach rejection is now surfaced as an error and the launched process is terminated |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | Full JIT session against a debuggable application | Pass | Attaching to a TrollStore-installed application returned a `T11` stop packet with full register state; detach and process termination both succeeded. This also confirms the attach-failure check does not reject a successful stop packet |
+| 2026-07-25 | iPhone10,1 + iPhone11,8 | 14.2 + 17.0 | USB + Network | Two devices attached at once | Pass | usbmuxd reported two records and the catalog produced exactly two entries with distinct UDIDs, labelling the USB device `USB` and the network device `usbmuxd Network` |
+| 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Ending a JIT session | Pass | Attached by name, sent the detach command `jit_stop` triggers, then re-attached successfully, confirming the application survives the session ending |
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Legacy JIT attach and detach | Pass | With the matching DeveloperDiskImage mounted, `debugserver.DVTSecureSocketProxy` opened in 191 ms and `vAttachName` for `ShopeeSG` returned a `T11` stop packet with full register state. Detach succeeded and the app was deliberately left running |
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Legacy instruments server | Fail | `StartService` returns a port for `com.apple.instruments.remoteserver.DVTSecureSocketProxy`, but the socket never responds: a TLS handshake and a plaintext DVT handshake each stalled past 45 seconds. Both plain-name variants answer `InvalidService`. `assertion_agent` on the same transport works, so lockdown itself is healthy. Device logs show `handle_start_service` and `spawn_xpc_service` with the service name redacted, and nothing afterwards |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | DDI mount and unmount cycle | Pass | Unmounted, mounted, and unmounted again. `copy_devices` reported 0, 1, then 0 images; `lookup_image("Personalized")` returned nothing, a 48-byte signature, then nothing; RSD services moved 57 → 69 → 57 with the debug proxy appearing and disappearing. `ddi_unmount` returned success and every signal returned to baseline |

@@ -171,7 +171,8 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 ### P2: Release Preparation
 
 - Define minimum macOS and iOS versions.
-- Tighten the Tauri CSP and evaluate the online map dependency and offline fallback.
+- ~~Tighten the Tauri CSP.~~ Done on 2026-07-25: scripts are limited to bundled code, images to the app, `data:` URLs, and the map tile host, and object, frame, and form directives are closed. Verified in the running application.
+- Evaluate the online map dependency and an offline fallback.
 - Complete the application icon, macOS signing, notarization, release notes, and full third-party license inventory.
 - Verify that the project MIT License and complete third-party notices ship with every release artifact.
 - Define an upgrade and regression process for the pinned `idevice` revision.

@@ -190,7 +190,7 @@ npm run desktop:build
 - The frontend is split into a shell, page modules, shared components, and helpers, but still has no component tests, so refactors rely on the type checker and the production build alone.
 - The project does not yet have systematic frontend tests, Rust integration tests, or automated real-device compatibility tests.
 - Map tiles come from the online OpenStreetMap service and will not work offline or on restricted networks.
-- The Tauri CSP is currently `null` and must be reviewed and tightened before signed or general-user distribution.
+- The Tauri CSP restricts scripts to bundled code, but `style-src` still allows inline styles because React style props and Leaflet's map positioning both depend on them. Removing that would mean rewriting both.
 
 ## 9. Documentation Rules
 

@@ -23,9 +23,9 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
-| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging and crash reports over USB and RemotePairing/RSD; iPhone10,1 on iOS 14.2 passed USB discovery/routing and crash-report list/read/export |
-| Git branch | `master` |
-| Worktree | The next patch routes network crash reports through the iOS 17 RSD shim; implementation and iOS 17.0 real-device verification are complete |
+| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging and crash reports over USB and RemotePairing/RSD; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, and legacy location |
+| Validation branch | `agent/network-crash-report`, pending merge |
+| Worktree | The next patch includes the iOS 17 network crash-report route and legacy location cleanup fixes; both have passed targeted real-device verification |
 
 ## 3. Feature Progress
 

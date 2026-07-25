@@ -63,8 +63,10 @@ npm run desktop:build -- --bundles dmg
 
 - The published 0.0.1 DMG supports Apple Silicon only and is not signed with an Apple Developer ID or notarized.
 - USB-to-network Lockdown fallback is verified on an iPhone XR running iOS 17.0.
+- USB discovery, nested crash-report export, legacy screenshots, OS Trace, diagnostics, AFC file round trips, application listing with icons, and legacy location set/clear are verified on an iPhone10,1 running iOS 14.2.
 - The published 0.0.1 build uses the wrong Lockdown crash-report service over a direct network route and can fail with `UnexpectedEof`. The current source routes iOS 17 network access through the RemotePairing/RSD crash-report shim; this fix is planned for the next patch release.
-- Multiple devices, sleeping-device behavior, iOS 16, iOS 17.4+, nested reports, and reports larger than the 4 MB preview limit still require validation.
+- The published 0.0.1 build can also fail to clear legacy simulated location after the device closes the set connection. The current source reconnects before clearing; this fix is planned for the next patch release.
+- Multiple simultaneously visible devices, sleeping-device behavior, iOS 15/16, iOS 17.4+, and reports larger than the 4 MB preview limit still require validation.
 
 ## Developer Feature Notes
 

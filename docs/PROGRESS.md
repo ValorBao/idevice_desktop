@@ -23,21 +23,21 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
-| Real-device verification | Prior iOS 17.0 mobdev2, RemotePairing, catalog merging, and network Lockdown reads passed; the 2026-07-25 acceptance run found no connected USB or network device, so physical transitions, direct TCP fallback, and crash reports remain pending |
+| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, physical USB disconnect and reconnect, direct TCP Lockdown fallback, and USB crash-report list/preview/export; crash-report listing over direct Bonjour TCP failed twice with `UnexpectedEof` |
 | Git branch | `master` |
-| Worktree | Crash-report and unified-discovery work is committed in `b9883f6`; the follow-up lint and documentation changes are the current cycle |
+| Worktree | Version `0.0.1` is published; the 2026-07-25 real-device acceptance record is the current follow-up cycle |
 
 ## 3. Feature Progress
 
 | Module | Code status | Current assessment | Next verification |
 | --- | --- | --- | --- |
-| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | Live iOS 17.0 mobdev2 and RemotePairing resolution, catalog merging, and network Lockdown reads pass | Verify physical USB/network transitions, direct TCP fallback, and multiple devices |
+| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | iOS 17.0 USB/Bonjour merging, physical disconnect/reconnect, and direct TCP Lockdown fallback pass | Verify multiple devices, sleeping-device behavior, and cold-start association |
 | Pair, unpair, select, and disconnect | Integrated | Build passed; real-device verification pending | Trust accepted, trust rejected, and stale pairing records |
 | Overview | Integrated | iOS 17.0 Lockdown, storage, battery, and RSD screenshot paths verified | Missing fields and DDI retry failure behavior |
 | Diagnostics | Five query categories integrated | Battery diagnostics verified on iOS 17.0 | Remaining query categories and permission failures across iOS versions |
 | AFC and file sharing | Integrated | AFC device info and root listing verified on iOS 17.0 | Large files, mutations, read-only paths, and app containers |
 | App list, installation, and uninstallation | Integrated | User-app listing verified; icons and filtering are in progress | IPA progress, icon retrieval, and uninstall confirmation |
-| Crash reports | List, filter, preview, and export integrated | Build passed; browser demo interaction verified | Real-device list, flush, nested reports, preview, and export |
+| Crash reports | List, filter, preview, and export integrated | USB list, preview, and byte-for-byte complete export pass on iOS 17.0; direct Bonjour TCP listing fails with `UnexpectedEof` | Diagnose network service closure; verify nested reports and previews larger than 4 MB |
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
@@ -98,15 +98,19 @@ Commit: `b9883f6 feat: add crash reports and unified device discovery`
 
 ## 5. Active Validation
 
-The frontend production build, Rust static check, 14 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass. Live Bonjour discovery and merged routing previously passed on iOS 17.0.
+The frontend production build, Rust static check, 14 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
 
-The 2026-07-25 acceptance attempt could not detect a device through USB, network `idevice_id`, or Apple's CoreDevice device list. The following checks must be repeated with an awake, trusted device:
+The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 
-- Disconnect USB while the device continues advertising Bonjour, and verify direct TCP Lockdown keeps Overview available.
-- Reconnect USB and verify the catalog merges transports without duplicating the device.
-- Repeat discovery with multiple devices and confirm each RemotePairing endpoint is routed to the matching device.
-- Refresh crash reports, including nested `.ips` and `.crash` entries, then verify preview, the 4 MB preview limit, and complete export.
-- Record the device model, iOS build, connection type, result, and relevant error for each check.
+- With USB attached, the catalog represented the phone as one connectable device with `USB`, `Wi-Fi`, and `RemotePairing` transports.
+- After physical USB removal, usbmuxd no longer listed the phone while mobdev2 continued advertising through Bonjour.
+- The project selected its Bonjour TCP provider, started a paired Lockdown session, and read `ProductVersion=17.0`.
+- Reattaching USB restored the three transports on the same catalog record without creating a duplicate device.
+- The USB crash-report service listed reports, previewed a 179,345-byte `.ips`, and exported an identical complete file.
+- A separate best-effort baseline copied 570 reports, approximately 80 MB, without removing them from the device.
+- Direct Bonjour TCP connected to the crash-report service but root listing failed twice because the device closed the TLS stream with `UnexpectedEof`.
+
+Remaining acceptance gaps are multiple devices, a sleeping device, nested crash-report directories, reports larger than the 4 MB preview limit, and iOS 16 or iOS 17.4+ devices.
 
 ## 6. Recommended Next Phase
 
@@ -122,7 +126,7 @@ The 2026-07-25 acceptance attempt could not detect a device through USB, network
 - Use [`CAPABILITY_MATRIX.md`](CAPABILITY_MATRIX.md) as the capability baseline for the pinned upstream revision.
 - Track Not integrated, Partial, Integrated, Build passed, and Real-device verified separately for each capability.
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
-- Validate the new crash-report workflow, then prioritize device console workflows, performance monitoring, packet capture, and process control.
+- Diagnose the direct-TCP crash-report `UnexpectedEof`, then prioritize device console workflows, performance monitoring, packet capture, and process control.
 
 ### P1: Testing and Stability
 
@@ -162,6 +166,9 @@ Append future validation results using this format:
 | 2026-07-22 | iPhone11,8 | 17.0 (21A329) | USB | Diagnostics, AFC, and app listing | Pass | Battery dictionary, AFC root, storage, and 16 user apps returned |
 | 2026-07-22 | iPhone11,8 | 17.0 (21A329) | USB | Developer status and OS Trace | Pass | Developer Mode enabled, one mounted image record, and a live log event received |
 | 2026-07-22 | iPhone11,8 | 17.0 (21A329) | USB | RemotePairing/RSD screenshot | Pass | Project screenshot implementation returned a non-empty PNG data URL |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB → Network → USB | Unified discovery and Lockdown fallback | Pass | One record transitioned from USB + Wi-Fi + RemotePairing to Wi-Fi + RemotePairing; direct TCP Lockdown read ProductVersion 17.0; USB reconnect restored all transports without duplication |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | Crash-report list, preview, and export | Pass | Listed reports, previewed a 179,345-byte IPS, and verified complete export byte-for-byte; a keep-on-device baseline copied 570 reports |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | Crash-report listing over direct TCP | Fail | Service connection succeeded, but root listing failed twice with TLS `UnexpectedEof`; USB path remained healthy |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

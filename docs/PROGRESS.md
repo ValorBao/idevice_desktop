@@ -172,11 +172,12 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 
 - ~~Define minimum macOS and iOS versions.~~ Done on 2026-07-25: macOS 11.0 on Apple Silicon, matching what the binary requires; iOS verified at 14.2 and above, with older paths present but unverified. See `PROJECT.md`.
 - ~~Tighten the Tauri CSP.~~ Done on 2026-07-25: scripts are limited to bundled code, images to the app, `data:` URLs, and the map tile host, and object, frame, and form directives are closed. Verified in the running application.
-- Evaluate the online map dependency and an offline fallback.
-- Complete the application icon, release notes, and the full third-party license inventory.
+- ~~Evaluate the online map dependency and an offline fallback.~~ Decided on 2026-07-25 to keep the online map with no fallback. The map is a convenience for picking coordinates, not a requirement for simulating a location, and presets remain available when tiles do not load.
+- ~~Complete the application icon and the full third-party license inventory.~~ Done on 2026-07-25: the icon is rendered from its SVG source at 1024x1024, and the notices file now lists every dependency that ships.
+- Write release notes once the interface work in progress settles.
 - **macOS signing and notarization are blocked**: no Apple Developer account or certificate is available. Releases stay unsigned, so distribution has to keep the Gatekeeper warning and the instructions for opening an unsigned build.
 - ~~Verify that the project MIT License and complete third-party notices ship with every release artifact.~~ Done on 2026-07-25: both files appear in the `.app` and the `.dmg`, byte-identical to their sources, and the CSP is embedded in the release binary. The DMG passes `hdiutil verify`.
-- Define an upgrade and regression process for the pinned `idevice` revision.
+- ~~Define an upgrade and regression process for the pinned `idevice` revision.~~ Defined on 2026-07-25 in `PROJECT.md`.
 
 ## 7. Open Decisions
 

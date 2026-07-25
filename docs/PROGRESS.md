@@ -170,7 +170,7 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 
 ### P2: Release Preparation
 
-- Define minimum macOS and iOS versions.
+- ~~Define minimum macOS and iOS versions.~~ Done on 2026-07-25: macOS 11.0 on Apple Silicon, matching what the binary requires; iOS verified at 14.2 and above, with older paths present but unverified. See `PROJECT.md`.
 - ~~Tighten the Tauri CSP.~~ Done on 2026-07-25: scripts are limited to bundled code, images to the app, `data:` URLs, and the map tile host, and object, frame, and form directives are closed. Verified in the running application.
 - Evaluate the online map dependency and an offline fallback.
 - Complete the application icon, release notes, and the full third-party license inventory.

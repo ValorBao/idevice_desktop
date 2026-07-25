@@ -52,6 +52,9 @@
     "active": true,
     "targets": "all",
     "icon": ["icons/icon.png"],
-    "resources": ["../THIRD_PARTY_NOTICES.md", "../LICENSE"]
+    "resources": ["../THIRD_PARTY_NOTICES.md", "../LICENSE"],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
   }
 }

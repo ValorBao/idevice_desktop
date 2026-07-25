@@ -33,6 +33,20 @@ The current phase focuses on a macOS MVP that can connect to real devices. High-
 - Developer workflows as the primary product focus, supported by foundational device-management features
 - Legacy developer services for iOS 16 and earlier, plus CoreDevice/RSD paths for iOS 17 and later
 
+### Supported Versions
+
+| | Requirement |
+| --- | --- |
+| macOS | 11.0 or later, Apple Silicon only |
+| iOS, verified | 14.2, 17.0, and 26.5 |
+| iOS, expected but unverified | 12.0 and later |
+
+macOS 11.0 is the floor because releases are built for `arm64`, and Apple Silicon starts there. It matches what the binary itself requires, so the bundle no longer advertises a lower version than it can run on.
+
+Automatic DDI mounting for iOS 17 and later shells out to `devicectl`, which needs Xcode 15 and therefore macOS 13.5. That is a requirement of one feature, not of the application: mounting through Choose files works without it.
+
+The unverified iOS floor is a statement about which code paths exist, not a compatibility claim. Nothing below 14.2 has been run. Systems old enough to need pre-TLS 1.2 handshakes are expected to fail outright, because the project builds `idevice` against rustls, which does not implement them.
+
 ### Current Non-Goals
 
 - Replacing the complete Finder or iTunes backup, restore, and system-update experience

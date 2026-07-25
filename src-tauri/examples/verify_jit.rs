@@ -199,6 +199,19 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     .await?;
     println!("     vAttach response: {response:?}");
 
+    // Mirrors `attach_failure` in `commands/developer.rs`: debugserver rejects an
+    // attach with a protocol error packet, which the send itself reports as Ok.
+    if let Some(detail) = attach_failure(response.as_deref()) {
+        println!("     attach REJECTED: {detail}");
+        drop(debug);
+        cleanup(&mut adapter, &mut handshake, pid).await;
+        return Err(idevice_desktop_lib::error::CommandError::new(
+            "jit",
+            format!("Unable to attach to {bundle_id}: {detail}"),
+            false,
+        ));
+    }
+
     let _ = step("detaching", async {
         Ok(debug.send_command("D".into()).await?)
     })
@@ -209,6 +222,32 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
 
     println!("\nRESULT: PASS — launched, attached, detached, and cleaned up {bundle_id}");
     Ok(())
+}
+
+/// Mirrors `attach_failure` in `commands/developer.rs`.
+fn attach_failure(response: Option<&str>) -> Option<String> {
+    let rest = response?.trim().strip_prefix('E')?;
+    let (code, message) = match rest.split_once(';') {
+        Some((code, message)) => (code, Some(message)),
+        None => (rest, None),
+    };
+    if code.is_empty() || !code.chars().all(|value| value.is_ascii_hexdigit()) {
+        return None;
+    }
+    let detail = message
+        .filter(|message| !message.is_empty() && message.len() % 2 == 0)
+        .and_then(|message| {
+            let bytes = (0..message.len())
+                .step_by(2)
+                .map(|index| u8::from_str_radix(&message[index..index + 2], 16))
+                .collect::<Result<Vec<u8>, _>>()
+                .ok()?;
+            String::from_utf8(bytes).ok()
+        })
+        .map(|text| text.trim().to_owned())
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| format!("debugserver rejected the attach with error {code}"));
+    Some(detail)
 }
 
 /// Mirrors `cleanup_jit_process` in `commands/developer.rs`.

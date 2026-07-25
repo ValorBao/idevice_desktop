@@ -287,6 +287,111 @@ mod signature_tests {
         fat[256..260].fill(0);
         assert!(!macho_has_signature(&fat));
     }
+
+    fn app_dict(application_type: &str, get_task_allow: Option<bool>) -> plist::Dictionary {
+        let mut dict = plist::Dictionary::new();
+        dict.insert("ApplicationType".into(), application_type.into());
+        if let Some(allowed) = get_task_allow {
+            let mut entitlements = plist::Dictionary::new();
+            entitlements.insert("get-task-allow".into(), allowed.into());
+            dict.insert("Entitlements".into(), entitlements.into());
+        }
+        dict
+    }
+
+    #[test]
+    fn treats_get_task_allow_as_the_only_debuggable_signal() {
+        // A System application still qualifies: this is how TrollStore and
+        // sideloaded tooling register, and it is the case the JIT picker missed.
+        assert!(app_is_debuggable(&app_dict("System", Some(true))));
+        assert!(app_is_debuggable(&app_dict("User", Some(true))));
+    }
+
+    #[test]
+    fn rejects_applications_without_the_entitlement() {
+        // App Store builds omit the key entirely; TestFlight sets it to false.
+        assert!(!app_is_debuggable(&app_dict("User", None)));
+        assert!(!app_is_debuggable(&app_dict("User", Some(false))));
+        assert!(!app_is_debuggable(&app_dict("System", None)));
+    }
+
+    #[test]
+    fn rejects_a_malformed_entitlements_value() {
+        let mut dict = plist::Dictionary::new();
+        dict.insert("Entitlements".into(), "not-a-dictionary".into());
+        assert!(!app_is_debuggable(&dict));
+
+        let mut wrong_type = plist::Dictionary::new();
+        let mut entitlements = plist::Dictionary::new();
+        entitlements.insert("get-task-allow".into(), "true".into());
+        wrong_type.insert("Entitlements".into(), entitlements.into());
+        assert!(!app_is_debuggable(&wrong_type));
+    }
+}
+
+/// Whether debugserver can attach to this application.
+///
+/// `get-task-allow` is the entitlement iOS checks on `vAttach`; without it the
+/// attach is refused no matter how the application was installed. It is
+/// independent of the `User` and `System` application type: applications
+/// installed by TrollStore or a sideloader commonly register as `System` while
+/// still carrying the entitlement, and App Store builds never carry it.
+fn app_is_debuggable(dict: &plist::Dictionary) -> bool {
+    dict.get("Entitlements")
+        .and_then(plist::Value::as_dictionary)
+        .and_then(|entitlements| entitlements.get("get-task-allow"))
+        .and_then(plist::Value::as_boolean)
+        .unwrap_or(false)
+}
+
+/// Lists the applications a JIT session can actually attach to.
+///
+/// This deliberately queries every registered application type rather than only
+/// `User`, because filtering by type hides exactly the applications that need
+/// manual JIT.
+#[tauri::command]
+pub async fn apps_debuggable(
+    state: State<'_, AppState>,
+    udid: Option<String>,
+) -> CommandResult<Vec<InstalledApp>> {
+    let (_, provider) = selected_provider(&state, udid).await?;
+    let mut client = InstallationProxyClient::connect(&provider)
+        .await
+        .map_err(CommandError::from)?;
+    let apps = client
+        .get_apps(None, None)
+        .await
+        .map_err(CommandError::from)?;
+    let mut result = apps
+        .into_iter()
+        .filter_map(|(bundle_id, value)| {
+            let dict = value.as_dictionary()?;
+            if !app_is_debuggable(dict) {
+                return None;
+            }
+            let name = dict_string(dict, &["CFBundleDisplayName", "CFBundleName"])
+                .unwrap_or_else(|| bundle_id.clone());
+            let version = dict_string(dict, &["CFBundleShortVersionString", "CFBundleVersion"])
+                .unwrap_or_default();
+            let size_bytes = dict_u64(dict, &["StaticDiskUsage"]).unwrap_or(0)
+                + dict_u64(dict, &["DynamicDiskUsage"]).unwrap_or(0);
+            let system = dict_string(dict, &["ApplicationType"])
+                .is_some_and(|value| value.eq_ignore_ascii_case("system"));
+            Some(InstalledApp {
+                bundle_id,
+                name,
+                version,
+                size_bytes,
+                system,
+                // Icons are skipped: this list feeds a picker, and fetching them
+                // would mean a SpringBoard round trip per registered bundle.
+                icon_data_url: None,
+                raw: plist_to_json(&value),
+            })
+        })
+        .collect::<Vec<_>>();
+    result.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(result)
 }
 
 #[tauri::command]

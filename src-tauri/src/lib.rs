@@ -48,6 +48,7 @@ pub fn run() {
             commands::afc_download,
             commands::file_sharing_apps,
             commands::apps_list,
+            commands::apps_debuggable,
             commands::app_install,
             commands::app_uninstall,
             commands::crash_reports_list,

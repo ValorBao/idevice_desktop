@@ -14,11 +14,12 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   const refresh = useCallback(async () => {
     if (!desktop) return
     try {
-      const [nextStatus, nextApps] = await Promise.all([api.developerStatus(device.udid), api.appsList(device.udid)])
+      // Debuggable apps are selected by their get-task-allow entitlement, not by
+      // application type: TrollStore and sideloaded builds register as System.
+      const [nextStatus, nextApps] = await Promise.all([api.developerStatus(device.udid), api.appsDebuggable(device.udid)])
       setStatus(nextStatus)
-      const userApps = nextApps.filter((app) => !app.system)
-      setApps(userApps)
-      setBundleId((current) => current || userApps[0]?.bundleId || '')
+      setApps(nextApps)
+      setBundleId((current) => nextApps.some((app) => app.bundleId === current) ? current : nextApps[0]?.bundleId ?? '')
     } catch (error) { onToast(errorMessage(error)) }
   }, [desktop, device.udid, onToast])
   useEffect(() => { void refresh() }, [refresh])
@@ -103,7 +104,9 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   return (
     <section className="developer-page page-padding">
       <div className="dev-top-grid">
-        <div className="card jit-card"><div><h2>Enable JIT</h2><p>Launch a user app, attach debugserver, and keep its JIT entitlement active.</p>{desktop && <select value={bundleId} onChange={(event) => setBundleId(event.target.value)}>{apps.map((app) => <option key={app.bundleId} value={app.bundleId}>{app.name} · {app.bundleId}</option>)}</select>}</div><button className={`toggle ${jit ? 'on' : ''}`} onClick={() => void toggleJit()}><span /></button><small><i className={jit ? 'good-dot' : ''} />{jit ? `debugserver attached${jitInfo ? ` · pid ${jitInfo.pid}` : ''}` : 'no process attached'}</small></div>
+        <div className="card jit-card"><div><h2>Enable JIT</h2><p>Launch a debuggable app, attach debugserver, and keep its JIT entitlement active.</p>{desktop && (apps.length
+          ? <select value={bundleId} onChange={(event) => setBundleId(event.target.value)}>{apps.map((app) => <option key={app.bundleId} value={app.bundleId}>{app.name} · {app.bundleId}</option>)}</select>
+          : <p className="jit-empty">No installed app allows debugging. Attaching requires the <code>get-task-allow</code> entitlement, which App Store and TestFlight builds never carry. Install a development-signed or sideloaded build to use JIT.</p>)}</div><button className={`toggle ${jit ? 'on' : ''}`} onClick={() => void toggleJit()} disabled={desktop && !jit && !apps.length}><span /></button><small><i className={jit ? 'good-dot' : ''} />{jit ? `debugserver attached${jitInfo ? ` · pid ${jitInfo.pid}` : ''}` : 'no process attached'}</small></div>
         <div className="card ddi-card"><h2>Developer Disk Image</h2><p><span>Status</span><b className={status.ddiMounted ? 'good' : ''}>{status.ddiMounted ? 'Mounted' : 'Not mounted'}</b></p><p><span>Developer Mode</span><b>{status.developerMode === null ? 'Unknown' : status.developerMode ? 'Enabled' : 'Disabled'}</b></p><p><span>RSD</span><b>{status.rsdAvailable ? 'Available' : 'Unavailable'}</b></p>{ddiProgress !== null && <div className="progress"><span style={{ width: `${ddiProgress}%` }} /></div>}<div className="dev-actions"><button className="primary-button" onClick={() => void autoMountDdi()}>Auto Mount DDI</button><button onClick={() => void mountDdi()}>Choose files</button><button onClick={() => void unmountDdi()} disabled={!status.ddiMounted}>Unmount</button></div></div>
       </div>
       <div className="developer-mode-actions"><button onClick={() => void developerAction('reveal')}>Show Developer Mode setting</button><button onClick={() => void developerAction('enable')}>Enable Developer Mode</button><button onClick={() => void developerAction('accept')}>Accept after reboot</button></div>

@@ -25,6 +25,32 @@ fn connection_label(connection: &Connection) -> String {
     }
 }
 
+/// Decides which UDID a selection request should route to.
+///
+/// A catalog entry that carries a usable Lockdown route wins. An entry the
+/// catalog knows but cannot route is refused rather than attempted, because the
+/// attempt would fail later with a transport error that does not explain what
+/// the user has to do. An id the catalog has never seen is passed through, so a
+/// device that appeared between the last discovery pass and this call is still
+/// reachable.
+fn resolve_selection(
+    requested: &str,
+    connectable: Option<String>,
+    known: bool,
+) -> CommandResult<String> {
+    if let Some(connectable) = connectable {
+        return Ok(connectable);
+    }
+    if known || requested.starts_with("bonjour:") {
+        return Err(CommandError::new(
+            "network_discovery",
+            "This iPhone is visible through Bonjour but has no usable Lockdown route. Connect it by USB once or configure paired Wi-Fi access.",
+            true,
+        ));
+    }
+    Ok(requested.to_string())
+}
+
 async fn enrich_device(device: UsbmuxdDevice) -> UsbDiscovery {
     let mut paired = false;
     let mut name = None;
@@ -107,17 +133,11 @@ pub async fn device_list(state: State<'_, AppState>) -> CommandResult<Vec<Device
 #[tauri::command]
 pub async fn device_select(state: State<'_, AppState>, udid: String) -> CommandResult<()> {
     let discovery = state.discovery.read().await;
-    let selected_udid = if let Some(selected_udid) = discovery.connectable_udid(&udid) {
-        selected_udid
-    } else if discovery.contains(&udid) || udid.starts_with("bonjour:") {
-        return Err(CommandError::new(
-            "network_discovery",
-            "This iPhone is visible through Bonjour but has no usable Lockdown route. Connect it by USB once or configure paired Wi-Fi access.",
-            true,
-        ));
-    } else {
-        udid.clone()
-    };
+    let selected_udid = resolve_selection(
+        &udid,
+        discovery.connectable_udid(&udid),
+        discovery.contains(&udid),
+    )?;
     let lockdown_target = discovery.lockdown_target(&udid);
     drop(discovery);
     let _ = routed_provider_for(&selected_udid, lockdown_target.as_ref()).await?;
@@ -372,4 +392,63 @@ async fn handle_bonjour_event(app: &AppHandle, event: ServiceEvent) {
 pub async fn device_monitor_stop(state: State<'_, AppState>) -> CommandResult<()> {
     state.cancel_task("device-monitor").await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{connection_label, resolve_selection};
+    use idevice::usbmuxd::Connection;
+
+    #[test]
+    fn labels_every_connection_kind() {
+        assert_eq!(connection_label(&Connection::Usb), "USB");
+        assert_eq!(
+            connection_label(&Connection::Network("192.168.1.20".parse().unwrap())),
+            "Network · 192.168.1.20"
+        );
+        assert_eq!(
+            connection_label(&Connection::Unknown("Carrier".into())),
+            "Carrier",
+            "an unrecognised kind is shown as reported rather than replaced"
+        );
+    }
+
+    #[test]
+    fn prefers_the_routable_udid_over_the_requested_id() {
+        let resolved = resolve_selection("bonjour:abc", Some("REAL-UDID".into()), true)
+            .expect("a connectable record routes");
+        assert_eq!(
+            resolved, "REAL-UDID",
+            "the catalog key was requested, but the device is reached by its UDID"
+        );
+    }
+
+    /// The failure this guards against is a Bonjour-only device: visible in the
+    /// list, but with no Lockdown route. Attempting it surfaces a transport
+    /// error that does not tell the user to plug in a cable.
+    #[test]
+    fn refuses_a_known_record_with_no_route() {
+        let error = resolve_selection("KNOWN-UDID", None, true)
+            .expect_err("a known but unroutable record must be refused up front");
+        assert_eq!(error.kind, "network_discovery");
+        assert!(error.retryable, "plugging in USB makes this succeed");
+        assert!(error.message.contains("USB"));
+    }
+
+    #[test]
+    fn refuses_a_bonjour_key_even_when_the_catalog_has_dropped_it() {
+        assert!(
+            resolve_selection("bonjour:stale", None, false).is_err(),
+            "a bonjour: key never names something usbmuxd can open"
+        );
+    }
+
+    /// Discovery runs on its own schedule, so a device can be selected before
+    /// the catalog has caught up. That has to stay reachable.
+    #[test]
+    fn passes_through_an_unknown_udid() {
+        let resolved = resolve_selection("FRESH-UDID", None, false)
+            .expect("an id the catalog has not seen yet is still attempted");
+        assert_eq!(resolved, "FRESH-UDID");
+    }
 }

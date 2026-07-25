@@ -19,10 +19,10 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-26 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-25: 47 passed, 0 failed |
+| Rust unit tests | Passed on 2026-07-26: 58 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` rebuilt on 2026-07-25; passes `hdiutil verify`, carries the CSP in the release binary, and ships both licence files byte-identical to their sources |
-| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
+| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
 | Branches | All validation branches are merged; `master` is at the 2026-07-26 Device Lab visual direction (PR #20) |
@@ -116,7 +116,7 @@ Merge commit: `a06074c Merge pull request #20 from ValorBao/agent/device-lab-vis
 
 ## 5. Active Validation
 
-The frontend production build, Rust static check, 15 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
+The frontend production build, Rust static check, 58 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
 
 The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 
@@ -175,6 +175,10 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 - ~~Verify `jit_stop` and confirm that switching or disconnecting a device tears down an active JIT session.~~ Done on 2026-07-25: four tests cover the task registry, and a real-device check confirms ending a session detaches without closing the application.
 
 ### P1: Testing and Stability
+
+- ~~Cover the command modules that had no tests at all.~~ Started on 2026-07-26: `device.rs` and `location.rs` were the two largest untested modules, and both now cover their pure decision logic — selection routing, connection labelling, and coordinate validation. `overview.rs`, `screenshot.rs`, `diagnostics.rs`, and `logs.rs` remain untested, though they are small and mostly pass values through.
+- **Add a frontend test harness.** There is none, which leaves the UI as the only layer with no safety net: a refactor is checked by the type checker and the production build alone, and neither catches a chart that renders wrongly. Vitest with Testing Library, scoped to `useDeviceTask` branching, page rendering under `desktop` true and false, and the pure helpers in `src/lib/`. Coverage percentage is not the target.
+- Integration tests are deliberately not planned. The integration boundary in this project is a real device, and a mocked stand-in would prove very little for the effort.
 
 - ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.
 - ~~Add serialization contract tests to prevent drift between Rust and TypeScript fields.~~ Done on 2026-07-25: thirteen tests compare what serde emits against the declarations parsed from `src/api.ts`. Both directions were confirmed to fail on an induced mismatch.

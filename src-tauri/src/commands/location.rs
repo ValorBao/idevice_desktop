@@ -18,14 +18,12 @@ use crate::{
     types::{LocationSession, StreamStatus},
 };
 
-#[tauri::command]
-pub async fn location_start(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    udid: Option<String>,
-    latitude: f64,
-    longitude: f64,
-) -> CommandResult<LocationSession> {
+/// Rejects coordinates the device would refuse or misread.
+///
+/// The range checks alone already reject NaN and the infinities, because every
+/// comparison against NaN is false. `is_finite` is kept so the intent does not
+/// depend on that, and both cases are covered by tests.
+fn validate_coordinates(latitude: f64, longitude: f64) -> CommandResult<()> {
     if !latitude.is_finite() || !(-90.0..=90.0).contains(&latitude) {
         return Err(CommandError::new(
             "location",
@@ -40,6 +38,18 @@ pub async fn location_start(
             false,
         ));
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn location_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    udid: Option<String>,
+    latitude: f64,
+    longitude: f64,
+) -> CommandResult<LocationSession> {
+    validate_coordinates(latitude, longitude)?;
 
     let udid = state
         .selected(udid)
@@ -238,4 +248,71 @@ pub async fn location_start(
 pub async fn location_stop(state: State<'_, AppState>) -> CommandResult<()> {
     state.cancel_task("location").await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_coordinates;
+
+    #[test]
+    fn accepts_ordinary_coordinates() {
+        assert!(validate_coordinates(37.7749, -122.4194).is_ok());
+        assert!(validate_coordinates(0.0, 0.0).is_ok());
+    }
+
+    #[test]
+    fn accepts_the_range_boundaries() {
+        for (latitude, longitude) in [(90.0, 180.0), (-90.0, -180.0), (90.0, -180.0)] {
+            assert!(
+                validate_coordinates(latitude, longitude).is_ok(),
+                "{latitude}, {longitude} sits on the boundary and must be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_latitude_outside_the_range() {
+        let error = validate_coordinates(90.1, 0.0).expect_err("90.1 is past the pole");
+        assert_eq!(error.kind, "location");
+        assert!(error.message.contains("Latitude"));
+        assert!(!error.retryable, "a bad coordinate is not worth retrying");
+
+        assert!(validate_coordinates(-90.1, 0.0).is_err());
+    }
+
+    #[test]
+    fn rejects_longitude_outside_the_range() {
+        let error = validate_coordinates(0.0, 180.1).expect_err("180.1 has wrapped");
+        assert_eq!(error.kind, "location");
+        assert!(error.message.contains("Longitude"));
+
+        assert!(validate_coordinates(0.0, -180.1).is_err());
+    }
+
+    /// The frontend wraps longitude before calling, so an out-of-range value
+    /// reaching here means that wrap was bypassed rather than that the user
+    /// dragged past the edge of the map.
+    #[test]
+    fn rejects_non_finite_coordinates() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(
+                validate_coordinates(value, 0.0).is_err(),
+                "latitude {value} must be rejected"
+            );
+            assert!(
+                validate_coordinates(0.0, value).is_err(),
+                "longitude {value} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn reports_latitude_before_longitude_when_both_are_invalid() {
+        let error = validate_coordinates(200.0, 200.0).expect_err("both are out of range");
+        assert!(
+            error.message.contains("Latitude"),
+            "the first failing field should be the one reported, got {}",
+            error.message
+        );
+    }
 }

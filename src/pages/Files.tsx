@@ -3,6 +3,7 @@ import { AppWindow, ChevronRight, File, Folder, HardDrive, Plus, Upload } from '
 import { fileSystem, installedApps } from '../data'
 import { api, dialogs, errorMessage, type FileSharingApp, type RemoteFileEntry } from '../api'
 import { bytes, displaySizeToBytes } from '../lib/format'
+import { useDeviceTask } from '../lib/hooks'
 
 type FileSource = 'media' | 'app'
 
@@ -24,6 +25,7 @@ const demoAppDocumentEntries: RemoteFileEntry[] = [
 const mediaPathIsProtected = (path: string) => protectedMediaRoots.has(path.split('/').filter(Boolean)[0] ?? '')
 
 export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
+  const runTask = useDeviceTask(desktop, onToast)
   const demoSharingApps: FileSharingApp[] = installedApps.filter((app) => !app.system).slice(0, 3).map((app) => ({ bundleId: app.bundle, name: app.name }))
   const [source, setSource] = useState<FileSource>('media')
   const [path, setPath] = useState<string[]>([])
@@ -85,46 +87,36 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
   }
   const remoteChild = (name: string) => `${currentPath === '/' ? '' : currentPath}/${name}`
 
-  const uploadFile = async () => {
-    if (!desktop) return onToast('File operations are available in the desktop app')
+  const uploadFile = () => runTask(async () => {
     if (!sourceAvailable || currentReadOnly) return
-    try {
-      const chosen = await dialogs.anyFile()
-      if (!chosen || Array.isArray(chosen)) return
-      const name = chosen.split(/[\\/]/).pop() ?? 'upload.bin'
-      await api.afcUpload(chosen, remoteChild(name), udid, bundleId)
-      onToast(`${name} uploaded`)
-      await refresh()
-    } catch (error) { onToast(errorMessage(error)) }
-  }
-  const downloadFile = async () => {
-    if (!desktop || !selected || selected.isDirectory) return
-    try {
-      const target = await dialogs.saveFile(selected.name)
-      if (!target) return
-      await api.afcDownload(selected.path, target, udid, bundleId)
-      onToast(`${selected.name} downloaded`)
-    } catch (error) { onToast(errorMessage(error)) }
-  }
-  const makeDirectory = async () => {
-    if (!desktop) return onToast('Folder creation is available in the desktop app')
+    const chosen = await dialogs.anyFile()
+    if (!chosen || Array.isArray(chosen)) return
+    const name = chosen.split(/[\\/]/).pop() ?? 'upload.bin'
+    await api.afcUpload(chosen, remoteChild(name), udid, bundleId)
+    onToast(`${name} uploaded`)
+    await refresh()
+  }, 'File operations are available in the desktop app')
+  const downloadFile = () => runTask(async () => {
+    if (!selected || selected.isDirectory) return
+    const target = await dialogs.saveFile(selected.name)
+    if (!target) return
+    await api.afcDownload(selected.path, target, udid, bundleId)
+    onToast(`${selected.name} downloaded`)
+  })
+  const makeDirectory = () => runTask(async () => {
     if (!sourceAvailable || currentReadOnly) return
     const name = window.prompt('Folder name')?.trim()
     if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) return
-    try {
-      await api.afcMkdir(remoteChild(name), udid, bundleId)
-      onToast(`${name} created`)
-      await refresh()
-    } catch (error) { onToast(errorMessage(error)) }
-  }
-  const removeEntry = async () => {
-    if (!desktop || !selected || selectedReadOnly || !window.confirm(`Delete ${selected.name}?`)) return
-    try {
-      await api.afcRemove(selected.path, selected.isDirectory, udid, bundleId)
-      onToast(`${selected.name} removed`)
-      await refresh()
-    } catch (error) { onToast(errorMessage(error)) }
-  }
+    await api.afcMkdir(remoteChild(name), udid, bundleId)
+    onToast(`${name} created`)
+    await refresh()
+  }, 'Folder creation is available in the desktop app')
+  const removeEntry = () => runTask(async () => {
+    if (!selected || selectedReadOnly || !window.confirm(`Delete ${selected.name}?`)) return
+    await api.afcRemove(selected.path, selected.isDirectory, udid, bundleId)
+    onToast(`${selected.name} removed`)
+    await refresh()
+  })
 
   const rootLabel = source === 'media' ? 'iPhone Media' : 'Documents'
   const displayedPath = source === 'media'

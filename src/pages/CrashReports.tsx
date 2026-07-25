@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bug, Download, RefreshCw, Search, X } from 'lucide-react'
 import { api, dialogs, errorMessage, type CrashReportContent, type CrashReportSummary } from '../api'
 import { bytes } from '../lib/format'
+import { useDeviceTask } from '../lib/hooks'
 
 const demoCrashReports: CrashReportSummary[] = [
   { name: 'StikDebug-2026-07-23-184205.ips', path: '/StikDebug-2026-07-23-184205.ips', kind: 'IPS', process: 'StikDebug', sizeBytes: 184326, modified: '2026-07-23 18:42:05' },
@@ -53,6 +54,7 @@ export function CrashReports({ desktop, udid, onToast }: { desktop: boolean; udi
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<'all' | 'ips' | 'crash'>('all')
   const [loading, setLoading] = useState(false)
+  const runTask = useDeviceTask(desktop, onToast)
   const selected = reports.find((report) => report.path === selectedPath)
 
   const loadReports = useCallback(async () => {
@@ -98,28 +100,24 @@ export function CrashReports({ desktop, udid, onToast }: { desktop: boolean; udi
     }
   }, [filtered, selectedPath])
 
-  const exportSelected = async () => {
+  const exportSelected = () => runTask(async () => {
     if (!selected) return
-    if (!desktop) {
-      const blob = new Blob([content?.content ?? demoCrashContent], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = selected.name
-      anchor.click()
-      URL.revokeObjectURL(url)
-      onToast(`${selected.name} exported`)
-      return
-    }
-    try {
-      const target = await dialogs.saveFile(selected.name)
-      if (!target) return
-      await api.crashReportExport(selected.path, target, udid)
-      onToast(`${selected.name} exported`)
-    } catch (error) {
-      onToast(errorMessage(error))
-    }
-  }
+    const target = await dialogs.saveFile(selected.name)
+    if (!target) return
+    await api.crashReportExport(selected.path, target, udid)
+    onToast(`${selected.name} exported`)
+  }, () => {
+    // The browser demo has no save dialog, so it downloads the preview instead.
+    if (!selected) return
+    const blob = new Blob([content?.content ?? demoCrashContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = selected.name
+    anchor.click()
+    URL.revokeObjectURL(url)
+    onToast(`${selected.name} exported`)
+  })
 
   return (
     <section className="crash-page page-padding compact-padding">

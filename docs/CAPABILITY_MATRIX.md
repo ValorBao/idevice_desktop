@@ -1,6 +1,6 @@
 # `idevice-tools` GUI Coverage Matrix
 
-> Last updated: 2026-07-24
+> Last updated: 2026-07-25
 > Upstream baseline: `jkcoxson/idevice@8eed181f39a16ea70380ec8c3cff6bed07a1ef69`
 > Goal: make upstream command-line capabilities safe and complete to operate through a macOS GUI.
 

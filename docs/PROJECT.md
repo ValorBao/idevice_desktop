@@ -1,6 +1,6 @@
 # idevice desktop Project Overview
 
-> Last updated: 2026-07-25
+> Last updated: 2026-07-26
 > Current release: 0.0.1 Developer Preview; next patch in development
 
 ## 1. Project Positioning
@@ -38,8 +38,13 @@ The current phase focuses on a macOS MVP that can connect to real devices. High-
 | | Requirement |
 | --- | --- |
 | macOS | 11.0 or later, Apple Silicon only |
-| iOS, verified | 14.2, 17.0, and 26.5 |
+| iOS, verified | 14.2, 17.0, and 26.5 — one device per developer-service generation |
+| iOS, covered by generation | 15 and 16, which share the Legacy branch with 14.2 |
 | iOS, expected but unverified | 12.0 and later |
+
+Verification is organized by developer-service generation rather than by iOS release, because `device_version.rs` is what decides how a device is driven. iOS 14, 15, and 16 all satisfy `major < 17` and therefore select the same Legacy transport and DDI approach, so the verified 14.2 device covers that branch and 15 and 16 are not tracked as separate gaps.
+
+The exception is Developer Mode, which Apple introduced in iOS 16. On iOS 14 and 15 the AMFI service is absent, `AmfiClient::connect` fails, and the status degrades to `None` — correct for those versions, but it means no verified device exercises the iOS 16 enable-and-reboot flow.
 
 macOS 11.0 is the floor because releases are built for `arm64`, and Apple Silicon starts there. It matches what the binary itself requires, so the bundle no longer advertises a lower version than it can run on.
 
@@ -96,13 +101,13 @@ flowchart LR
 ### Frontend
 
 - React 18, TypeScript, and Vite
-- `src/App.tsx` holds the application shell: device selection, navigation, theme state, and page routing.
+- `src/App.tsx` holds the application shell: device selection, navigation, and page routing.
 - `src/pages/` contains one module per feature page, and `src/components/` holds the shell and shared presentation components.
 - `src/lib/` holds byte and value formatting plus the conversions between backend responses and view models.
 - `src/types.ts` defines the shell-level union types shared across pages.
 - `src/api.ts` defines the Tauri commands, events, and cross-boundary data types.
 - `src/data.ts` supplies browser-demo data.
-- `src/styles.css` provides Clean, Terminal, and Apple visual themes plus light and dark appearances.
+- `src/styles.css` holds the base component styles, and `src/device-lab.css` layers the Device Lab visual direction over them. The application is fixed to that single dark theme; the style and appearance switchers were removed on 2026-07-26.
 - Leaflet and OpenStreetMap provide interactive location selection.
 
 ### Desktop Backend
@@ -152,7 +157,8 @@ JIT differs between generations beyond transport. iOS 17 and later launch the ap
 │   ├── types.ts             # Shell-level shared types
 │   ├── api.ts               # Tauri API and event boundary
 │   ├── data.ts              # Browser demo data
-│   └── styles.css           # Global visual styles
+│   ├── styles.css           # Base component styles
+│   └── device-lab.css       # Device Lab theme layered over the base styles
 ├── src-tauri/               # Tauri and Rust backend
 │   ├── src/commands/        # Device capability commands
 │   ├── src/discovery.rs      # Unified usbmuxd and Bonjour device catalog
@@ -199,7 +205,7 @@ The dependency is a git revision rather than a released version, so an upgrade c
 
 1. Compare upstream commits for changed or removed services, renamed types, and new capabilities. Record new capabilities in `CAPABILITY_MATRIX.md` before scheduling work on them.
 2. Move the pin, then run `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, and `cargo test`. The contract tests catch response-shape drift; the transport tests catch changes in how a generation is selected.
-3. Re-run the harnesses in `src-tauri/examples/` against at least one device per generation that hardware allows, currently iOS 14.2 and iOS 17 or later. Record the results in the verification log in `PROGRESS.md`.
+3. Re-run the harnesses in `src-tauri/examples/` against one device per developer-service generation, currently iOS 14.2 for Legacy, 17.0 for CoreDeviceRemote, and 26.5 for CoreDeviceLockdown. Record the results in the verification log in `PROGRESS.md`.
 4. Regenerate `THIRD_PARTY_NOTICES.md` if the dependency graph changed.
 
 An upgrade that cannot be validated on hardware for a generation is recorded as a coverage gap for that generation rather than assumed to work.
@@ -234,3 +240,5 @@ An upgrade that cannot be validated on hardware for a generation is recorded as 
 | 2026-07-22 | License idevice desktop under the MIT License | Permit broad use and contribution while retaining copyright and license notices |
 | 2026-07-25 | Publish 0.0.1 as an unsigned Apple Silicon Developer Preview | Distribute through GitHub prerelease with Gatekeeper and compatibility warnings |
 | 2026-07-25 | Keep releases unsigned until an Apple Developer account exists | Signing and notarization stay out of scope; every release must document how to open an unsigned build |
+| 2026-07-26 | Fix the interface to a single dark Device Lab theme | The style and appearance switchers are removed; visual work targets one direction instead of keeping three in step |
+| 2026-07-26 | Verify by developer-service generation rather than by iOS release | iOS 15 and 16 are covered by the verified 14.2 device because all three select the Legacy branch; only the iOS 16 Developer Mode flow is tracked separately |

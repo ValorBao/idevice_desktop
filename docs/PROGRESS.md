@@ -1,7 +1,7 @@
 # idevice desktop Development Progress
 
 > Last updated: 2026-07-25
-> Version: 0.0.1
+> Release: 0.0.1; next patch in development
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
 The product direction is confirmed: developer tools first, macOS-only for the initial release, and long-term GUI coverage of device capabilities that currently require `idevice-tools`.
@@ -19,13 +19,13 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-25 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-25: 14 passed, 0 failed |
+| Rust unit tests | Passed on 2026-07-25: 15 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
-| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
-| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, physical USB disconnect and reconnect, direct TCP Lockdown fallback, and USB crash-report list/preview/export; crash-report listing over direct Bonjour TCP failed twice with `UnexpectedEof` |
+| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
+| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, physical USB disconnect and reconnect, direct TCP Lockdown fallback, and crash-report list/preview/export over both USB and RemotePairing/RSD |
 | Git branch | `master` |
-| Worktree | Version `0.0.1` is published, the real-device acceptance record is merged, and no feature implementation is currently active |
+| Worktree | The next patch routes network crash reports through the iOS 17 RSD shim; implementation and iOS 17.0 real-device verification are complete |
 
 ## 3. Feature Progress
 
@@ -37,7 +37,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Diagnostics | Five query categories integrated | Battery diagnostics verified on iOS 17.0 | Remaining query categories and permission failures across iOS versions |
 | AFC and file sharing | Integrated | AFC device info and root listing verified on iOS 17.0 | Large files, mutations, read-only paths, and app containers |
 | App list, installation, and uninstallation | Integrated | User-app listing is verified; icons and filtering are integrated | Real-device icon rendering, IPA progress, and uninstall confirmation |
-| Crash reports | List, filter, preview, and export integrated | USB list, preview, and byte-for-byte complete export pass on iOS 17.0; direct Bonjour TCP listing fails with `UnexpectedEof` | Diagnose network service closure; verify nested reports and previews larger than 4 MB |
+| Crash reports | List, filter, preview, and export integrated | USB Lockdown and network RemotePairing/RSD list, preview, and byte-for-byte complete export pass on iOS 17.0 | Verify the iOS 17.4+ CoreDeviceProxy path, nested reports, and previews larger than 4 MB |
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
@@ -108,9 +108,10 @@ The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the follow
 - Reattaching USB restored the three transports on the same catalog record without creating a duplicate device.
 - The USB crash-report service listed reports, previewed a 179,345-byte `.ips`, and exported an identical complete file.
 - A separate best-effort baseline copied 570 reports, approximately 80 MB, without removing them from the device.
-- Direct Bonjour TCP connected to the crash-report service but root listing failed twice because the device closed the TLS stream with `UnexpectedEof`.
+- The original direct Lockdown crash-report service closed during AFC root listing with `UnexpectedEof`; routing the same operation through the RSD `com.apple.crashreportcopymobile.shim.remote` service fixed the failure.
+- RemotePairing/RSD listed, previewed, and exported the same 179,345-byte `.ips` byte-for-byte over the network.
 
-Remaining acceptance gaps are multiple devices, a sleeping device, nested crash-report directories, reports larger than the 4 MB preview limit, and iOS 16 or iOS 17.4+ devices.
+Remaining acceptance gaps are multiple devices, a sleeping device, nested crash-report directories, reports larger than the 4 MB preview limit, and iOS 16 or iOS 17.4+ devices. The iOS 17.4+ CoreDeviceProxy crash-report route is integrated but not hardware-verified.
 
 ## 6. Recommended Next Phase
 
@@ -126,7 +127,7 @@ Remaining acceptance gaps are multiple devices, a sleeping device, nested crash-
 - Use [`CAPABILITY_MATRIX.md`](CAPABILITY_MATRIX.md) as the capability baseline for the pinned upstream revision.
 - Track Not integrated, Partial, Integrated, Build passed, and Real-device verified separately for each capability.
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
-- Diagnose the direct-TCP crash-report `UnexpectedEof`, then prioritize device console workflows, performance monitoring, packet capture, and process control.
+- Publish the RSD crash-report fix in the next patch, then prioritize device console workflows, performance monitoring, packet capture, and process control.
 
 ### P1: Testing and Stability
 
@@ -168,7 +169,7 @@ Append future validation results using this format:
 | 2026-07-22 | iPhone11,8 | 17.0 (21A329) | USB | RemotePairing/RSD screenshot | Pass | Project screenshot implementation returned a non-empty PNG data URL |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB → Network → USB | Unified discovery and Lockdown fallback | Pass | One record transitioned from USB + Wi-Fi + RemotePairing to Wi-Fi + RemotePairing; direct TCP Lockdown read ProductVersion 17.0; USB reconnect restored all transports without duplication |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | Crash-report list, preview, and export | Pass | Listed reports, previewed a 179,345-byte IPS, and verified complete export byte-for-byte; a keep-on-device baseline copied 570 reports |
-| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | Crash-report listing over direct TCP | Fail | Service connection succeeded, but root listing failed twice with TLS `UnexpectedEof`; USB path remained healthy |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | Crash-report list, preview, and export over RemotePairing/RSD | Pass | The direct Lockdown service failed twice with `UnexpectedEof`; switching to the RSD shim listed and exported a 179,345-byte IPS byte-for-byte |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

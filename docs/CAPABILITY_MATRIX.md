@@ -25,7 +25,7 @@ This matrix records capability coverage, not real-device compatibility. Real-dev
 | App container files | House Arrest | Partial | File-sharing apps are supported; broader container access is pending |
 | CoreDevice apps and processes | `app_service` | Partial | JIT uses launch; listing, processes, signals, and standard I/O are pending |
 | Application management | `ideviceinstaller`, `instproxy`, `application_listing` | Partial | User-app list with icons and filtering, IPA installation, and uninstallation; broader installation coordination is pending |
-| Crash reports | `crash_logs` | Partial | List, filter, preview, and export are integrated; report removal is not exposed and non-USB service support remains incomplete |
+| Crash reports | `crash_logs` | Partial | List, filter, preview, and export use Lockdown over USB and the RSD shim over iOS 17 network routes; report removal is not exposed |
 | Installation coordination | `installcoordination_proxy` | Not covered | Installation sessions and diagnostics need a dedicated design |
 | Device logs | `syslog_relay`, `os_trace_relay` | Covered | Live stream, pause, filter, and clear |
 | Device diagnostics | `diagnostics`, `diagnosticsservice` | Partial | Battery, Gestalt, IORegistry, NAND, and Wi-Fi |

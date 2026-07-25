@@ -1,7 +1,7 @@
 # idevice desktop Project Overview
 
 > Last updated: 2026-07-25
-> Current version: 0.0.1 Developer Preview
+> Current release: 0.0.1 Developer Preview; next patch in development
 
 ## 1. Project Positioning
 
@@ -96,6 +96,7 @@ flowchart LR
 - `discovery.rs` merges usbmuxd, `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing observations. USB is preferred; Wi-Fi MAC address, UDID, hostname, and address overlap are used to reconcile transports.
 - A known paired device remains selectable through direct Bonjour TCP Lockdown if its usbmuxd observation disappears. Unidentified mobdev2 and manual RemotePairing records remain visible for association, while unidentifiable RemotePairing-only records are hidden.
 - `provider.rs` prefers usbmuxd and falls back to a paired Bonjour TCP provider using the selected device's mobdev2 addresses.
+- Crash reports use the Lockdown CrashReportCopyMobile service over USB. Network access uses the RSD `com.apple.crashreportcopymobile.shim.remote` service through RemotePairing on iOS 17.0–17.3 or CoreDeviceProxy on iOS 17.4+.
 - `device_version.rs` selects the developer-service transport based on iOS version.
 - `tunnel.rs` implements RemotePairing and RSD software tunnels for iOS 17.0 through 17.3 and accepts the selected device's resolved endpoint to avoid cross-device routing.
 
@@ -164,7 +165,7 @@ npm run desktop:build
 
 - Real-device behavior depends on the iOS version, Developer Mode, DDI state, pairing records, USB or network transport, and changes to private Apple protocols.
 - RemotePairing on iOS 17.0 through 17.3 depends on Bonjour discovery and a locally stored pairing file, making it sensitive to network conditions.
-- Direct Bonjour TCP Lockdown reads pass on the validated iOS 17.0 device, but CrashReportCopyMobile root listing closes with `UnexpectedEof`; crash-report access is currently verified only over USB.
+- Direct Bonjour TCP Lockdown and RemotePairing/RSD crash-report access pass on the validated iOS 17.0 device. The corresponding iOS 17.4+ CoreDeviceProxy crash-report path is integrated but not yet verified on hardware.
 - Most frontend code currently lives in a single `App.tsx`, increasing maintenance and testing cost as the project grows.
 - The project does not yet have systematic frontend tests, Rust integration tests, or automated real-device compatibility tests.
 - Map tiles come from the online OpenStreetMap service and will not work offline or on restricted networks.

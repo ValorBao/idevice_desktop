@@ -208,3 +208,4 @@ npm run desktop:build
 | 2026-07-22 | Credit `jkcoxson/idevice` and retain its MIT license text for GitHub publication | Add a README acknowledgement and third-party license notice |
 | 2026-07-22 | License idevice desktop under the MIT License | Permit broad use and contribution while retaining copyright and license notices |
 | 2026-07-25 | Publish 0.0.1 as an unsigned Apple Silicon Developer Preview | Distribute through GitHub prerelease with Gatekeeper and compatibility warnings |
+| 2026-07-25 | Keep releases unsigned until an Apple Developer account exists | Signing and notarization stay out of scope; every release must document how to open an unsigned build |

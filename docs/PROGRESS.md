@@ -19,9 +19,9 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-25 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-25: 43 passed, 0 failed |
+| Rust unit tests | Passed on 2026-07-25: 47 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
-| Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
+| Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` rebuilt on 2026-07-25; passes `hdiutil verify`, carries the CSP in the release binary, and ships both licence files byte-identical to their sources |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
@@ -137,7 +137,7 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 ### P0: Establish a Trustworthy Real-Device Baseline
 
 - Record the date, device, iOS version, connection type, feature, result, and relevant log or error for every validation session.
-- Cover iOS 16, iOS 17.0–17.3, and iOS 17.4+ paths. Mark unavailable devices as explicit coverage gaps.
+- Cover iOS 16, iOS 17.0–17.3, and iOS 17.4+ paths. iOS 14.2, 17.0, and 26.5 are verified; **iOS 15 and 16 have no available device and are an explicit, open coverage gap**.
 - Prioritize the main and cleanup paths for pairing, Overview, files, installation, uninstallation, logs, DDI, JIT, and location.
 - Validate the active application-icon, screenshot-cache, and map-interaction changes.
 
@@ -156,7 +156,7 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 
 ### P1: Testing and Stability
 
-- Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.
+- ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.
 - ~~Add serialization contract tests to prevent drift between Rust and TypeScript fields.~~ Done on 2026-07-25: thirteen tests compare what serde emits against the declarations parsed from `src/api.ts`. Both directions were confirmed to fail on an induced mismatch.
 - Verify that device switches, disconnects, and page unmounts reliably stop long-running tasks.
 - Cover empty states, timeouts, permission denial, mid-operation disconnects, and large files.
@@ -173,8 +173,9 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 - Define minimum macOS and iOS versions.
 - ~~Tighten the Tauri CSP.~~ Done on 2026-07-25: scripts are limited to bundled code, images to the app, `data:` URLs, and the map tile host, and object, frame, and form directives are closed. Verified in the running application.
 - Evaluate the online map dependency and an offline fallback.
-- Complete the application icon, macOS signing, notarization, release notes, and full third-party license inventory.
-- Verify that the project MIT License and complete third-party notices ship with every release artifact.
+- Complete the application icon, release notes, and the full third-party license inventory.
+- **macOS signing and notarization are blocked**: no Apple Developer account or certificate is available. Releases stay unsigned, so distribution has to keep the Gatekeeper warning and the instructions for opening an unsigned build.
+- ~~Verify that the project MIT License and complete third-party notices ship with every release artifact.~~ Done on 2026-07-25: both files appear in the `.app` and the `.dmg`, byte-identical to their sources, and the CSP is embedded in the release binary. The DMG passes `hdiutil verify`.
 - Define an upgrade and regression process for the pinned `idevice` revision.
 
 ## 7. Open Decisions

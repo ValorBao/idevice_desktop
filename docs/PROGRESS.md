@@ -1,6 +1,6 @@
 # idevice desktop Development Progress
 
-> Last updated: 2026-07-25
+> Last updated: 2026-07-26
 > Release: 0.0.1; next patch in development
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
@@ -17,7 +17,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Item | Status |
 | --- | --- |
-| Frontend production build | Passed on 2026-07-25 with `npm run build` |
+| Frontend production build | Passed on 2026-07-26 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | Passed on 2026-07-25: 47 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
@@ -25,8 +25,8 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
-| Branches | All validation branches are merged; `master` is at the 2026-07-25 JIT and pairing cycle |
-| Worktree | Clean. The merged patch carries the iOS 17 network crash-report route, the legacy location cleanup, the JIT attach-failure fix, the JIT selector fix, and the frontend split |
+| Branches | All validation branches are merged; `master` is at the 2026-07-26 Device Lab visual direction (PR #20) |
+| Worktree | Clean |
 
 ## 3. Feature Progress
 
@@ -45,7 +45,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | JIT | Integrated for both generations | iOS 17.0 passes launch, `vAttach`, detach, and cleanup; iOS 14.2 passes attach-by-name and detach. Ending a session leaves the application running, and the task registry cancels a session on device switch. A rejected attach is reported as a failure | Exercise the full sequence through the interface rather than a harness |
 | Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
-| Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
+| Single Device Lab theme | Integrated | The style and appearance switchers were removed on 2026-07-26; the interface is fixed to the dark Device Lab theme. Frontend build passed | Small windows, long content, and accessibility |
 
 ## 4. Completed Milestones
 
@@ -97,6 +97,23 @@ Implemented the unified device-discovery layer:
 
 Commit: `b9883f6 feat: add crash reports and unified device discovery`
 
+### 2026-07-26: Device Lab Visual Direction
+
+Settled the interface on a single visual direction, which release notes were waiting on:
+
+- Removed the in-app style and appearance switchers and fixed the application to the dark Device Lab theme. They were scaffolding from exploring three parallel directions and had stopped earning their place in the header.
+- Reworked the title bar into a brand mark with a live connection status line, and gave the page header a device state readout in place of the theme controls.
+- Rebuilt Overview as an object-led cockpit rather than a generic card dashboard.
+- Added entry motion: pages fade and lift, Diagnostics stat values count up over smoothed sparklines, and capacity bars grow with a hover readout. All of it degrades under `prefers-reduced-motion`.
+- Receded the dividers inside cards and faded the page-header and tab rules out toward the right, so dense pages stop reading as grid paper.
+- Restyled the Location caption as light frosted glass and removed the redundant service-name badge from the map.
+
+The map tiles stayed on standard OpenStreetMap. A detour through a dark basemap was reverted: a monochrome dark tileset loses the map's colour coding, and reproducing it with a CSS invert and hue-rotate filter produces colours that are simply wrong. Recorded here so the idea is not proposed again.
+
+A follow-up pass removed what the switchers left behind: the `UiStyle` and `Appearance` types, the `.style-switcher` and `.appearance-button` rules including their two responsive overrides, and the five unreachable theme variable blocks. Only `.theme-clean.mode-dark` remains, because `device-lab.css` layers over it. The production stylesheet dropped from 90.18 kB to 86.58 kB.
+
+Merge commit: `a06074c Merge pull request #20 from ValorBao/agent/device-lab-visual-polish`
+
 ## 5. Active Validation
 
 The frontend production build, Rust static check, 15 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
@@ -130,16 +147,19 @@ Reaching that application exposed a separate defect. `apps_list` requests only t
 
 A DDI mount and unmount cycle was then verified on the same device, which also settled a doubt raised during the JIT work. Two separate readings of `copy_devices` had returned no images, suggesting it might not reflect a personalized DDI on iOS 17 and that `developer_status` might depend on its devicectl fallback to be correct. Taking the missing reading while an image was actually mounted disproved that: `copy_devices` reported one image, `lookup_image("Personalized")` returned a 48-byte signature, and the RSD service list rose from 57 to 69 with the debug proxy appearing. All three agreed again after unmounting. Both earlier readings had simply been taken while no image was mounted, and `ddi_mounted` needs no correction. `lookup_image("Developer")` reports nothing throughout, which is correct for a generation that uses personalized images.
 
-Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB preview limit, devices on iOS 15 and 16, the first-time trust prompt on a host the device has never authorized, and a JIT attach on iOS 17.4 or later, which needs a debuggable application on such a device. JIT on iOS 16 and earlier is refused by design and remains unimplemented, which excludes the large TrollStore audience on those versions.
+Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB preview limit, the first-time trust prompt on a host the device has never authorized, and a JIT attach on iOS 17.4 or later, which needs a debuggable application on such a device.
+
+iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `device_version.rs` branches on `major < 17`, so 14, 15, and 16 all select the same Legacy transport and DDI approach, and the verified iOS 14.2 result covers that branch. One behaviour sits outside this equivalence: Developer Mode arrived in iOS 16, so an iOS 16 device must enable it before developer services respond. On 14 and 15 `AmfiClient::connect` fails and the status degrades to `None`, which is correct for those versions but means the iOS 16 enable-and-reboot flow is exercised by no verified device.
 
 ## 6. Recommended Next Phase
 
 ### P0: Establish a Trustworthy Real-Device Baseline
 
 - Record the date, device, iOS version, connection type, feature, result, and relevant log or error for every validation session.
-- Cover iOS 16, iOS 17.0–17.3, and iOS 17.4+ paths. iOS 14.2, 17.0, and 26.5 are verified; **iOS 15 and 16 have no available device and are an explicit, open coverage gap**.
+- Cover one device per developer-service generation rather than one per iOS release. iOS 14.2 covers Legacy, 17.0 covers CoreDeviceRemote, and 26.5 covers CoreDeviceLockdown; all three are verified. iOS 15 and 16 fall inside the Legacy branch and are covered by the 14.2 result, with the iOS 16 Developer Mode flow noted above as the one exception.
 - Prioritize the main and cleanup paths for pairing, Overview, files, installation, uninstallation, logs, DDI, JIT, and location.
-- Validate the active application-icon, screenshot-cache, and map-interaction changes.
+- Validate the active application-icon and screenshot-cache changes.
+- Validate the Location page against a device. Preset selection, map panning, and click-to-select were exercised in browser demo mode on 2026-07-26, which does not touch the DVT/RSD or legacy location transports.
 
 ### P0: Maintain CLI-to-GUI Coverage
 
@@ -174,17 +194,24 @@ Remaining acceptance gaps are a sleeping device, reports larger than the 4 MB pr
 - ~~Tighten the Tauri CSP.~~ Done on 2026-07-25: scripts are limited to bundled code, images to the app, `data:` URLs, and the map tile host, and object, frame, and form directives are closed. Verified in the running application.
 - ~~Evaluate the online map dependency and an offline fallback.~~ Decided on 2026-07-25 to keep the online map with no fallback. The map is a convenience for picking coordinates, not a requirement for simulating a location, and presets remain available when tiles do not load.
 - ~~Complete the application icon and the full third-party license inventory.~~ Done on 2026-07-25: the icon is rendered from its SVG source at 1024x1024, and the notices file now lists every dependency that ships.
-- Write release notes once the interface work in progress settles.
+- Write release notes. The interface work this was waiting on settled on 2026-07-26 with the Device Lab visual direction, so this is now unblocked.
 - **macOS signing and notarization are blocked**: no Apple Developer account or certificate is available. Releases stay unsigned, so distribution has to keep the Gatekeeper warning and the instructions for opening an unsigned build.
 - ~~Verify that the project MIT License and complete third-party notices ship with every release artifact.~~ Done on 2026-07-25: both files appear in the `.app` and the `.dmg`, byte-identical to their sources, and the CSP is embedded in the release binary. The DMG passes `hdiutil verify`.
 - ~~Define an upgrade and regression process for the pinned `idevice` revision.~~ Defined on 2026-07-25 in `PROJECT.md`.
 
 ## 7. Open Decisions
 
-- **Compatibility:** minimum iOS version and the device/system combinations required for the first release
-- **macOS coverage:** minimum macOS version and whether Intel Macs are included initially
-- **Map strategy:** online OpenStreetMap, an offline option, or a replaceable tile source
-- **Distribution:** internal tool, open-source project, or general-user application
+The four decisions previously listed here were all settled during the 2026-07-25 and 2026-07-26 cycles and are recorded where they belong:
+
+- **Compatibility** — resolved. One device per developer-service generation, verified at iOS 14.2, 17.0, and 26.5; see the P0 entry above and the Supported Versions table in `PROJECT.md`.
+- **macOS coverage** — resolved. macOS 11.0 or later, Apple Silicon only for the initial release; see `PROJECT.md`.
+- **Map strategy** — resolved. Online OpenStreetMap with no offline fallback; see the P2 entry above.
+- **Distribution** — resolved. Open-source MIT project distributed as an unsigned GitHub prerelease; see the decision log in `PROJECT.md`.
+
+Genuinely open:
+
+- **Signing** stays blocked rather than undecided: there is no Apple Developer account, so every release ships unsigned.
+- **iOS 16 Developer Mode** has no verified device. The enable-and-reboot flow is the one Legacy-generation behaviour the iOS 14.2 result does not cover.
 
 ## 8. Real-Device Verification Log
 

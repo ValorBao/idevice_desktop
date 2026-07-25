@@ -42,7 +42,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 14.2 and 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
-| JIT | Integrated | iOS 17.0 passes tunnel, RSD, DVT handshake, app launch, memory-limit removal, attach round trip, and failure cleanup; a rejected attach is now reported as a failure | A successful attach against a development-signed app, plus stop and device-switch cleanup |
+| JIT | Integrated at the backend; not reachable from the interface | iOS 17.0 passes the full sequence against a TrollStore-installed app: tunnel, RSD, DVT handshake, launch, memory-limit removal, `vAttach`, detach, and cleanup. A rejected attach is reported as a failure | Expose debuggable applications in the JIT selector, then verify `jit_stop` and device-switch cleanup |
 | Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
@@ -124,9 +124,11 @@ JIT was verified in two stages. With no DDI mounted, the RemotePairing tunnel op
 
 The attach round trip then exposed a real defect. debugserver answered `vAttach` for an App Store build with `E96;…`, which decodes to "attach failed (Not allowed to attach to process…)". Because that is a protocol-level error packet rather than a transport error, `send_command` returned success and the session was reported as attached: the interface would have shown a JIT badge over a process that was never attached, and the launched process was left running. `attach_failure` now decodes the reply, surfaces the device's own explanation, and routes through the same cleanup path used for a failed debug-server connection. Four unit tests cover stop packets, a hex-encoded reason, a bare error code, and a payload that only resembles an error.
 
-A successful attach is still uncovered, because none of the 16 installed applications carry `get-task-allow`; that requires a development-signed build.
+A successful attach was then verified against a TrollStore-installed application. `vAttach` returned a `T11` stop packet carrying full register state, detach succeeded, and the launched process was terminated. That also confirms the new attach-failure check does not misread a successful stop packet as an error, so both directions of the JIT attach path are now covered.
 
-Remaining acceptance gaps are multiple simultaneously visible devices, a sleeping device, reports larger than the 4 MB preview limit, devices on iOS 15/16 or iOS 17.4+, a successful JIT attach against a development-signed application, and the first-time trust prompt on a host the device has never authorized. The iOS 17.4+ CoreDeviceProxy crash-report route is integrated but not hardware-verified.
+Reaching that application exposed a separate defect. `apps_list` requests only the `User` application type and the interface then filters out anything marked as a system application. Every debuggable application on the device is registered as `System`: a survey of all 209 registered applications found eight carrying `get-task-allow`, including the TrollStore-installed tooling, and none of them can appear in the JIT selector. The JIT backend therefore works while the feature stays unreachable through the interface for its primary audience, since applications installed through TrollStore or a sideloader are exactly the ones that need manual JIT. Applications distributed through the App Store never carry `get-task-allow` and are granted their JIT privileges by the system directly.
+
+Remaining acceptance gaps are multiple simultaneously visible devices, a sleeping device, reports larger than the 4 MB preview limit, devices on iOS 15/16 or iOS 17.4+, and the first-time trust prompt on a host the device has never authorized. The iOS 17.4+ CoreDeviceProxy crash-report route is integrated but not hardware-verified. JIT on iOS 16 and earlier is refused by design and remains unimplemented, which excludes the large TrollStore audience on those versions.
 
 ## 6. Recommended Next Phase
 
@@ -143,6 +145,12 @@ Remaining acceptance gaps are multiple simultaneously visible devices, a sleepin
 - Track Not integrated, Partial, Integrated, Build passed, and Real-device verified separately for each capability.
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
 - Publish the RSD crash-report fix in the next patch, then prioritize device console workflows, performance monitoring, packet capture, and process control.
+
+### P0: Make JIT Reachable from the Interface
+
+- List debuggable applications in the JIT selector instead of user applications. `get-task-allow` is the property that decides whether `vAttach` can succeed, and it is independent of the `User` and `System` application type.
+- Keep the Apps page unchanged: it should continue to show user applications rather than all 209 registered bundles.
+- Consider whether iOS 16 and earlier deserve a legacy debugserver JIT path, since TrollStore is most widely used on those versions.
 
 ### P1: Testing and Stability
 
@@ -193,6 +201,7 @@ Append future validation results using this format:
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | JIT tunnel, launch, and failure cleanup | Partial | RemotePairing tunnel opened in 656 ms exposing 57 RSD services; DVT handshake, `launch_app`, and `disable_memory_limit` passed; `DebugProxyClient::connect_rsd` returned "service not found" because no DDI was mounted, and the cleanup path then terminated the launched process as designed |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | DDI mount and debug-proxy availability | Pass | `devicectl --auto-mount-ddis` failed with `ExistingTransferInProgress` until the device was rebooted, then mounted DDI 17E202; RSD services went from 57 to 69 and exposed `com.apple.internal.dt.remote.debugproxy`, confirming the earlier "service not found" was a missing DDI rather than a routing defect |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | JIT attach round trip | Pass (attach rejected as expected) | The debug server connected and `vAttach` returned `E96;…` decoding to "attach failed (Not allowed to attach to process…)" for an App Store build. This exposed a defect: the reply was previously reported as an attached session. Attach rejection is now surfaced as an error and the launched process is terminated |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | Full JIT session against a debuggable application | Pass | Attaching to a TrollStore-installed application returned a `T11` stop packet with full register state; detach and process termination both succeeded. This also confirms the attach-failure check does not reject a successful stop packet |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

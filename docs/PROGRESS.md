@@ -144,7 +144,8 @@ Remaining acceptance gaps are multiple simultaneously visible devices, a sleepin
 
 ### P1: Frontend Maintainability
 
-- Split `App.tsx` into page components, shared components, and hooks.
+- ~~Split `App.tsx` into page components, shared components, and helpers.~~ Done on 2026-07-25: the shell dropped from 1,147 to 233 lines, with eight page modules, five shared components, and two helper modules. The move was verified line by line and the production bundle was unchanged apart from module boundaries.
+- Extract the repeated desktop-guard, load, and toast-on-error pattern that every page currently reimplements into shared hooks.
 - Consolidate device sessions, notifications, and asynchronous loading into a clear state model.
 - Add component tests for critical interactions and audit keyboard access, focus, and color contrast.
 

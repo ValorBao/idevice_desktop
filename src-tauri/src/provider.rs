@@ -23,7 +23,7 @@ pub async fn provider_for(udid: &str) -> CommandResult<UsbmuxdProvider> {
 #[derive(Debug)]
 pub enum RoutedProvider {
     Usbmuxd(UsbmuxdProvider),
-    Bonjour(TcpProvider),
+    Bonjour(Box<TcpProvider>),
 }
 
 impl IdeviceProvider for RoutedProvider {
@@ -103,12 +103,12 @@ pub async fn routed_provider_for(
             true,
         )
     })?;
-    Ok(RoutedProvider::Bonjour(TcpProvider {
+    Ok(RoutedProvider::Bonjour(Box::new(TcpProvider {
         addr: address,
         scope_id: None,
         pairing_file,
         label: "idevice-desktop-bonjour".into(),
-    }))
+    })))
 }
 
 pub async fn selected_provider(

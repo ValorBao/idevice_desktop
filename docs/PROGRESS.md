@@ -1,6 +1,6 @@
 # idevice desktop Development Progress
 
-> Last updated: 2026-07-24
+> Last updated: 2026-07-25
 > Version: 0.0.1
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
@@ -20,10 +20,12 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Frontend production build | Passed on 2026-07-25 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | Passed on 2026-07-25: 14 passed, 0 failed |
+| Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
+| Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
-| Real-device verification | iOS 17.0 mobdev2, RemotePairing, catalog merging, and network Lockdown reads passed; physical USB transition and the new direct TCP fallback still require an awake device |
-| Git branch | `main` |
-| Worktree | Contains the uncommitted crash-report and unified-discovery work described in Active Work |
+| Real-device verification | Prior iOS 17.0 mobdev2, RemotePairing, catalog merging, and network Lockdown reads passed; the 2026-07-25 acceptance run found no connected USB or network device, so physical transitions, direct TCP fallback, and crash reports remain pending |
+| Git branch | `master` |
+| Worktree | Crash-report and unified-discovery work is committed in `b9883f6`; the follow-up lint and documentation changes are the current cycle |
 
 ## 3. Feature Progress
 
@@ -69,9 +71,9 @@ Commit: `b2e37b8 fix: handle iOS developer services by version`
 
 Commit: `a584c07 feat: harden logs installs and file access`
 
-## 5. Active Work
+### 2026-07-25: Crash Reports and Unified Discovery
 
-The worktree contains the first crash-report workflow:
+Implemented the first crash-report workflow:
 
 - Recursively list reports exposed by `com.apple.crashreportcopymobile`, after requesting a best-effort report flush.
 - Filter reports by filename, process, path, `.ips`, or `.crash`.
@@ -81,7 +83,7 @@ The worktree contains the first crash-report workflow:
 - Represent report size as unknown until previewed instead of displaying a false `0 B`, avoiding up to 2,000 AFC metadata round trips during listing.
 - Provide browser demonstration data and a responsive list-and-preview interface.
 
-It also contains the unified device-discovery layer:
+Implemented the unified device-discovery layer:
 
 - Monitor usbmuxd and the `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing Bonjour services in parallel.
 - Merge USB and network observations by UDID, Wi-Fi MAC address, hostname, or address overlap.
@@ -92,7 +94,19 @@ It also contains the unified device-discovery layer:
 - Route iOS 17.0–17.3 screenshot, location, and JIT tunnels to the RemotePairing endpoint associated with the selected device instead of the first service found.
 - Keep unidentified Bonjour-only devices visible with a clear “network route unavailable” state until they can be associated with a pairing record.
 
-The frontend build, Rust static check, 14 Rust unit tests, and browser interaction check pass. Live Bonjour discovery and merged routing passed on iOS 17.0; direct TCP fallback timed out after the phone stopped advertising while asleep. Repeat that path with an awake device and validate crash reports before these features are considered complete.
+Commit: `b9883f6 feat: add crash reports and unified device discovery`
+
+## 5. Active Validation
+
+The frontend production build, Rust static check, 14 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass. Live Bonjour discovery and merged routing previously passed on iOS 17.0.
+
+The 2026-07-25 acceptance attempt could not detect a device through USB, network `idevice_id`, or Apple's CoreDevice device list. The following checks must be repeated with an awake, trusted device:
+
+- Disconnect USB while the device continues advertising Bonjour, and verify direct TCP Lockdown keeps Overview available.
+- Reconnect USB and verify the catalog merges transports without duplicating the device.
+- Repeat discovery with multiple devices and confirm each RemotePairing endpoint is routed to the matching device.
+- Refresh crash reports, including nested `.ips` and `.crash` entries, then verify preview, the 4 MB preview limit, and complete export.
+- Record the device model, iOS build, connection type, result, and relevant error for each check.
 
 ## 6. Recommended Next Phase
 

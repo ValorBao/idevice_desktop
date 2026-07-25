@@ -1,20 +1,64 @@
-use std::path::Path;
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
 use idevice::{
-    IdeviceService,
+    IdeviceService, RsdService,
+    core_device_proxy::CoreDeviceProxy,
+    rsd::RsdHandshake,
     services::crashreportcopymobile::{CrashReportCopyMobileClient, flush_reports},
+    tcp::handle::AdapterHandle,
 };
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::{
+    device_version::{DeveloperGeneration, ios_version},
     error::{CommandError, CommandResult},
     provider::selected_provider,
     state::AppState,
+    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
     types::{CrashReportContent, CrashReportSummary},
 };
 
 const MAX_PREVIEW_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REPORTS: usize = 2_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CrashTransport {
+    Lockdown,
+    RemoteRsd,
+    CoreDeviceRsd,
+    UsbRequired,
+}
+
+fn crash_transport(is_bonjour: bool, generation: DeveloperGeneration) -> CrashTransport {
+    match (is_bonjour, generation) {
+        (false, _) => CrashTransport::Lockdown,
+        (true, DeveloperGeneration::Legacy) => CrashTransport::UsbRequired,
+        (true, DeveloperGeneration::CoreDeviceRemote) => CrashTransport::RemoteRsd,
+        (true, DeveloperGeneration::CoreDeviceLockdown) => CrashTransport::CoreDeviceRsd,
+    }
+}
+
+struct CrashClient {
+    inner: CrashReportCopyMobileClient,
+    _adapter: Option<AdapterHandle>,
+}
+
+impl Deref for CrashClient {
+    type Target = CrashReportCopyMobileClient;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for CrashClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
 
 fn validate_report_path(path: &str) -> CommandResult<String> {
     let normalized = path.trim_start_matches('/');
@@ -97,30 +141,103 @@ fn report_modified(name: &str) -> String {
 }
 
 async fn crash_client(
+    app: &AppHandle,
     state: &AppState,
     udid: Option<String>,
-) -> CommandResult<CrashReportCopyMobileClient> {
-    let (_, provider) = selected_provider(state, udid).await?;
-    CrashReportCopyMobileClient::connect(&provider)
-        .await
-        .map_err(CommandError::from)
+    flush_pending: bool,
+) -> CommandResult<CrashClient> {
+    let (udid, provider) = selected_provider(state, udid).await?;
+    let generation = ios_version(&provider).await?.developer_generation();
+    match crash_transport(provider.is_bonjour(), generation) {
+        CrashTransport::Lockdown => {
+            if flush_pending && let Err(error) = flush_reports(&provider).await {
+                tracing::warn!(?error, "unable to flush pending crash reports");
+            }
+            let inner = CrashReportCopyMobileClient::connect(&provider)
+                .await
+                .map_err(CommandError::from)?;
+            Ok(CrashClient {
+                inner,
+                _adapter: None,
+            })
+        }
+        CrashTransport::UsbRequired => Err(CommandError::new(
+            "crash_reports",
+            "Crash reports over the network require iOS 17 or later. Connect the device by USB.",
+            false,
+        )),
+        CrashTransport::RemoteRsd | CrashTransport::CoreDeviceRsd => {
+            let (mut adapter, mut handshake) = match generation {
+                DeveloperGeneration::CoreDeviceRemote => {
+                    let pairing_path = remote_pairing_path(app, &udid)?;
+                    let remote_target = state.discovery.read().await.remote_pairing_target(&udid);
+                    let tunnel = open_remote_pairing_tunnel(
+                        &provider,
+                        &pairing_path,
+                        "idevice-desktop",
+                        remote_target.as_ref(),
+                    )
+                    .await?;
+                    (tunnel.adapter, tunnel.handshake)
+                }
+                DeveloperGeneration::CoreDeviceLockdown => {
+                    let proxy = CoreDeviceProxy::connect(&provider)
+                        .await
+                        .map_err(CommandError::from)?;
+                    let rsd_port = proxy.tunnel_info().server_rsd_port;
+                    let adapter = proxy.create_software_tunnel().map_err(|error| {
+                        CommandError::new(
+                            "crash_reports",
+                            format!("Unable to create the CoreDevice tunnel: {error}"),
+                            true,
+                        )
+                    })?;
+                    let mut adapter = adapter.to_async_handle();
+                    let stream = adapter.connect(rsd_port).await.map_err(|error| {
+                        CommandError::new(
+                            "crash_reports",
+                            format!("Unable to connect to tunneled RSD: {error}"),
+                            true,
+                        )
+                    })?;
+                    let handshake = RsdHandshake::new(stream)
+                        .await
+                        .map_err(CommandError::from)?;
+                    (adapter, handshake)
+                }
+                DeveloperGeneration::Legacy => unreachable!(),
+            };
+            let inner =
+                CrashReportCopyMobileClient::connect_rsd(&mut adapter, &mut handshake)
+                    .await
+                    .map_err(|error| {
+                        CommandError::new(
+                            "crash_reports",
+                            format!(
+                                "The network crash-report service is unavailable: {error}. Connect the device by USB and retry."
+                            ),
+                            true,
+                        )
+                    })?;
+            Ok(CrashClient {
+                inner,
+                _adapter: Some(adapter),
+            })
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn crash_reports_list(
+    app: AppHandle,
     state: State<'_, AppState>,
     udid: Option<String>,
 ) -> CommandResult<Vec<CrashReportSummary>> {
-    let (_, provider) = selected_provider(&state, udid).await?;
-    if let Err(error) = flush_reports(&provider).await {
-        tracing::warn!(?error, "unable to flush pending crash reports");
-    }
-
-    let mut client = match CrashReportCopyMobileClient::connect(&provider).await {
+    let mut client = match crash_client(&app, &state, udid, true).await {
         Ok(client) => client,
         Err(error) => {
             tracing::error!(?error, "unable to connect to crash report service");
-            return Err(CommandError::from(error));
+            return Err(error);
         }
     };
     let mut directories = vec!["/".to_string()];
@@ -197,12 +314,13 @@ pub async fn crash_reports_list(
 
 #[tauri::command]
 pub async fn crash_report_read(
+    app: AppHandle,
     state: State<'_, AppState>,
     udid: Option<String>,
     path: String,
 ) -> CommandResult<CrashReportContent> {
     let normalized = validate_report_path(&path)?;
-    let mut client = crash_client(&state, udid).await?;
+    let mut client = crash_client(&app, &state, udid, false).await?;
     let bytes = client.pull(normalized).await.map_err(CommandError::from)?;
     let truncated = bytes.len() > MAX_PREVIEW_BYTES;
     let preview_len = bytes.len().min(MAX_PREVIEW_BYTES);
@@ -221,6 +339,7 @@ pub async fn crash_report_read(
 
 #[tauri::command]
 pub async fn crash_report_export(
+    app: AppHandle,
     state: State<'_, AppState>,
     udid: Option<String>,
     path: String,
@@ -234,7 +353,7 @@ pub async fn crash_report_export(
             false,
         ));
     }
-    let mut client = crash_client(&state, udid).await?;
+    let mut client = crash_client(&app, &state, udid, false).await?;
     let bytes = client.pull(normalized).await.map_err(CommandError::from)?;
     tokio::fs::write(local_path, bytes).await?;
     Ok(())
@@ -243,6 +362,7 @@ pub async fn crash_report_export(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::device_version::DeveloperGeneration;
 
     #[test]
     fn validates_report_paths() {
@@ -268,6 +388,30 @@ mod tests {
         assert_eq!(
             report_modified("ExampleApp-2026-07-24-120000.ips"),
             "2026-07-24 12:00:00"
+        );
+    }
+
+    #[test]
+    fn selects_transport_by_connection_and_ios_generation() {
+        assert_eq!(
+            crash_transport(false, DeveloperGeneration::Legacy),
+            CrashTransport::Lockdown
+        );
+        assert_eq!(
+            crash_transport(false, DeveloperGeneration::CoreDeviceRemote),
+            CrashTransport::Lockdown
+        );
+        assert_eq!(
+            crash_transport(true, DeveloperGeneration::Legacy),
+            CrashTransport::UsbRequired
+        );
+        assert_eq!(
+            crash_transport(true, DeveloperGeneration::CoreDeviceRemote),
+            CrashTransport::RemoteRsd
+        );
+        assert_eq!(
+            crash_transport(true, DeveloperGeneration::CoreDeviceLockdown),
+            CrashTransport::CoreDeviceRsd
         );
     }
 }

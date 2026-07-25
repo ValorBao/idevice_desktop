@@ -152,7 +152,15 @@ pub async fn location_start(
                     } else {
                         let mut client = LocationSimulationService::connect(&provider)
                             .await
-                            .map_err(CommandError::from)?;
+                            .map_err(|error| {
+                                CommandError::new(
+                                    "location",
+                                    format!(
+                                        "Legacy location service unavailable. Mount the matching DeveloperDiskImage first: {error}"
+                                    ),
+                                    true,
+                                )
+                            })?;
                         client
                             .set(&latitude.to_string(), &longitude.to_string())
                             .await
@@ -173,6 +181,18 @@ pub async fn location_start(
                             },
                         );
                         token.cancelled().await;
+                        drop(client);
+                        let mut client = LocationSimulationService::connect(&provider)
+                            .await
+                            .map_err(|error| {
+                                CommandError::new(
+                                    "location",
+                                    format!(
+                                        "Unable to reconnect to clear the simulated location: {error}"
+                                    ),
+                                    true,
+                                )
+                            })?;
                         client.clear().await.map_err(CommandError::from)?;
                     }
 

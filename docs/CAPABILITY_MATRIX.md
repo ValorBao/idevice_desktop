@@ -17,15 +17,15 @@ This matrix records capability coverage, not real-device compatibility. Real-dev
 
 | Capability group | Upstream command or service | GUI status | Current entry point or gap |
 | --- | --- | --- | --- |
-| Device discovery and selection | Provider and UDID selection | Partial | Unified catalog, device-targeted RemotePairing, and paired Bonjour TCP Lockdown fallback are integrated; associating an unidentified Bonjour-only record after a cold start remains pending |
+| Device discovery and selection | Provider and UDID selection | Partial | Unified catalog, physical USB/network transitions, device-targeted RemotePairing, and paired Bonjour TCP Lockdown fallback are integrated; cold-start association and multiple-device coverage remain pending |
 | USB pairing | `pair` | Partial | Pair and unpair are available; advanced pairing information is incomplete |
 | RemotePairing | `rppairing` | Partial | iOS 17.0–17.3 tunnels use the selected device's discovered endpoint; no dedicated pairing-management interface |
 | Lockdown information | `ideviceinfo`, `lockdown`, `device_info` | Partial | Overview and Diagnostics show common fields |
 | AFC files | `afc` | Covered | Browse, upload, download, create directories, and remove |
 | App container files | House Arrest | Partial | File-sharing apps are supported; broader container access is pending |
 | CoreDevice apps and processes | `app_service` | Partial | JIT uses launch; listing, processes, signals, and standard I/O are pending |
-| Application management | `ideviceinstaller`, `instproxy`, `application_listing` | Partial | User-app list, IPA installation, uninstallation, and icons |
-| Crash reports | `crash_logs` | Partial | List, filter, preview, and export are integrated; removal and real-device validation are pending |
+| Application management | `ideviceinstaller`, `instproxy`, `application_listing` | Partial | User-app list with icons and filtering, IPA installation, and uninstallation; broader installation coordination is pending |
+| Crash reports | `crash_logs` | Partial | List, filter, preview, and export use Lockdown over USB and the RSD shim over iOS 17 network routes; report removal is not exposed |
 | Installation coordination | `installcoordination_proxy` | Not covered | Installation sessions and diagnostics need a dedicated design |
 | Device logs | `syslog_relay`, `os_trace_relay` | Covered | Live stream, pause, filter, and clear |
 | Device diagnostics | `diagnostics`, `diagnosticsservice` | Partial | Battery, Gestalt, IORegistry, NAND, and Wi-Fi |

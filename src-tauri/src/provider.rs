@@ -26,6 +26,12 @@ pub enum RoutedProvider {
     Bonjour(Box<TcpProvider>),
 }
 
+impl RoutedProvider {
+    pub fn is_bonjour(&self) -> bool {
+        matches!(self, Self::Bonjour(_))
+    }
+}
+
 impl IdeviceProvider for RoutedProvider {
     fn connect(
         &self,

@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Check, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { RefreshCw, Zap } from 'lucide-react'
 import type { Device } from '../data'
 import { api, errorMessage, type DeviceOverview } from '../api'
-import type { Page } from '../types'
 import { deviceScreenCache } from '../lib/device'
 import { bytes } from '../lib/format'
-import { StatCard } from '../components/StatCard'
 
-export function Overview({ device, desktop, onNavigate, onError }: { device: Device; desktop: boolean; onNavigate: (page: Page) => void; onError: (message: string) => void }) {
+export function Overview({ device, desktop, onError }: { device: Device; desktop: boolean; onError: (message: string) => void }) {
   const [overview, setOverview] = useState<DeviceOverview | null>(null)
   const [screenImage, setScreenImage] = useState(() => deviceScreenCache.get(device.udid) ?? '')
   const [screenError, setScreenError] = useState('')
   const [screenLoading, setScreenLoading] = useState(false)
+  const [phoneRotation, setPhoneRotation] = useState({ x: 0, y: 0 })
+  const [phoneDragging, setPhoneDragging] = useState(false)
+  const dragStart = useRef<{ x: number; y: number; rx: number; ry: number } | null>(null)
   const refreshScreen = useCallback(async (mountIfNeeded = false) => {
     if (!desktop) return
     setScreenLoading(true)
@@ -64,44 +65,77 @@ export function Overview({ device, desktop, onNavigate, onError }: { device: Dev
       ? 'Unlock iPhone\nthen refresh'
       : 'DDI not mounted\ntap refresh'
     : screenLoading ? 'Loading…' : device.chip
-  const identity = [
-    ['UDID', device.udid], ['Serial number', overview?.serialNumber ?? device.serial], ['ECID', overview?.uniqueChipId ?? device.ecid],
-    ['Hardware model', overview?.hardwareModel ?? device.modelId], ['Chip / platform', overview?.hardwarePlatform ?? device.chip], ['Wi-Fi address', overview?.wifiAddress ?? device.wifi],
-  ]
-  const actions: Array<[string, string, string, Page]> = [
-    ['▤', 'Browse files', 'AFC filesystem', 'files'], ['◇', 'Manage apps', 'install · uninstall', 'apps'],
-    ['≣', 'Stream logs', 'live syslog', 'logs'], ['◆', 'Debug tools', 'JIT · GDB · DDI', 'developer'],
-  ]
+  const startPhoneRotation = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.target instanceof Element && event.target.closest('button')) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragStart.current = { x: event.clientX, y: event.clientY, rx: phoneRotation.x, ry: phoneRotation.y }
+    setPhoneDragging(true)
+  }
+  const movePhoneRotation = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart.current) return
+    const deltaX = event.clientX - dragStart.current.x
+    const deltaY = event.clientY - dragStart.current.y
+    setPhoneRotation({
+      x: Math.max(-18, Math.min(18, dragStart.current.rx - deltaY * .16)),
+      y: Math.max(-38, Math.min(38, dragStart.current.ry + deltaX * .2)),
+    })
+  }
+  const stopPhoneRotation = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart.current) return
+    dragStart.current = null
+    setPhoneDragging(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
   return (
-    <section className="overview-page content-width">
-      <div className="overview-grid">
-        <div className="device-visual card">
-          <div className={`phone-frame ${screenImage ? 'has-screen' : ''}`} title={screenError || 'Device screen'}>
-            {screenImage
-              ? <img src={screenImage} alt="Current device screen" />
-              : <small className="phone-screen-status">{screenStatus}</small>}
+    <section className="cockpit">
+      <div className="cockpit-noise" />
+      <div className="cockpit-word" aria-hidden="true">DEVICE</div>
+
+      <header className="cockpit-header">
+        <div>
+          <small>CONNECTED OBJECT</small>
+          <h1>{device.name}</h1>
+        </div>
+        <div className="cockpit-live"><i /> LIVE</div>
+      </header>
+
+      <div className="cockpit-stage">
+        <aside className="cockpit-model">
+          <span>HARDWARE</span>
+          <strong>{overview?.productType ?? device.model}</strong>
+          <small>{overview?.hardwareModel ?? device.modelId}</small>
+          <div className="cockpit-rule"><i /></div>
+          <code>{device.udid}</code>
+        </aside>
+
+        <div
+          className={`cockpit-device ${phoneDragging ? 'is-dragging' : ''}`}
+          style={{ '--phone-rx': `${phoneRotation.x}deg`, '--phone-ry': `${phoneRotation.y}deg` } as React.CSSProperties}
+          title="Drag to rotate · double-click to reset"
+          onPointerDown={startPhoneRotation}
+          onPointerMove={movePhoneRotation}
+          onPointerUp={stopPhoneRotation}
+          onPointerCancel={stopPhoneRotation}
+          onDoubleClick={() => setPhoneRotation({ x: 0, y: 0 })}
+        >
+          <div className="cockpit-orbit cockpit-orbit-one" />
+          <div className="cockpit-orbit cockpit-orbit-two" />
+          <div className={`phone-frame cockpit-phone ${screenImage ? 'has-screen' : ''}`} title={screenError || 'Device screen'}>
+            {screenImage ? <img src={screenImage} alt="Current device screen" /> : <div className="cockpit-screen"><Zap size={25} /><small>{screenStatus}</small></div>}
             <span className="phone-notch" />
-            {desktop && <button className={`phone-refresh ${screenLoading ? 'loading' : ''}`} type="button" title={screenError ? 'Mount DDI and retry' : 'Refresh device screen'} aria-label={screenError ? 'Mount DDI and retry' : 'Refresh device screen'} disabled={screenLoading} onClick={() => void refreshScreen(true)}><RefreshCw size={11} /></button>}
+            {desktop && <button className={`phone-refresh ${screenLoading ? 'loading' : ''}`} type="button" title="Refresh device screen" aria-label="Refresh device screen" disabled={screenLoading} onClick={() => void refreshScreen(true)}><RefreshCw size={13} /></button>}
           </div>
-          <div><b>{overview?.productType ?? device.model}</b><small>{overview?.hardwareModel ?? device.modelId}</small></div>
+          <div className="cockpit-signal"><i /><span>{overview?.connection ?? device.conn}</span><b>LOCKDOWN / ACTIVE</b></div>
         </div>
-        <div className="stats-grid">
-          <StatCard label="iOS Version"><strong>{overview?.productVersion ?? device.ios}</strong><small>build {overview?.buildVersion ?? device.build}</small></StatCard>
-          <StatCard label="Battery">
-            <div className="battery-stat"><div className="battery-ring" style={{ '--battery': `${battery * 3.6}deg` } as React.CSSProperties}><span>{battery}</span></div><div><b>{batteryHealth ? `${batteryHealth}% health` : 'health unavailable'}</b><small>{cycles ? `${cycles} cycles` : 'cycle count unavailable'}</small></div></div>
-          </StatCard>
-          <StatCard label="Connection"><div className="connected-label"><i />{overview?.connection ?? device.conn}</div><small>lockdown session active</small></StatCard>
-          <StatCard label="Storage" wide><div className="storage-label"><span /><small>{bytes(storageUsed)} / {bytes(storageTotal)}</small></div><div className="progress"><span style={{ width: `${storagePercent}%` }} /></div><small>{bytes(storageFree)} available</small></StatCard>
-          <StatCard label="Pairing"><div className="trusted"><Check size={16} />Trusted</div><small>record valid</small></StatCard>
-        </div>
+
+        <aside className="cockpit-readout">
+          <div><span>OS</span><strong>{overview?.productVersion ?? device.ios}</strong><small>{overview?.buildVersion ?? device.build}</small></div>
+          <div><span>POWER</span><strong>{battery}<sup>%</sup></strong><small>{batteryHealth || '—'} health / {cycles || '—'} cycles</small></div>
+          <div><span>FREE</span><strong>{bytes(storageFree)}</strong><small>of {bytes(storageTotal)}</small></div>
+          <div className="cockpit-storage"><i style={{ width: `${storagePercent}%` }} /></div>
+        </aside>
       </div>
-      <div className="identity-card card">
-        {identity.map(([key, value]) => <div key={key}><span>{key}</span><code>{value}</code></div>)}
-      </div>
-      <h2 className="section-label">Quick actions</h2>
-      <div className="quick-actions">
-        {actions.map(([glyph, title, subtitle, target]) => <button key={target} onClick={() => onNavigate(target)}><code>{glyph}</code><b>{title}</b><small>{subtitle}</small></button>)}
-      </div>
+
     </section>
   )
 }

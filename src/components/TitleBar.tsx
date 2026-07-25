@@ -5,7 +5,7 @@ import { isDesktopRuntime } from '../api'
 import type { Connection } from '../types'
 
 export function TitleBar({ device, connection }: { device: Device; connection: Connection }) {
-  const status = connection === 'connected' ? 'lockdownd · usbmuxd' : connection === 'detected' ? 'device detected · awaiting trust' : 'no device · scanning usbmuxd'
+  const status = connection === 'connected' ? `${device.conn} connected · ready` : connection === 'detected' ? 'device found · awaiting trust' : 'scanning for devices'
   const startWindowDrag = (event: MouseEvent<HTMLDivElement>) => {
     if (!isDesktopRuntime() || event.button !== 0) return
     const target = event.target
@@ -30,7 +30,11 @@ export function TitleBar({ device, connection }: { device: Device; connection: C
         <button type="button" aria-label="Minimize window" title="Minimize" onClick={() => controlWindow('minimize')}><i /></button>
         <button type="button" aria-label="Enter or exit fullscreen" title="Fullscreen" onClick={() => controlWindow('fullscreen')}><i /></button>
       </div>
-      <div className="app-title" data-tauri-drag-region><span />idevice <small>— {connection === 'connected' ? device.name : connection === 'detected' ? `${device.model} (untrusted)` : 'no device'}</small></div>
+      <div className="app-title" data-tauri-drag-region>
+        <span className="brand-mark"><i /><i /><i /></span>
+        <b>DEVICE LAB</b>
+        <small>{connection === 'connected' ? device.name : connection === 'detected' ? `${device.model} · untrusted` : 'No device'}</small>
+      </div>
       <div className="titlebar-spacer" data-tauri-drag-region />
       <div className={`connection-status status-${connection}`} data-tauri-drag-region><i />{status}</div>
     </div>

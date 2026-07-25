@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AppWindow, Bug, Check, ChevronDown, CircleStop, Code2, FolderOpen,
-  MapPin, Moon, Plus, Smartphone, Sun, TerminalSquare,
+  MapPin, Plus, Smartphone, TerminalSquare,
 } from 'lucide-react'
 import { devices, type Device } from './data'
 import { api, errorMessage, events, isDesktopRuntime, type DeviceSummary } from './api'
-import type { Appearance, Connection, Page, UiStyle } from './types'
+import type { Connection, Page } from './types'
 import { summaryToDevice } from './lib/device'
 import { TitleBar } from './components/TitleBar'
 import { Onboarding } from './components/Onboarding'
@@ -42,8 +42,6 @@ const navItems = [
 function App() {
   const desktop = useMemo(isDesktopRuntime, [])
   const [page, setPage] = useState<Page>('overview')
-  const [uiStyle, setUiStyle] = useState<UiStyle>('clean')
-  const [appearance, setAppearance] = useState<Appearance>('dark')
   const [deviceCatalog, setDeviceCatalog] = useState<Device[]>(desktop ? [] : devices)
   const [deviceId, setDeviceId] = useState(desktop ? '' : 'd1')
   const deviceIdRef = useRef(deviceId)
@@ -139,13 +137,13 @@ function App() {
   }
 
   return (
-    <div className={`desktop theme-${uiStyle} mode-${appearance}`}>
+    <div className="desktop theme-clean mode-dark device-lab">
       <div className="window-shell">
         <TitleBar device={device} connection={connection} />
         <div className="window-body">
           <aside className="sidebar">
             <div className="device-select-wrap">
-              <button className="device-card" onClick={() => setDeviceMenu((value) => !value)} aria-expanded={deviceMenu}>
+              <button className="device-card" onClick={() => setDeviceMenu((value) => !value)} aria-expanded={deviceMenu} aria-label="Select device" title={connected ? device.name : 'Select device'}>
                 <span className={`device-icon status-${connection}`}><Smartphone size={19} /><i /></span>
                 <span className="device-card-copy">
                   <b>{connected ? device.name : connection === 'detected' ? device.model : 'No device'}</b>
@@ -171,13 +169,13 @@ function App() {
             <nav className={connected ? '' : 'nav-disabled'}>
               <span className="nav-heading">Device</span>
               {navItems.map(({ id, label, icon: Icon, ...item }) => (
-                <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}>
+                <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)} aria-label={label} title={label}>
                   <Icon size={17} /><span>{label}</span>{'suffix' in item && <small>{item.suffix}</small>}
                 </button>
               ))}
               <span className="nav-heading developer-heading">Developer</span>
-              <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')}><Code2 size={17} /><span>Debug Tools</span></button>
-              <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')}><MapPin size={17} /><span>Location</span></button>
+              <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')} aria-label="Debug Tools" title="Debug Tools"><Code2 size={17} /><span>Debug Tools</span></button>
+              <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')} aria-label="Location" title="Location"><MapPin size={17} /><span>Location</span></button>
             </nav>
 
             <div className="sidebar-footer">
@@ -187,21 +185,21 @@ function App() {
           </aside>
 
           <main className="main-panel">
-            <header className="page-header">
-              <div><h1>{pageMeta[page][0]}</h1><p>{pageMeta[page][1]}</p></div>
-              <div className="header-spacer" />
-              <div className="style-switcher">
-                {(['clean', 'terminal', 'apple'] as UiStyle[]).map((style) => (
-                  <button key={style} className={uiStyle === style ? 'active' : ''} onClick={() => setUiStyle(style)}>{style[0].toUpperCase() + style.slice(1)}</button>
-                ))}
-              </div>
-              <button className="appearance-button" onClick={() => setAppearance((mode) => mode === 'dark' ? 'light' : 'dark')} aria-label="Toggle appearance">
-                {appearance === 'dark' ? <Moon size={17} /> : <Sun size={17} />}
-              </button>
-            </header>
+            {page !== 'overview' && (
+              <header className="page-header">
+                <div><h1>{pageMeta[page][0]}</h1><p>{pageMeta[page][1]}</p></div>
+                <div className="header-spacer" />
+                <div className="header-device-state">
+                  <span className="header-state-dot" />
+                  <span>{connected ? device.conn : 'Offline'}</span>
+                  <i />
+                  <span>{connected ? `iOS ${device.ios}` : 'No session'}</span>
+                </div>
+              </header>
+            )}
 
-            <div className="page-scroll">
-              {page === 'overview' && <Overview device={device} desktop={desktop} onNavigate={setPage} onError={setToast} />}
+            <div className="page-scroll" key={page}>
+              {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
               {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
               {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
               {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}

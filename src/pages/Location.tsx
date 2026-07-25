@@ -79,7 +79,6 @@ export function Location({ desktop, udid, onToast }: { desktop: boolean; udid: s
       <div className="location-controls"><div className="card coordinate-card"><h2>Simulated coordinates</h2><label>Latitude<strong>{loc.lat.toFixed(4)}</strong></label><label>Longitude<strong>{loc.lng.toFixed(4)}</strong></label><button className={simulating ? 'stop-button' : 'primary-button'} onClick={() => void toggleSimulation()}>{simulating ? 'Stop simulation' : 'Start simulation'}</button><small><i className={simulating ? 'good-dot' : ''} />{simulating ? `Location override active${transport ? ` · ${transport}` : ''}` : 'Using real GPS'}</small></div><h3 className="section-label">Presets</h3><div className="preset-list">{presets.map((item) => <button key={item.id} className={!custom && presetId === item.id ? 'active' : ''} onClick={() => selectPreset(item)}><MapPin size={14} /><span>{item.name}</span><small>{item.lat.toFixed(2)},{item.lng.toFixed(2)}</small></button>)}</div></div>
       <div className="map-grid" ref={mapElementRef}>
         <div className="map-caption"><b>{loc.name} · {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</b><small>drag to pan · scroll to zoom · click to select</small></div>
-        <code className="map-service">com.apple.dt.simulatelocation</code>
       </div>
     </section>
   )

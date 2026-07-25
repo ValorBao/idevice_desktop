@@ -139,7 +139,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .style-switcher button.active { color: var(--accent-contrast); background: var(--accent); }
 .appearance-button { width: 38px; height: 34px; display: grid; place-items: center; color: var(--dim); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; }
 .appearance-button:hover { color: var(--text); border-color: var(--border2); }
-.page-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.page-scroll { flex: 1; min-height: 0; overflow-y: auto; animation: page-enter .18s ease; }
+@keyframes page-enter { from { opacity: 0; transform: translateY(6px); } }
 .page-padding { padding: 22px 28px; }
 .compact-padding { padding: 18px 24px; }
 .content-width { max-width: 980px; padding: 26px 28px; }
@@ -197,14 +198,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tabs button { margin-right: 18px; margin-bottom: -1px; padding: 9px 4px; color: var(--dim); font-size: 13px; cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid transparent; }
 .tabs button.active { color: var(--text); font-weight: 700; border-color: var(--accent); }
 .diagnostic-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-.diagnostic-stats .card { padding: 16px; }
-.diagnostic-stats strong { display: block; margin-top: 8px; font: 700 22px var(--mono); }
+.diagnostic-stats .card { padding: 16px; transition: border-color .15s; }
+.diagnostic-stats .card:hover { border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.diagnostic-stats strong { display: block; margin-top: 8px; font: 700 22px var(--mono); font-variant-numeric: tabular-nums; }
 .diagnostic-stats small { display: block; margin-top: 2px; color: var(--dim); font-size: 11px; }
+.stat-spark { width: 100%; height: 26px; margin-top: 12px; opacity: .8; }
+.stat-spark .spark-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: spark-draw .9s .15s cubic-bezier(.4,0,.2,1) forwards; }
+.stat-spark .spark-fill { opacity: 0; animation: spark-fill .6s .55s ease forwards; }
+@keyframes spark-draw { to { stroke-dashoffset: 0; } }
+@keyframes spark-fill { to { opacity: 1; } }
 .good { color: #28c840 !important; }
 .chart-card { padding: 18px 18px 14px; }
 .chart-card > b { font-size: 12.5px; }
 .bar-chart { height: 120px; display: flex; align-items: flex-end; gap: 4px; margin-top: 16px; }
-.bar-chart span { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; }
+.bar-chart span { position: relative; flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; transform-origin: bottom; animation: bar-grow .5s cubic-bezier(.2,.7,.3,1) backwards; }
+@keyframes bar-grow { from { transform: scaleY(0); } }
+.bar-chart span:hover { opacity: 1 !important; }
+.bar-chart span::after { content: attr(data-value); position: absolute; bottom: calc(100% + 5px); left: 50%; padding: 2px 6px; color: var(--text); background: var(--elev); border: 1px solid var(--border2); border-radius: 4px; font: 10px var(--mono); white-space: nowrap; opacity: 0; transform: translateX(-50%); transition: opacity .12s; pointer-events: none; }
+.bar-chart span:hover::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .page-scroll, .bar-chart span { animation: none; }
+  .stat-spark .spark-line { animation: none; stroke-dashoffset: 0; }
+  .stat-spark .spark-fill { animation: none; opacity: 1; }
+}
 .table-card { overflow: hidden; }
 .search-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .search-row svg { color: var(--faint); }
@@ -452,11 +468,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .map-grid { position: relative; min-height: 480px; flex: 1; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
 .location-map-marker { background: transparent; border: 0; }
 .location-map-marker span { width: 28px; height: 28px; display: block; background: var(--accent); border: 3px solid #fff; border-radius: 50% 50% 50% 0; box-shadow: 0 4px 12px rgba(0,0,0,.38); transform: rotate(-45deg); }
-.map-caption { position: absolute; z-index: 500; bottom: 14px; left: 14px; padding: 8px 12px; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font: 11.5px var(--mono); }
+/* The map tiles are always light, so these overlays stay light regardless of app theme */
+.map-caption { position: absolute; z-index: 500; bottom: 14px; left: 14px; padding: 7px 11px; pointer-events: none; color: #2a333b; background: rgba(255,255,255,.86); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(0,0,0,.1); border-radius: 8px; font: 11.5px var(--mono); box-shadow: 0 2px 8px rgba(0,0,0,.1); }
 .map-caption b, .map-caption small { display: block; }
 .map-caption b { font-weight: 500; }
-.map-caption small { margin-top: 3px; color: var(--faint); font-size: 10px; }
-.map-service { position: absolute; z-index: 500; top: 14px; right: 14px; padding: 5px 9px; pointer-events: none; color: var(--faint); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; font: 10px var(--mono); }
+.map-caption small { margin-top: 3px; color: #7a8791; font-size: 10px; }
 .map-grid .leaflet-control-attribution { color: #555; font-size: 10px; }
 
 .onboarding { position: absolute; z-index: 30; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; background: var(--bg); }
@@ -584,6 +600,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .key-value-row { flex-direction: column; gap: 4px; }
   .key-value-row code { width: auto; }
   .preset-list { grid-template-columns: 1fr; }
-  .map-service { display: none; }
   .onboarding { padding: 24px; }
 }

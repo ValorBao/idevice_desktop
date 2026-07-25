@@ -82,7 +82,10 @@ flowchart LR
 ### Frontend
 
 - React 18, TypeScript, and Vite
-- `src/App.tsx` currently contains the application shell and eight feature pages.
+- `src/App.tsx` holds the application shell: device selection, navigation, theme state, and page routing.
+- `src/pages/` contains one module per feature page, and `src/components/` holds the shell and shared presentation components.
+- `src/lib/` holds byte and value formatting plus the conversions between backend responses and view models.
+- `src/types.ts` defines the shell-level union types shared across pages.
 - `src/api.ts` defines the Tauri commands, events, and cross-boundary data types.
 - `src/data.ts` supplies browser-demo data.
 - `src/styles.css` provides Clean, Terminal, and Apple visual themes plus light and dark appearances.
@@ -116,7 +119,11 @@ flowchart LR
 ├── docs/                    # Project, progress, and capability documentation
 ├── idevice/                 # Original design handoff bundle, used only as a visual reference
 ├── src/                     # React frontend
-│   ├── App.tsx              # Pages, state, and interactions
+│   ├── App.tsx              # Application shell, navigation, and page routing
+│   ├── pages/               # One module per feature page
+│   ├── components/          # Shell and shared presentation components
+│   ├── lib/                 # Formatting and backend-to-view-model conversion
+│   ├── types.ts             # Shell-level shared types
 │   ├── api.ts               # Tauri API and event boundary
 │   ├── data.ts              # Browser demo data
 │   └── styles.css           # Global visual styles
@@ -168,7 +175,7 @@ npm run desktop:build
 - RemotePairing on iOS 17.0 through 17.3 depends on Bonjour discovery and a locally stored pairing file, making it sensitive to network conditions.
 - Direct Bonjour TCP Lockdown and RemotePairing/RSD crash-report access pass on the validated iOS 17.0 device. The corresponding iOS 17.4+ CoreDeviceProxy crash-report path is integrated but not yet verified on hardware.
 - On iOS 14.2, USB discovery and routing, nested crash-report export, legacy screenshot and location services, OS Trace, five diagnostic request paths, AFC file round trips, and user-app listing with icons pass at the backend. Frontend interaction remains a separate acceptance layer.
-- Most frontend code currently lives in a single `App.tsx`, increasing maintenance and testing cost as the project grows.
+- The frontend is split into a shell, page modules, shared components, and helpers, but still has no component tests, so refactors rely on the type checker and the production build alone.
 - The project does not yet have systematic frontend tests, Rust integration tests, or automated real-device compatibility tests.
 - Map tiles come from the online OpenStreetMap service and will not work offline or on restricted networks.
 - The Tauri CSP is currently `null` and must be reviewed and tightened before signed or general-user distribution.

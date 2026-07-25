@@ -25,7 +25,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
 | Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, physical USB disconnect and reconnect, direct TCP Lockdown fallback, and USB crash-report list/preview/export; crash-report listing over direct Bonjour TCP failed twice with `UnexpectedEof` |
 | Git branch | `master` |
-| Worktree | Version `0.0.1` is published; the 2026-07-25 real-device acceptance record is the current follow-up cycle |
+| Worktree | Version `0.0.1` is published, the real-device acceptance record is merged, and no feature implementation is currently active |
 
 ## 3. Feature Progress
 
@@ -36,13 +36,13 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Overview | Integrated | iOS 17.0 Lockdown, storage, battery, and RSD screenshot paths verified | Missing fields and DDI retry failure behavior |
 | Diagnostics | Five query categories integrated | Battery diagnostics verified on iOS 17.0 | Remaining query categories and permission failures across iOS versions |
 | AFC and file sharing | Integrated | AFC device info and root listing verified on iOS 17.0 | Large files, mutations, read-only paths, and app containers |
-| App list, installation, and uninstallation | Integrated | User-app listing verified; icons and filtering are in progress | IPA progress, icon retrieval, and uninstall confirmation |
+| App list, installation, and uninstallation | Integrated | User-app listing is verified; icons and filtering are integrated | Real-device icon rendering, IPA progress, and uninstall confirmation |
 | Crash reports | List, filter, preview, and export integrated | USB list, preview, and byte-for-byte complete export pass on iOS 17.0; direct Bonjour TCP listing fails with `UnexpectedEof` | Diagnose network service closure; verify nested reports and previews larger than 4 MB |
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
 | JIT | Integrated | Build passed; real-device verification pending | Launch, attach, stop, and device-switch cleanup |
-| Location simulation | Legacy and DVT/RSD paths integrated | Interactive map improvements are in progress | Map selection, presets, and restoration of real GPS |
+| Location simulation | Legacy and DVT/RSD paths integrated | Interactive Leaflet map, presets, transport selection, and page-exit cleanup are integrated | Real-device map selection, presets, and restoration of real GPS |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
 

@@ -6,6 +6,10 @@ The project aims to make device operations that currently require the `idevice-t
 
 This is an independent project and is not an official `jkcoxson/idevice` application.
 
+## Release
+
+The current release is [0.0.1 Developer Preview](https://github.com/ValorBao/idevice_desktop/releases/tag/v0.0.1), an unsigned and unnotarized Apple Silicon build.
+
 ## Documentation
 
 - [Project overview and architecture](docs/PROJECT.md)
@@ -18,12 +22,12 @@ This is an independent project and is not an official `jkcoxson/idevice` applica
 - Lockdown device overview, pairing information, battery information, and AFC storage capacity
 - Diagnostics Relay queries for battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data
 - AFC file browsing, upload, download, directory creation, and recursive removal
-- Installation Proxy application listing, IPA installation, uninstallation, and progress events
+- Installation Proxy user-application listing with icons and filtering, IPA installation, uninstallation, and progress events
 - Crash report listing, filtering, text preview, and export
 - Live structured OS Trace logs with pause, filter, and clear controls
 - Developer Mode and Developer Disk Image mounting and unmounting
 - device-targeted iOS 17+ RemotePairing/CoreDevice RSD tunnels, application launch, debug proxy attachment, and JIT sessions
-- DVT/RSD and legacy Lockdown location simulation transports
+- interactive Leaflet location selection with DVT/RSD and legacy Lockdown simulation transports
 
 Running the project in a regular browser automatically uses design demonstration data. Running it through Tauri automatically switches to commands backed by a real device.
 
@@ -48,6 +52,19 @@ npm run dev
 npm run build
 npm run desktop:build
 ```
+
+To build only the macOS DMG:
+
+```bash
+npm run desktop:build -- --bundles dmg
+```
+
+## Developer Preview Limitations
+
+- The published 0.0.1 DMG supports Apple Silicon only and is not signed with an Apple Developer ID or notarized.
+- USB-to-network Lockdown fallback is verified on an iPhone XR running iOS 17.0.
+- Crash-report list, preview, and export are verified over USB. Direct Bonjour TCP crash-report listing currently fails with `UnexpectedEof`.
+- Multiple devices, sleeping-device behavior, iOS 16, iOS 17.4+, nested reports, and reports larger than the 4 MB preview limit still require validation.
 
 ## Developer Feature Notes
 

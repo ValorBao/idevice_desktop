@@ -1,11 +1,11 @@
 # idevice desktop Project Overview
 
-> Last updated: 2026-07-22
-> Current version: 0.0.1, early working prototype
+> Last updated: 2026-07-25
+> Current version: 0.0.1 Developer Preview
 
 ## 1. Project Positioning
 
-idevice desktop is a macOS developer tool for iPhone and iPad development and testing. It presents device discovery, pairing, information, file management, application management, live logs, and developer capabilities through a graphical interface. Its purpose is to lower the barrier to using usbmuxd, Lockdown, AFC, CoreDevice/DVT, and related low-level services directly.
+idevice desktop is a macOS developer tool for iPhone and iPad development and testing. It presents device discovery, pairing, information, file management, application management, crash reports, live logs, and developer capabilities through a graphical interface. Its purpose is to lower the barrier to using usbmuxd, Lockdown, AFC, CoreDevice/DVT, and related low-level services directly.
 
 The long-term goal is to make the device capabilities currently exposed through `idevice-tools` usable through a GUI. The GUI is more than a command launcher: it must handle device and parameter selection, prerequisites, input validation, progress, understandable errors, destructive-action confirmation, and cleanup of long-running tasks.
 
@@ -29,7 +29,7 @@ The current phase focuses on a macOS MVP that can connect to real devices. High-
 ### Current Scope
 
 - The initial release supports macOS only; Windows and Linux are outside the initial commitment.
-- USB device discovery and initial pairing, with network access to already-paired devices through usbmuxd or netmuxd
+- USB and Bonjour device discovery, initial USB pairing, and direct TCP Lockdown fallback for already-paired devices
 - Developer workflows as the primary product focus, supported by foundational device-management features
 - Legacy developer services for iOS 16 and earlier, plus CoreDevice/RSD paths for iOS 17 and later
 
@@ -58,6 +58,7 @@ The frontend detects the Tauri runtime and selects the appropriate mode automati
 | Diagnostics | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data | Diagnostics Relay |
 | Files | Browse AFC and file-sharing app containers; upload, download, create directories, and remove recursively | AFC, House Arrest |
 | Apps | List user applications and icons; install and uninstall IPAs; show installation progress | Installation Proxy, SpringBoardServices |
+| Crash Reports | List, filter, preview, and export device reports | CrashReportCopyMobile, AFC |
 | Logs | Stream, filter, pause, and clear structured logs | OS Trace and syslog services |
 | Debug Tools | Manage Developer Mode and DDI; launch applications; maintain JIT sessions | AMFI, Image Mounter, CoreDevice, DVT, debug proxy |
 | Location | Choose presets or map coordinates and start or stop location simulation | DVT/RSD or Lockdown location services |
@@ -81,7 +82,7 @@ flowchart LR
 ### Frontend
 
 - React 18, TypeScript, and Vite
-- `src/App.tsx` currently contains the application shell and seven feature pages.
+- `src/App.tsx` currently contains the application shell and eight feature pages.
 - `src/api.ts` defines the Tauri commands, events, and cross-boundary data types.
 - `src/data.ts` supplies browser-demo data.
 - `src/styles.css` provides Clean, Terminal, and Apple visual themes plus light and dark appearances.
@@ -90,10 +91,10 @@ flowchart LR
 ### Desktop Backend
 
 - Tauri 2, Rust 2024 edition, and Tokio
-- `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, logs, developer, location, and screenshot commands.
+- `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, crash reports, logs, developer, location, and screenshot commands.
 - `AppState` stores the unified discovery catalog and selected device, and uses cancellation tokens for monitoring, logs, JIT, location, and other long-running tasks.
 - `discovery.rs` merges usbmuxd, `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing observations. USB is preferred; Wi-Fi MAC address, UDID, hostname, and address overlap are used to reconcile transports.
-- A known paired device remains selectable through direct Bonjour TCP Lockdown if its usbmuxd observation disappears; unidentified Bonjour-only devices remain visible until they can be associated with a pairing record.
+- A known paired device remains selectable through direct Bonjour TCP Lockdown if its usbmuxd observation disappears. Unidentified mobdev2 and manual RemotePairing records remain visible for association, while unidentifiable RemotePairing-only records are hidden.
 - `provider.rs` prefers usbmuxd and falls back to a paired Bonjour TCP provider using the selected device's mobdev2 addresses.
 - `device_version.rs` selects the developer-service transport based on iOS version.
 - `tunnel.rs` implements RemotePairing and RSD software tunnels for iOS 17.0 through 17.3 and accepts the selected device's resolved endpoint to avoid cross-device routing.
@@ -163,10 +164,11 @@ npm run desktop:build
 
 - Real-device behavior depends on the iOS version, Developer Mode, DDI state, pairing records, USB or network transport, and changes to private Apple protocols.
 - RemotePairing on iOS 17.0 through 17.3 depends on Bonjour discovery and a locally stored pairing file, making it sensitive to network conditions.
+- Direct Bonjour TCP Lockdown reads pass on the validated iOS 17.0 device, but CrashReportCopyMobile root listing closes with `UnexpectedEof`; crash-report access is currently verified only over USB.
 - Most frontend code currently lives in a single `App.tsx`, increasing maintenance and testing cost as the project grows.
-- The project does not yet have systematic frontend tests, Rust integration tests, or a real-device compatibility matrix.
+- The project does not yet have systematic frontend tests, Rust integration tests, or automated real-device compatibility tests.
 - Map tiles come from the online OpenStreetMap service and will not work offline or on restricted networks.
-- The Tauri CSP is currently `null` and must be reviewed and tightened before release.
+- The Tauri CSP is currently `null` and must be reviewed and tightened before signed or general-user distribution.
 
 ## 9. Documentation Rules
 
@@ -183,3 +185,4 @@ npm run desktop:build
 | 2026-07-22 | Make GUI coverage of `idevice-tools` the long-term product goal | Track coverage and implement capabilities by frequency, complexity, and risk |
 | 2026-07-22 | Credit `jkcoxson/idevice` and retain its MIT license text for GitHub publication | Add a README acknowledgement and third-party license notice |
 | 2026-07-22 | License idevice desktop under the MIT License | Permit broad use and contribution while retaining copyright and license notices |
+| 2026-07-25 | Publish 0.0.1 as an unsigned Apple Silicon Developer Preview | Distribute through GitHub prerelease with Gatekeeper and compatibility warnings |

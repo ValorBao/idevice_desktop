@@ -1,7 +1,8 @@
 use std::{future::Future, net::IpAddr, pin::Pin, str::FromStr};
 
 use idevice::{
-    Idevice, IdeviceError,
+    Idevice, IdeviceError, IdeviceService, ReadWrite,
+    lockdown::LockdownClient,
     pairing_file::PairingFile,
     provider::{IdeviceProvider, TcpProvider, UsbmuxdProvider},
     usbmuxd::{UsbmuxdAddr, UsbmuxdConnection},
@@ -10,6 +11,44 @@ use idevice::{
 use crate::discovery::LockdownTarget;
 use crate::error::{CommandError, CommandResult};
 use crate::state::AppState;
+
+/// Starts a lockdown service and hands back its raw stream.
+///
+/// Services reached this way negotiate TLS separately from the lockdown session
+/// that started them, and the device decides whether it wants that through the
+/// `EnableServiceSSL` reply. Callers that need a typed client wrap the stream
+/// themselves, which is how services with no lockdown-aware client in the
+/// upstream crate are reached.
+pub async fn lockdown_service_socket(
+    provider: &impl IdeviceProvider,
+    service: &str,
+) -> CommandResult<Box<dyn ReadWrite>> {
+    let mut lockdown = LockdownClient::connect(provider)
+        .await
+        .map_err(CommandError::from)?;
+    let pairing = provider
+        .get_pairing_file()
+        .await
+        .map_err(CommandError::from)?;
+    let legacy_tls = lockdown
+        .start_session(&pairing)
+        .await
+        .map_err(CommandError::from)?;
+    let (port, ssl) = lockdown
+        .start_service(service)
+        .await
+        .map_err(CommandError::from)?;
+    let mut connection = provider.connect(port).await.map_err(CommandError::from)?;
+    if ssl {
+        connection
+            .start_session(&pairing, legacy_tls)
+            .await
+            .map_err(CommandError::from)?;
+    }
+    connection
+        .get_socket()
+        .ok_or_else(|| CommandError::new("device", format!("{service} returned no socket"), true))
+}
 
 pub async fn provider_for(udid: &str) -> CommandResult<UsbmuxdProvider> {
     let mut mux = UsbmuxdConnection::default()

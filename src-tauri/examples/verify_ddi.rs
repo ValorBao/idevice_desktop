@@ -14,7 +14,10 @@
 
 use std::time::Duration;
 
-use idevice::{IdeviceService, mobile_image_mounter::ImageMounter};
+use idevice::{
+    IdeviceService, core_device_proxy::CoreDeviceProxy, mobile_image_mounter::ImageMounter,
+    rsd::RsdHandshake,
+};
 use idevice_desktop_lib::{
     device_version::{DeveloperGeneration, IosVersion, ios_version},
     provider::{RoutedProvider, lockdown_service_socket, routed_provider_for},
@@ -93,19 +96,34 @@ async fn report_state(
         return;
     }
 
+    // Each generation reaches RSD differently: iOS 17.0-17.3 through
+    // RemotePairing, iOS 17.4 and later through CoreDeviceProxy.
     let pairing_path = std::path::PathBuf::from(std::env::var("HOME").expect("HOME")).join(
         format!("Library/Application Support/dev.idevice.desktop/remote-pairing-{udid}.plist"),
     );
-    match tokio::time::timeout(
-        TUNNEL_TIMEOUT,
-        open_remote_pairing_tunnel(provider, &pairing_path, "idevice-desktop", None),
-    )
-    .await
-    {
-        Ok(Ok(tunnel)) => {
-            let total = tunnel.handshake.services.len();
-            let debug = tunnel
-                .handshake
+    let handshake = match generation {
+        DeveloperGeneration::CoreDeviceRemote => tokio::time::timeout(
+            TUNNEL_TIMEOUT,
+            open_remote_pairing_tunnel(provider, &pairing_path, "idevice-desktop", None),
+        )
+        .await
+        .map(|result| result.map(|tunnel| tunnel.handshake)),
+        DeveloperGeneration::CoreDeviceLockdown => {
+            tokio::time::timeout(TUNNEL_TIMEOUT, async {
+                let proxy = CoreDeviceProxy::connect(provider).await?;
+                let rsd_port = proxy.tunnel_info().server_rsd_port;
+                let mut adapter = proxy.create_software_tunnel()?.to_async_handle();
+                let stream = adapter.connect(rsd_port).await?;
+                Ok(RsdHandshake::new(stream).await?)
+            })
+            .await
+        }
+        DeveloperGeneration::Legacy => unreachable!("returned above"),
+    };
+    match handshake {
+        Ok(Ok(handshake)) => {
+            let total = handshake.services.len();
+            let debug = handshake
                 .services
                 .keys()
                 .filter(|name| name.contains("debugproxy") || name.contains("debugserverproxy"))

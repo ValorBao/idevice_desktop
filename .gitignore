@@ -6,3 +6,13 @@ src-tauri/target/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# Data captured from a real device must never be committed
+*.ips
+*.crash
+*.ipa
+*.mobiledevicepairing
+*.plist
+exports/
+screenshots/*.png
+!idevice/project/screenshots/overview.png

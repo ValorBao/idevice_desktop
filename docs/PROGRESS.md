@@ -19,10 +19,10 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-25 with `npm run build` |
 | Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-25: 22 passed, 0 failed |
+| Rust unit tests | Passed on 2026-07-25: 35 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
-| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, and debuggable-application filtering; no frontend, integration, or automated real-device tests yet |
+| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
 | Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
 | Branches | All validation branches are merged; `master` is at the 2026-07-25 JIT and pairing cycle |
@@ -157,14 +157,14 @@ Remaining acceptance gaps are multiple simultaneously visible devices, a sleepin
 ### P1: Testing and Stability
 
 - Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.
-- Add serialization contract tests to prevent drift between Rust and TypeScript fields.
+- ~~Add serialization contract tests to prevent drift between Rust and TypeScript fields.~~ Done on 2026-07-25: thirteen tests compare what serde emits against the declarations parsed from `src/api.ts`. Both directions were confirmed to fail on an induced mismatch.
 - Verify that device switches, disconnects, and page unmounts reliably stop long-running tasks.
 - Cover empty states, timeouts, permission denial, mid-operation disconnects, and large files.
 
 ### P1: Frontend Maintainability
 
 - ~~Split `App.tsx` into page components, shared components, and helpers.~~ Done on 2026-07-25: the shell dropped from 1,147 to 233 lines, with eight page modules, five shared components, and two helper modules. The move was verified line by line and the production bundle was unchanged apart from module boundaries.
-- Extract the repeated desktop-guard, load, and toast-on-error pattern that every page currently reimplements into shared hooks.
+- ~~Extract the repeated desktop-guard and toast-on-error pattern into a shared hook.~~ Done on 2026-07-25: `useDeviceTask` took the duplicated catch-and-toast line from 15 occurrences to 3. The remaining three are load paths whose catch clauses do more than report.
 - Consolidate device sessions, notifications, and asynchronous loading into a clear state model.
 - Add component tests for critical interactions and audit keyboard access, focus, and color contrast.
 

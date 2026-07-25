@@ -36,6 +36,41 @@ where
         .map_err(|_| CommandError::new("jit", format!("Timed out while {label}"), true))?
 }
 
+/// Decodes a debugserver reply to `vAttach`, returning a human-readable reason
+/// when the reply is a GDB remote protocol error packet.
+///
+/// Errors take the form `E<hex code>` and may carry a hex-encoded description
+/// after a semicolon. Successful replies are stop packets, which never start
+/// with `E`.
+fn attach_failure(response: Option<&str>) -> Option<String> {
+    let rest = response?.trim().strip_prefix('E')?;
+    let (code, message) = match rest.split_once(';') {
+        Some((code, message)) => (code, Some(message)),
+        None => (rest, None),
+    };
+    if code.is_empty() || !code.chars().all(|value| value.is_ascii_hexdigit()) {
+        return None;
+    }
+    let detail = message
+        .and_then(decode_hex_message)
+        .unwrap_or_else(|| format!("debugserver rejected the attach with error {code}"));
+    Some(detail)
+}
+
+fn decode_hex_message(message: &str) -> Option<String> {
+    if message.is_empty() || message.len() % 2 != 0 {
+        return None;
+    }
+    let bytes = (0..message.len())
+        .step_by(2)
+        .map(|index| u8::from_str_radix(&message[index..index + 2], 16))
+        .collect::<Result<Vec<u8>, _>>()
+        .ok()?;
+    let text = String::from_utf8(bytes).ok()?;
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
 async fn cleanup_jit_process(
     adapter: &mut AdapterHandle,
     handshake: &mut RsdHandshake,
@@ -707,6 +742,19 @@ pub async fn jit_start(
                             return Err(error);
                         }
                     };
+                    // debugserver answers a rejected vAttach with a protocol-level
+                    // error packet, not a transport error, so the send above still
+                    // succeeds. Reporting that as an attached session would leave the
+                    // user with a JIT badge over a process that was never attached.
+                    if let Some(detail) = attach_failure(response.as_deref()) {
+                        drop(debug);
+                        let _ = cleanup_jit_process(&mut adapter, &mut handshake, pid).await;
+                        return Err(CommandError::new(
+                            "jit",
+                            format!("Unable to attach to {bundle_id}: {detail}"),
+                            false,
+                        ));
+                    }
                     let _ = app.emit(
                         "jit://status",
                         StreamStatus {
@@ -755,4 +803,45 @@ pub async fn jit_start(
 pub async fn jit_stop(state: State<'_, AppState>) -> CommandResult<()> {
     state.cancel_task("jit").await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn treats_stop_packets_as_a_successful_attach() {
+        assert_eq!(attach_failure(Some("T11thread:1234;")), None);
+        assert_eq!(attach_failure(Some("S05")), None);
+        assert_eq!(attach_failure(None), None);
+        assert_eq!(attach_failure(Some("")), None);
+    }
+
+    #[test]
+    fn reports_the_decoded_reason_for_a_rejected_attach() {
+        // Observed on iPhone11,8 / iOS 17.0 when attaching to an App Store build.
+        let response = "E96;617474616368206661696c6564";
+        assert_eq!(
+            attach_failure(Some(response)).as_deref(),
+            Some("attach failed")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_error_code_without_a_usable_message() {
+        assert_eq!(
+            attach_failure(Some("E96")).as_deref(),
+            Some("debugserver rejected the attach with error 96")
+        );
+        assert_eq!(
+            attach_failure(Some("E08;zz")).as_deref(),
+            Some("debugserver rejected the attach with error 08")
+        );
+    }
+
+    #[test]
+    fn ignores_replies_that_only_look_like_an_error() {
+        // A stop packet whose payload happens to start with E is not an error.
+        assert_eq!(attach_failure(Some("Exception")), None);
+    }
 }

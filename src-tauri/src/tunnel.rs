@@ -14,7 +14,10 @@ use mdns_sd::{ServiceDaemon, ServiceEvent};
 use tauri::Manager;
 use tokio::net::TcpStream;
 
-use crate::error::{CommandError, CommandResult};
+use crate::{
+    discovery::RemotePairingTarget,
+    error::{CommandError, CommandResult},
+};
 
 pub struct RsdTunnel {
     pub adapter: AdapterHandle,
@@ -57,7 +60,7 @@ async fn connect_host(hostname: &str, port: u16) -> CommandResult<TcpStream> {
     ))
 }
 
-async fn discover_remote_pairing() -> CommandResult<(String, u16)> {
+async fn discover_remote_pairing() -> CommandResult<RemotePairingTarget> {
     let daemon = ServiceDaemon::new()
         .map_err(|error| CommandError::new("bonjour", error.to_string(), true))?;
     let receiver = daemon
@@ -67,7 +70,10 @@ async fn discover_remote_pairing() -> CommandResult<(String, u16)> {
         loop {
             match receiver.recv_async().await {
                 Ok(ServiceEvent::ServiceResolved(info)) => {
-                    return Ok((info.get_hostname().to_owned(), info.get_port()));
+                    return Ok(RemotePairingTarget {
+                        hostname: info.get_hostname().to_owned(),
+                        port: info.get_port(),
+                    });
                 }
                 Ok(_) => {}
                 Err(error) => {
@@ -153,6 +159,7 @@ pub async fn open_remote_pairing_tunnel(
     provider: &impl IdeviceProvider,
     pairing_path: &Path,
     host_identifier: &str,
+    discovered_target: Option<&RemotePairingTarget>,
 ) -> CommandResult<RsdTunnel> {
     if RpPairingFile::read_from_file(pairing_path).await.is_err() {
         let mut last_error = None;
@@ -174,8 +181,11 @@ pub async fn open_remote_pairing_tunnel(
             return Err(error);
         }
     }
-    let (hostname, pairing_port) = discover_remote_pairing().await?;
-    let pairing_stream = connect_host(&hostname, pairing_port).await?;
+    let target = match discovered_target {
+        Some(target) => target.clone(),
+        None => discover_remote_pairing().await?,
+    };
+    let pairing_stream = connect_host(&target.hostname, target.port).await?;
     let pairing_socket = RpPairingSocket::new(pairing_stream);
 
     let mut pairing = RpPairingFile::read_from_file(pairing_path)
@@ -195,7 +205,7 @@ pub async fn open_remote_pairing_tunnel(
             true,
         )
     })?;
-    let tunnel_stream = connect_host(&hostname, tunnel_port).await?;
+    let tunnel_stream = connect_host(&target.hostname, tunnel_port).await?;
     let tunnel = connect_tls_psk_tunnel_native(tunnel_stream, client.encryption_key())
         .await
         .map_err(|error| {

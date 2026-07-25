@@ -1,6 +1,6 @@
 # idevice desktop Development Progress
 
-> Last updated: 2026-07-22
+> Last updated: 2026-07-24
 > Version: 0.0.1
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
@@ -17,24 +17,25 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Item | Status |
 | --- | --- |
-| Frontend production build | Passed on 2026-07-22 with `npm run build` |
-| Rust static check | Passed on 2026-07-22 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-22: 7 passed, 0 failed |
-| Test coverage | Covers IPA signature checks, file-path protection, and iOS generation selection; no frontend, integration, or automated real-device tests yet |
-| Real-device verification | Initial iOS 17.0 USB smoke test passed; broader compatibility coverage is still required |
+| Frontend production build | Passed on 2026-07-25 with `npm run build` |
+| Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | Passed on 2026-07-25: 14 passed, 0 failed |
+| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
+| Real-device verification | iOS 17.0 mobdev2, RemotePairing, catalog merging, and network Lockdown reads passed; physical USB transition and the new direct TCP fallback still require an awake device |
 | Git branch | `main` |
-| Worktree | Contains uncommitted changes; see Active Work |
+| Worktree | Contains the uncommitted crash-report and unified-discovery work described in Active Work |
 
 ## 3. Feature Progress
 
 | Module | Code status | Current assessment | Next verification |
 | --- | --- | --- | --- |
-| Device discovery and hot plug | Integrated | Build passed; real-device verification pending | USB reconnects, multiple devices, and network devices |
+| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | Live iOS 17.0 mobdev2 and RemotePairing resolution, catalog merging, and network Lockdown reads pass | Verify physical USB/network transitions, direct TCP fallback, and multiple devices |
 | Pair, unpair, select, and disconnect | Integrated | Build passed; real-device verification pending | Trust accepted, trust rejected, and stale pairing records |
 | Overview | Integrated | iOS 17.0 Lockdown, storage, battery, and RSD screenshot paths verified | Missing fields and DDI retry failure behavior |
 | Diagnostics | Five query categories integrated | Battery diagnostics verified on iOS 17.0 | Remaining query categories and permission failures across iOS versions |
 | AFC and file sharing | Integrated | AFC device info and root listing verified on iOS 17.0 | Large files, mutations, read-only paths, and app containers |
 | App list, installation, and uninstallation | Integrated | User-app listing verified; icons and filtering are in progress | IPA progress, icon retrieval, and uninstall confirmation |
+| Crash reports | List, filter, preview, and export integrated | Build passed; browser demo interaction verified | Real-device list, flush, nested reports, preview, and export |
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
@@ -70,15 +71,28 @@ Commit: `a584c07 feat: harden logs installs and file access`
 
 ## 5. Active Work
 
-Before this documentation was created, the worktree had nine modified feature files relative to `main`, with approximately 130 additions and 37 deletions. These changes remain uncommitted:
+The worktree contains the first crash-report workflow:
 
-- Show only user applications and retrieve real icons through SpringBoardServices.
-- Add `iconDataUrl` and `icon_data_url` to the TypeScript and Rust `InstalledApp` contract.
-- Cache screenshots by UDID and retry after automatic DDI mounting when necessary.
-- Replace the static location grid with an interactive Leaflet and OpenStreetMap view.
-- Add Leaflet and its TypeScript definitions.
+- Recursively list reports exposed by `com.apple.crashreportcopymobile`, after requesting a best-effort report flush.
+- Filter reports by filename, process, path, `.ips`, or `.crash`.
+- Preview text safely with a 4 MB display limit.
+- Export the complete original report to a user-selected local path.
+- Validate remote paths and cap a listing at 2,000 reports.
+- Represent report size as unknown until previewed instead of displaying a false `0 B`, avoiding up to 2,000 AFC metadata round trips during listing.
+- Provide browser demonstration data and a responsive list-and-preview interface.
 
-The frontend production build and Rust static check pass. These changes still require real-device and desktop-interaction testing before they should be considered complete.
+It also contains the unified device-discovery layer:
+
+- Monitor usbmuxd and the `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing Bonjour services in parallel.
+- Merge USB and network observations by UDID, Wi-Fi MAC address, hostname, or address overlap.
+- Coalesce all transitively matching observations when mobdev2 bridges an earlier RemotePairing record to USB, and hide unidentifiable RemotePairing-only records from the device list.
+- Share one Bonjour daemon and multicast socket across all three browsed service types.
+- Prefer USB while preserving Bonjour presence after USB disconnects.
+- Route a known paired device through direct Bonjour TCP Lockdown when its usbmuxd record disappears.
+- Route iOS 17.0–17.3 screenshot, location, and JIT tunnels to the RemotePairing endpoint associated with the selected device instead of the first service found.
+- Keep unidentified Bonjour-only devices visible with a clear “network route unavailable” state until they can be associated with a pairing record.
+
+The frontend build, Rust static check, 14 Rust unit tests, and browser interaction check pass. Live Bonjour discovery and merged routing passed on iOS 17.0; direct TCP fallback timed out after the phone stopped advertising while asleep. Repeat that path with an awake device and validate crash reports before these features are considered complete.
 
 ## 6. Recommended Next Phase
 
@@ -94,7 +108,7 @@ The frontend production build and Rust static check pass. These changes still re
 - Use [`CAPABILITY_MATRIX.md`](CAPABILITY_MATRIX.md) as the capability baseline for the pinned upstream revision.
 - Track Not integrated, Partial, Integrated, Build passed, and Real-device verified separately for each capability.
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
-- Prioritize crash reports, device console workflows, performance monitoring, packet capture, and process control.
+- Validate the new crash-report workflow, then prioritize device console workflows, performance monitoring, packet capture, and process control.
 
 ### P1: Testing and Stability
 

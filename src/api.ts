@@ -5,9 +5,12 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 export type CommandError = { kind: string; message: string; retryable: boolean }
 
 export type DeviceSummary = {
+  id: string
   udid: string
   deviceId: number
   connection: string
+  transports: string[]
+  connectable: boolean
   paired: boolean
   name: string | null
   model: string | null
@@ -70,6 +73,22 @@ export type InstalledApp = {
   raw: unknown
 }
 
+export type CrashReportSummary = {
+  name: string
+  path: string
+  kind: string
+  process: string
+  sizeBytes: number | null
+  modified: string
+}
+
+export type CrashReportContent = {
+  path: string
+  content: string
+  truncated: boolean
+  sizeBytes: number
+}
+
 export type OperationProgress = { operation: string; item: string; percent: number }
 export type DeviceLog = {
   timestamp: string
@@ -99,7 +118,7 @@ const call = <T>(command: string, args: Record<string, unknown> = {}) => invoke<
 
 export const api = {
   deviceList: () => call<DeviceSummary[]>('device_list'),
-  deviceSelect: (udid: string) => call<void>('device_select', { udid }),
+  deviceSelect: (id: string) => call<void>('device_select', { udid: id }),
   deviceDisconnect: () => call<void>('device_disconnect'),
   devicePair: (udid: string) => call<DeviceSummary>('device_pair', { udid, hostName: 'idevice desktop' }),
   deviceForget: (udid: string) => call<void>('device_forget', { udid }),
@@ -123,6 +142,9 @@ export const api = {
   appsList: (udid?: string) => call<InstalledApp[]>('apps_list', { udid }),
   appInstall: (localPath: string, udid?: string) => call<void>('app_install', { udid, localPath }),
   appUninstall: (bundleId: string, udid?: string) => call<void>('app_uninstall', { udid, bundleId }),
+  crashReportsList: (udid?: string) => call<CrashReportSummary[]>('crash_reports_list', { udid }),
+  crashReportRead: (path: string, udid?: string) => call<CrashReportContent>('crash_report_read', { udid, path }),
+  crashReportExport: (path: string, localPath: string, udid?: string) => call<void>('crash_report_export', { udid, path, localPath }),
   logsStart: (udid?: string, pid?: number) => call<void>('logs_start', { udid, pid }),
   logsStop: () => call<void>('logs_stop'),
   developerStatus: (udid?: string) => call<DeveloperStatus>('developer_status', { udid }),

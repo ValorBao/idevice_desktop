@@ -45,6 +45,8 @@ pub async fn location_start(
         .selected(udid)
         .await
         .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
+    let remote_target = state.discovery.read().await.remote_pairing_target(&udid);
+    let lockdown_target = state.discovery.read().await.lockdown_target(&udid);
     let pairing_path = remote_pairing_path(&app, &udid)?;
     let token = CancellationToken::new();
     state.replace_task("location", token.clone()).await;
@@ -71,7 +73,9 @@ pub async fn location_start(
             runtime.block_on(async move {
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
-                    let provider = crate::provider::provider_for(&udid).await?;
+                    let provider =
+                        crate::provider::routed_provider_for(&udid, lockdown_target.as_ref())
+                            .await?;
                     let generation = ios_version(&provider).await?.developer_generation();
 
                     if generation != DeveloperGeneration::Legacy {
@@ -81,6 +85,7 @@ pub async fn location_start(
                                     &provider,
                                     &pairing_path,
                                     "idevice-desktop",
+                                    remote_target.as_ref(),
                                 )
                                 .await?;
                                 (tunnel.adapter, tunnel.handshake)

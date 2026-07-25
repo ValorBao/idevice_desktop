@@ -1,4 +1,5 @@
 mod apps;
+mod crash_reports;
 mod developer;
 mod device;
 mod diagnostics;
@@ -9,6 +10,7 @@ mod overview;
 mod screenshot;
 
 pub use apps::*;
+pub use crash_reports::*;
 pub use developer::*;
 pub use device::*;
 pub use diagnostics::*;

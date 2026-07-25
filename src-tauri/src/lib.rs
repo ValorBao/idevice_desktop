@@ -1,5 +1,6 @@
 mod commands;
 mod device_version;
+mod discovery;
 mod error;
 mod provider;
 mod state;
@@ -49,6 +50,9 @@ pub fn run() {
             commands::apps_list,
             commands::app_install,
             commands::app_uninstall,
+            commands::crash_reports_list,
+            commands::crash_report_read,
+            commands::crash_report_export,
             commands::logs_start,
             commands::logs_stop,
             commands::developer_status,

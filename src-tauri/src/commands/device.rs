@@ -5,12 +5,14 @@ use idevice::{
     provider::IdeviceProvider,
     usbmuxd::{Connection, UsbmuxdAddr, UsbmuxdConnection, UsbmuxdDevice, UsbmuxdListenEvent},
 };
-use tauri::{AppHandle, Emitter, State};
+use mdns_sd::{ServiceDaemon, ServiceEvent};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
+    discovery::{BonjourEndpoint, NETWORK_SERVICE_TYPES, UsbDiscovery},
     error::{CommandError, CommandResult},
-    provider::provider_for,
+    provider::{provider_for, routed_provider_for},
     state::AppState,
     types::{DeviceChangeEvent, DeviceSummary},
 };
@@ -23,11 +25,12 @@ fn connection_label(connection: &Connection) -> String {
     }
 }
 
-async fn enrich_device(device: UsbmuxdDevice) -> DeviceSummary {
+async fn enrich_device(device: UsbmuxdDevice) -> UsbDiscovery {
     let mut paired = false;
     let mut name = None;
     let mut model = None;
     let mut ios = None;
+    let mut wifi_address = None;
 
     if let Ok(mut mux) = UsbmuxdConnection::default().await {
         paired = mux.get_pair_record(&device.udid).await.is_ok();
@@ -54,9 +57,14 @@ async fn enrich_device(device: UsbmuxdDevice) -> DeviceSummary {
             .await
             .ok()
             .and_then(|value| value.into_string());
+        wifi_address = lockdown
+            .get_value(Some("WiFiAddress"), None)
+            .await
+            .ok()
+            .and_then(|value| value.into_string());
     }
 
-    DeviceSummary {
+    UsbDiscovery {
         udid: device.udid,
         device_id: device.device_id,
         connection: connection_label(&device.connection_type),
@@ -64,27 +72,57 @@ async fn enrich_device(device: UsbmuxdDevice) -> DeviceSummary {
         name,
         model,
         ios,
+        wifi_address,
     }
 }
 
 #[tauri::command]
-pub async fn device_list() -> CommandResult<Vec<DeviceSummary>> {
-    let mut mux = UsbmuxdConnection::default()
-        .await
-        .map_err(CommandError::from)?;
-    let devices = mux.get_devices().await.map_err(CommandError::from)?;
-    let mut result = Vec::with_capacity(devices.len());
-    for device in devices {
-        result.push(enrich_device(device).await);
+pub async fn device_list(state: State<'_, AppState>) -> CommandResult<Vec<DeviceSummary>> {
+    match UsbmuxdConnection::default().await {
+        Ok(mut mux) => match mux.get_devices().await {
+            Ok(devices) => {
+                let mut enriched = Vec::with_capacity(devices.len());
+                for device in devices {
+                    enriched.push(enrich_device(device).await);
+                }
+                state.discovery.write().await.replace_usbmuxd(enriched);
+            }
+            Err(error) => {
+                if state.discovery.read().await.summaries().is_empty() {
+                    return Err(CommandError::from(error));
+                }
+                tracing::warn!(?error, "unable to refresh usbmuxd discovery");
+            }
+        },
+        Err(error) => {
+            if state.discovery.read().await.summaries().is_empty() {
+                return Err(CommandError::from(error));
+            }
+            tracing::warn!(?error, "unable to connect to usbmuxd during discovery");
+        }
     }
-    Ok(result)
+    Ok(state.discovery.read().await.summaries())
 }
 
 #[tauri::command]
 pub async fn device_select(state: State<'_, AppState>, udid: String) -> CommandResult<()> {
-    let _ = provider_for(&udid).await?;
+    let discovery = state.discovery.read().await;
+    let selected_udid = if let Some(selected_udid) = discovery.connectable_udid(&udid) {
+        selected_udid
+    } else if discovery.contains(&udid) || udid.starts_with("bonjour:") {
+        return Err(CommandError::new(
+            "network_discovery",
+            "This iPhone is visible through Bonjour but has no usable Lockdown route. Connect it by USB once or configure paired Wi-Fi access.",
+            true,
+        ));
+    } else {
+        udid.clone()
+    };
+    let lockdown_target = discovery.lockdown_target(&udid);
+    drop(discovery);
+    let _ = routed_provider_for(&selected_udid, lockdown_target.as_ref()).await?;
     state.cancel_device_tasks().await;
-    *state.selected_udid.write().await = Some(udid);
+    *state.selected_udid.write().await = Some(selected_udid);
     Ok(())
 }
 
@@ -133,7 +171,24 @@ pub async fn device_pair(udid: String, host_name: Option<String>) -> CommandResu
         .await
         .map_err(CommandError::from)?;
 
-    Ok(enrich_device(device).await)
+    let discovered = enrich_device(device).await;
+    let transport = if discovered.connection.starts_with("USB") {
+        "USB"
+    } else {
+        "usbmuxd Network"
+    };
+    Ok(DeviceSummary {
+        id: discovered.udid.clone(),
+        udid: discovered.udid,
+        device_id: discovered.device_id,
+        connection: discovered.connection,
+        transports: vec![transport.into()],
+        connectable: true,
+        paired: discovered.paired,
+        name: discovered.name,
+        model: discovered.model,
+        ios: discovered.ios,
+    })
 }
 
 #[tauri::command]
@@ -164,6 +219,8 @@ pub async fn device_monitor_start(app: AppHandle, state: State<'_, AppState>) ->
     let token = CancellationToken::new();
     state.replace_task("device-monitor", token.clone()).await;
 
+    let usb_app = app.clone();
+    let usb_token = token.clone();
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -179,28 +236,136 @@ pub async fn device_monitor_start(app: AppHandle, state: State<'_, AppState>) ->
 
             loop {
                 tokio::select! {
-                    _ = token.cancelled() => break,
+                    _ = usb_token.cancelled() => break,
                     event = stream.next() => {
                         let Some(Ok(event)) = event else { break };
                         let payload = match event {
-                            UsbmuxdListenEvent::Connected(device) => DeviceChangeEvent {
-                                kind: "connected".into(),
-                                device: Some(enrich_device(device).await),
-                                device_id: None,
-                            },
-                            UsbmuxdListenEvent::Disconnected(device_id) => DeviceChangeEvent {
-                                kind: "disconnected".into(),
-                                device: None,
-                                device_id: Some(device_id),
-                            },
+                            UsbmuxdListenEvent::Connected(device) => {
+                                let discovered = enrich_device(device).await;
+                                let summary = usb_app
+                                    .state::<AppState>()
+                                    .discovery
+                                    .write()
+                                    .await
+                                    .upsert_usb(discovered);
+                                DeviceChangeEvent {
+                                    kind: "connected".into(),
+                                    device: Some(summary),
+                                    device_id: None,
+                                }
+                            }
+                            UsbmuxdListenEvent::Disconnected(device_id) => {
+                                usb_app
+                                    .state::<AppState>()
+                                    .discovery
+                                    .write()
+                                    .await
+                                    .remove_usbmuxd(device_id);
+                                DeviceChangeEvent {
+                                    kind: "disconnected".into(),
+                                    device: None,
+                                    device_id: Some(device_id),
+                                }
+                            }
                         };
-                        let _ = app.emit("device://changed", payload);
+                        let _ = usb_app.emit("device://changed", payload);
                     }
                 }
             }
         });
     });
+
+    spawn_bonjour_monitor(app, token);
     Ok(())
+}
+
+fn spawn_bonjour_monitor(app: AppHandle, token: CancellationToken) {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Bonjour monitor runtime");
+        runtime.block_on(async move {
+            let Ok(daemon) = ServiceDaemon::new() else {
+                return;
+            };
+            let Ok(mobdev) = daemon.browse(NETWORK_SERVICE_TYPES[0]) else {
+                let _ = daemon.shutdown();
+                return;
+            };
+            let Ok(remote_pairing) = daemon.browse(NETWORK_SERVICE_TYPES[1]) else {
+                let _ = daemon.shutdown();
+                return;
+            };
+            let Ok(manual_pairing) = daemon.browse(NETWORK_SERVICE_TYPES[2]) else {
+                let _ = daemon.shutdown();
+                return;
+            };
+            loop {
+                tokio::select! {
+                    _ = token.cancelled() => break,
+                    event = mobdev.recv_async() => {
+                        let Ok(event) = event else { break };
+                        handle_bonjour_event(&app, event).await;
+                    },
+                    event = remote_pairing.recv_async() => {
+                        let Ok(event) = event else { break };
+                        handle_bonjour_event(&app, event).await;
+                    },
+                    event = manual_pairing.recv_async() => {
+                        let Ok(event) = event else { break };
+                        handle_bonjour_event(&app, event).await;
+                    },
+                }
+            }
+            for service_type in NETWORK_SERVICE_TYPES {
+                let _ = daemon.stop_browse(service_type);
+            }
+            let _ = daemon.shutdown();
+        });
+    });
+}
+
+async fn handle_bonjour_event(app: &AppHandle, event: ServiceEvent) {
+    let payload = match event {
+        ServiceEvent::ServiceResolved(service) => {
+            let endpoint = BonjourEndpoint::from_resolved(&service);
+            let service_type = endpoint.service_type.clone();
+            let summary = app
+                .state::<AppState>()
+                .discovery
+                .write()
+                .await
+                .upsert_bonjour(endpoint);
+            tracing::info!(
+                service_type,
+                connectable = summary.connectable,
+                transports = ?summary.transports,
+                "network device discovered"
+            );
+            Some(DeviceChangeEvent {
+                kind: "updated".into(),
+                device: Some(summary),
+                device_id: None,
+            })
+        }
+        ServiceEvent::ServiceRemoved(_, fullname) => {
+            app.state::<AppState>()
+                .discovery
+                .write()
+                .await
+                .remove_bonjour(&fullname);
+            Some(DeviceChangeEvent {
+                kind: "disconnected".into(),
+                device: None,
+                device_id: None,
+            })
+        }
+        _ => None,
+    };
+    if let Some(payload) = payload {
+        let _ = app.emit("device://changed", payload);
+    }
 }
 
 #[tauri::command]

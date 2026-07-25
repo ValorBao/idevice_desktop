@@ -4,7 +4,7 @@ import L, { type Map as LeafletMap, type Marker as LeafletMarker } from 'leaflet
 import 'leaflet/dist/leaflet.css'
 import {
   Activity, AppWindow, BatteryCharging, Check, ChevronDown, ChevronRight, CircleStop,
-  Code2, File, Folder, FolderOpen, HardDrive, MapPin, Moon, Pause, Play, Plus,
+  Bug, Code2, Download, File, Folder, FolderOpen, HardDrive, MapPin, Moon, Pause, Play, Plus,
   RefreshCw, Search, Smartphone, Sun, TerminalSquare, Upload, Usb, Wifi, X,
 } from 'lucide-react'
 import {
@@ -13,11 +13,11 @@ import {
 } from './data'
 import {
   api, dialogs, errorMessage, events, isDesktopRuntime,
-  type DeveloperStatus, type DeviceOverview, type DeviceSummary, type FileSharingApp, type InstalledApp,
+  type CrashReportContent, type CrashReportSummary, type DeveloperStatus, type DeviceOverview, type DeviceSummary, type FileSharingApp, type InstalledApp,
   type RemoteFileEntry,
 } from './api'
 
-type Page = 'overview' | 'diagnostics' | 'files' | 'apps' | 'logs' | 'developer' | 'location'
+type Page = 'overview' | 'diagnostics' | 'files' | 'apps' | 'crashes' | 'logs' | 'developer' | 'location'
 type UiStyle = 'clean' | 'terminal' | 'apple'
 type Appearance = 'dark' | 'light'
 type Connection = 'connected' | 'detected' | 'none'
@@ -27,6 +27,7 @@ const pageMeta: Record<Page, [string, string]> = {
   diagnostics: ['Diagnostics', 'com.apple.mobile.diagnostics_relay'],
   files: ['Files', 'com.apple.afc'],
   apps: ['Apps', 'com.apple.mobile.installation_proxy'],
+  crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
   logs: ['Logs', 'com.apple.syslog_relay'],
   developer: ['Debug Tools', 'com.apple.dt.* services'],
   location: ['Location', 'com.apple.dt.simulatelocation'],
@@ -37,13 +38,14 @@ const navItems = [
   { id: 'diagnostics', label: 'Diagnostics', icon: Activity },
   { id: 'files', label: 'Files', icon: FolderOpen, suffix: 'AFC' },
   { id: 'apps', label: 'Apps', icon: AppWindow },
+  { id: 'crashes', label: 'Crash Reports', icon: Bug },
   { id: 'logs', label: 'Logs', icon: TerminalSquare },
 ] as const
 
 const summaryToDevice = (summary: DeviceSummary): Device => ({
-  id: summary.udid,
-  name: summary.name ?? 'Unpaired device',
-  model: summary.model ?? 'iPhone / iPad',
+  id: summary.id,
+  name: summary.name ?? (summary.connectable ? 'Unpaired device' : 'Network iPhone'),
+  model: summary.model ?? (summary.connectable ? 'iPhone / iPad' : 'Bonjour device'),
   modelId: summary.model ?? 'Unknown',
   ios: summary.ios ?? '—',
   build: '—',
@@ -58,9 +60,11 @@ const summaryToDevice = (summary: DeviceSummary): Device => ({
   cycles: 0,
   storageUsed: 0,
   storageTotal: 0,
+  transports: summary.transports,
+  connectable: summary.connectable,
 })
 
-const bytes = (value: number) => {
+const bytes = (value: number | null | undefined) => {
   if (!value) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const power = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)))
@@ -128,11 +132,11 @@ function App() {
         setConnection('none')
         return
       }
-      const current = found.find((item) => item.udid === deviceIdRef.current)
-      const target = current ?? found.find((item) => item.paired) ?? found[0]
-      setDeviceId(target.udid)
-      if (target.paired) {
-        if (target.udid !== deviceIdRef.current) await api.deviceSelect(target.udid)
+      const current = found.find((item) => item.id === deviceIdRef.current)
+      const target = current ?? found.find((item) => item.paired && item.connectable) ?? found[0]
+      setDeviceId(target.id)
+      if (target.paired && target.connectable) {
+        if (target.id !== deviceIdRef.current) await api.deviceSelect(target.id)
         setConnection('connected')
       } else {
         setConnection('detected')
@@ -211,7 +215,7 @@ function App() {
                 <span className={`device-icon status-${connection}`}><Smartphone size={19} /><i /></span>
                 <span className="device-card-copy">
                   <b>{connected ? device.name : connection === 'detected' ? device.model : 'No device'}</b>
-                  <small>{connected ? device.model : connection === 'detected' ? 'Awaiting trust…' : 'Connect to begin'}</small>
+                  <small>{connected ? device.model : connection === 'detected' ? device.connectable === false ? 'Network only · connect USB once' : 'Awaiting trust…' : 'Connect to begin'}</small>
                 </span>
                 <ChevronDown size={14} />
               </button>
@@ -220,7 +224,7 @@ function App() {
                   {deviceCatalog.map((item) => (
                     <button key={item.id} onClick={() => void selectDevice(item.id)}>
                       <i className={item.id === deviceId ? 'selected-dot' : ''} />
-                      <span><b>{item.name}</b><small>{item.conn} · iOS {item.ios}</small></span>
+                      <span><b>{item.name}</b><small>{item.conn}{item.ios !== '—' ? ` · iOS ${item.ios}` : ''}</small></span>
                     </button>
                   ))}
                   <hr />
@@ -267,6 +271,7 @@ function App() {
               {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
               {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
               {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
+              {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
               {page === 'logs' && <Logs connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
               {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
               {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
@@ -275,6 +280,7 @@ function App() {
             {!connected && (
               <Onboarding
                 state={connection}
+                device={device}
                 desktop={desktop}
                 onDetect={() => desktop ? void refreshDevices() : setConnection('detected')}
                 onPair={() => void finishPairing()}
@@ -725,6 +731,151 @@ function AppIcon({ app, large }: { app: AppInfo; large?: boolean }) {
   return <span className={`app-icon ${large ? 'large' : ''}`} style={{ background: app.color }}>{app.icon ? <img src={app.icon} alt="" /> : app.name[0]}</span>
 }
 
+const demoCrashReports: CrashReportSummary[] = [
+  { name: 'StikDebug-2026-07-23-184205.ips', path: '/StikDebug-2026-07-23-184205.ips', kind: 'IPS', process: 'StikDebug', sizeBytes: 184326, modified: '2026-07-23 18:42:05' },
+  { name: 'JetsamEvent-2026-07-22-091814.ips', path: '/JetsamEvent-2026-07-22-091814.ips', kind: 'IPS', process: 'JetsamEvent', sizeBytes: 42812, modified: '2026-07-22 09:18:14' },
+  { name: 'CrossCode-2026-07-20-221037.crash', path: '/Retired/CrossCode-2026-07-20-221037.crash', kind: 'CRASH', process: 'CrossCode', sizeBytes: 96340, modified: '2026-07-20 22:10:37' },
+]
+
+const demoCrashContent = `{"app_name":"StikDebug","timestamp":"2026-07-23 18:42:05.00 +0800","app_version":"1.4.2","slice_uuid":"4A9B1E5C-97B2-4D19-97F2-7BD6404C470A","build_version":"142","platform":2,"bundleID":"com.stik.debug","share_with_app_devs":1,"is_first_party":0,"bug_type":"309","os_version":"iPhone OS 17.5.1 (21F90)","incident_id":"A72B817D-8250-42A1-AC3B-9566A69D2F90"}
+{
+  "uptime" : 42000,
+  "procRole" : "Foreground",
+  "version" : 2,
+  "userID" : 501,
+  "modelCode" : "iPhone16,1",
+  "coalitionName" : "com.stik.debug",
+  "captureTime" : "2026-07-23 18:42:05.128 +0800",
+  "exception" : {
+    "type" : "EXC_BAD_ACCESS",
+    "signal" : "SIGSEGV",
+    "subtype" : "KERN_INVALID_ADDRESS at 0x0000000000000010"
+  },
+  "termination" : {
+    "namespace" : "SIGNAL",
+    "code" : 11,
+    "indicator" : "Segmentation fault: 11"
+  },
+  "faultingThread" : 0,
+  "threads" : [
+    {
+      "triggered" : true,
+      "name" : "com.apple.main-thread",
+      "frames" : [
+        { "imageOffset" : 42824, "symbol" : "DebugSession.start()", "symbolLocation" : 184 },
+        { "imageOffset" : 21760, "symbol" : "AppDelegate.application(_:didFinishLaunchingWithOptions:)", "symbolLocation" : 92 }
+      ]
+    }
+  ]
+}`
+
+function CrashReports({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
+  const [reports, setReports] = useState<CrashReportSummary[]>(desktop ? [] : demoCrashReports)
+  const [selectedPath, setSelectedPath] = useState(desktop ? '' : demoCrashReports[0].path)
+  const [content, setContent] = useState<CrashReportContent | null>(desktop ? null : {
+    path: demoCrashReports[0].path,
+    content: demoCrashContent,
+    truncated: false,
+    sizeBytes: demoCrashReports[0].sizeBytes ?? 0,
+  })
+  const [query, setQuery] = useState('')
+  const [kind, setKind] = useState<'all' | 'ips' | 'crash'>('all')
+  const [loading, setLoading] = useState(false)
+  const selected = reports.find((report) => report.path === selectedPath)
+
+  const loadReports = useCallback(async () => {
+    if (!desktop) return
+    setLoading(true)
+    try {
+      const loaded = await api.crashReportsList(udid)
+      setReports(loaded)
+      setSelectedPath((current) => loaded.some((report) => report.path === current) ? current : loaded[0]?.path ?? '')
+    } catch (error) {
+      onToast(errorMessage(error))
+    } finally {
+      setLoading(false)
+    }
+  }, [desktop, udid, onToast])
+
+  useEffect(() => { void loadReports() }, [loadReports])
+  useEffect(() => {
+    if (!desktop || !selectedPath) {
+      if (!selectedPath) setContent(null)
+      return
+    }
+    let disposed = false
+    setContent(null)
+    void api.crashReportRead(selectedPath, udid)
+      .then((result) => {
+        if (disposed) return
+        setContent(result)
+        setReports((items) => items.map((report) => report.path === result.path ? { ...report, sizeBytes: result.sizeBytes } : report))
+      })
+      .catch((error) => { if (!disposed) onToast(errorMessage(error)) })
+    return () => { disposed = true }
+  }, [desktop, selectedPath, udid, onToast])
+
+  const filtered = useMemo(() => reports.filter((report) => {
+    const kindMatches = kind === 'all' || report.kind.toLowerCase() === kind
+    const queryMatches = `${report.name} ${report.process} ${report.path}`.toLowerCase().includes(query.toLowerCase())
+    return kindMatches && queryMatches
+  }), [reports, kind, query])
+  useEffect(() => {
+    if (!filtered.some((report) => report.path === selectedPath)) {
+      setSelectedPath(filtered[0]?.path ?? '')
+    }
+  }, [filtered, selectedPath])
+
+  const exportSelected = async () => {
+    if (!selected) return
+    if (!desktop) {
+      const blob = new Blob([content?.content ?? demoCrashContent], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = selected.name
+      anchor.click()
+      URL.revokeObjectURL(url)
+      onToast(`${selected.name} exported`)
+      return
+    }
+    try {
+      const target = await dialogs.saveFile(selected.name)
+      if (!target) return
+      await api.crashReportExport(selected.path, target, udid)
+      onToast(`${selected.name} exported`)
+    } catch (error) {
+      onToast(errorMessage(error))
+    }
+  }
+
+  return (
+    <section className="crash-page page-padding compact-padding">
+      <div className="crash-toolbar">
+        <label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports by app, filename, or path…" />{query && <button onClick={() => setQuery('')} aria-label="Clear report filter"><X size={14} /></button>}</label>
+        <div className="crash-kind-filter">{(['all', 'ips', 'crash'] as const).map((item) => <button key={item} className={kind === item ? 'active' : ''} onClick={() => setKind(item)}>{item === 'all' ? 'All' : `.${item}`}</button>)}</div>
+        <button className="crash-refresh" onClick={() => void loadReports()} disabled={loading}><RefreshCw className={loading ? 'spinning' : ''} size={14} />Refresh</button>
+      </div>
+      <div className="crash-workspace">
+        <div className="crash-list card">
+          <header><span>{filtered.length} reports</span><small>Newest first</small></header>
+          <div>
+            {filtered.map((report) => <button key={report.path} className={selectedPath === report.path ? 'active' : ''} onClick={() => setSelectedPath(report.path)}><span className="crash-kind"><Bug size={15} /></span><span><b>{report.process}</b><small>{report.name}</small><time>{report.modified}</time></span><code>{report.kind}</code><em>{bytes(report.sizeBytes)}</em></button>)}
+            {!filtered.length && <div className="crash-empty">{loading ? 'Loading crash reports…' : reports.length ? 'No reports match this filter.' : 'No crash reports were returned by the device.'}</div>}
+          </div>
+        </div>
+        <div className="crash-preview card">
+          {selected ? <>
+            <header><div><b>{selected.name}</b><small>{selected.path}</small></div><button className="primary-button" onClick={() => void exportSelected()} disabled={!content}><Download size={14} />Export</button></header>
+            <div className="crash-summary"><span><small>Process</small><b>{selected.process}</b></span><span><small>Type</small><b>{selected.kind}</b></span><span><small>Modified</small><b>{selected.modified || '—'}</b></span><span><small>Size</small><b>{bytes(content?.sizeBytes ?? selected.sizeBytes)}</b></span></div>
+            {content ? <><pre>{content.content}</pre>{content.truncated && <footer>Preview limited to 4 MB. Export saves the complete report.</footer>}</> : <div className="crash-empty">Loading report contents…</div>}
+          </> : <div className="crash-empty">Select a crash report to preview its contents.</div>}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function Logs({ connected, desktop, udid, onError }: { connected: boolean; desktop: boolean; udid: string; onError: (message: string) => void }) {
   const [logs, setLogs] = useState<LogLine[]>(desktop ? [] : initialLogs)
   const [filter, setFilter] = useState<'all' | 'error' | 'warn' | 'info' | 'debug'>('all')
@@ -983,9 +1134,10 @@ function Location({ desktop, udid, onToast }: { desktop: boolean; udid: string; 
   )
 }
 
-function Onboarding({ state, desktop, onDetect, onPair, onCancel }: { state: Exclude<Connection, 'connected'>; desktop: boolean; onDetect: () => void; onPair: () => void; onCancel: () => void }) {
-  if (state === 'none') return <div className="onboarding"><div className="scan-icon"><i /><i /><span><Smartphone size={31} /></span></div><h2>No device connected</h2><p>Plug in an iPhone or iPad over USB, or pair one over the network with netmuxd. idevice is listening on usbmuxd for a handshake.</p><code><i />scanning /var/run/usbmuxd…</code><button className="primary-button" onClick={onDetect}><Usb size={16} />{desktop ? 'Scan again' : 'Simulate USB connection'}</button><div className="steps"><span className="active">Detect</span><i /><span>Trust</span><i /><span>Ready</span></div></div>
-  return <div className="onboarding"><span className="detected-icon"><Smartphone size={31} /><i>!</i></span><h2>iPhone 15 Pro detected</h2><p>Trust this computer to open a lockdown session.</p><div className="trust-card card"><p><b>1</b><span>Tap <strong>Trust</strong> on the device prompt</span></p><p><b>2</b><span>Enter the device passcode</span></p><div className="passcode"><i>•</i><i>•</i><i>•</i><i /></div></div><button className="primary-button full-button" onClick={onPair}>Trust & generate pairing</button><button className="text-button" onClick={onCancel}>Cancel</button></div>
+function Onboarding({ state, device, desktop, onDetect, onPair, onCancel }: { state: Exclude<Connection, 'connected'>; device: Device; desktop: boolean; onDetect: () => void; onPair: () => void; onCancel: () => void }) {
+  if (state === 'none') return <div className="onboarding"><div className="scan-icon"><i /><i /><span><Smartphone size={31} /></span></div><h2>No device connected</h2><p>Connect an iPhone or iPad over USB or make it available on the local network. idevice is scanning usbmuxd and Bonjour.</p><code><i />usbmuxd · mobdev2 · RemotePairing</code><button className="primary-button" onClick={onDetect}><Usb size={16} />{desktop ? 'Scan again' : 'Simulate USB connection'}</button><div className="steps"><span className="active">Detect</span><i /><span>Trust</span><i /><span>Ready</span></div></div>
+  if (device.connectable === false) return <div className="onboarding"><span className="detected-icon"><Wifi size={31} /><i>!</i></span><h2>{device.name} found on the network</h2><p>Bonjour can see this device, but no paired Lockdown route is available yet.</p><div className="trust-card card"><p><b>1</b><span>Connect the device with a <strong>USB data cable</strong></span></p><p><b>2</b><span>Unlock it and tap <strong>Trust</strong> when prompted</span></p></div><button className="primary-button full-button" onClick={onDetect}>Check connections again</button><button className="text-button" onClick={onCancel}>Cancel</button></div>
+  return <div className="onboarding"><span className="detected-icon"><Smartphone size={31} /><i>!</i></span><h2>{device.model} detected</h2><p>Trust this computer to open a lockdown session.</p><div className="trust-card card"><p><b>1</b><span>Tap <strong>Trust</strong> on the device prompt</span></p><p><b>2</b><span>Enter the device passcode</span></p><div className="passcode"><i>•</i><i>•</i><i>•</i><i /></div></div><button className="primary-button full-button" onClick={onPair}>Trust & generate pairing</button><button className="text-button" onClick={onCancel}>Cancel</button></div>
 }
 
 function PairModal({ onClose, onPair }: { onClose: () => void; onPair: () => void }) {

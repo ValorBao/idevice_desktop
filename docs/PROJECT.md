@@ -53,7 +53,7 @@ The frontend detects the Tauri runtime and selects the appropriate mode automati
 
 | Module | User capabilities | Primary services |
 | --- | --- | --- |
-| Device connection | Discover, monitor, select, pair, unpair, and disconnect devices | usbmuxd, Lockdown |
+| Device connection | Discover through usbmuxd and Bonjour, merge transports, monitor, select, pair, unpair, and disconnect devices | usbmuxd, mDNS/DNS-SD, Lockdown |
 | Overview | Device details, battery, storage, and screenshots | Lockdown, AFC, Screenshot/DVT |
 | Diagnostics | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data | Diagnostics Relay |
 | Files | Browse AFC and file-sharing app containers; upload, download, create directories, and remove recursively | AFC, House Arrest |
@@ -68,9 +68,11 @@ The frontend detects the Tauri runtime and selects the appropriate mode automati
 flowchart LR
     UI["React + TypeScript UI"] --> API["src/api.ts\nTauri command and event boundary"]
     API --> CMD["Rust commands\nDevice capability modules"]
-    CMD --> STATE["AppState\nSelected device and task cancellation"]
+    CMD --> STATE["AppState\nDiscovery catalog, selected device,\nand task cancellation"]
+    DISC["Discovery\nusbmuxd + Bonjour"] --> STATE
     CMD --> LIB["jkcoxson/idevice"]
-    LIB --> MUX["usbmuxd / netmuxd"]
+    LIB --> ROUTE["Provider routing\nusbmuxd or paired Bonjour TCP"]
+    ROUTE --> MUX["USB / local network"]
     MUX --> IOS["iPhone / iPad"]
     CMD --> EVT["Log, installation, and DDI progress events"]
     EVT --> UI
@@ -89,10 +91,12 @@ flowchart LR
 
 - Tauri 2, Rust 2024 edition, and Tokio
 - `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, logs, developer, location, and screenshot commands.
-- `AppState` stores the selected device and uses cancellation tokens for monitoring, logs, JIT, location, and other long-running tasks.
-- `provider.rs` creates a consistent usbmuxd provider from a UDID.
+- `AppState` stores the unified discovery catalog and selected device, and uses cancellation tokens for monitoring, logs, JIT, location, and other long-running tasks.
+- `discovery.rs` merges usbmuxd, `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing observations. USB is preferred; Wi-Fi MAC address, UDID, hostname, and address overlap are used to reconcile transports.
+- A known paired device remains selectable through direct Bonjour TCP Lockdown if its usbmuxd observation disappears; unidentified Bonjour-only devices remain visible until they can be associated with a pairing record.
+- `provider.rs` prefers usbmuxd and falls back to a paired Bonjour TCP provider using the selected device's mobdev2 addresses.
 - `device_version.rs` selects the developer-service transport based on iOS version.
-- `tunnel.rs` implements RemotePairing and RSD software tunnels for iOS 17.0 through 17.3.
+- `tunnel.rs` implements RemotePairing and RSD software tunnels for iOS 17.0 through 17.3 and accepts the selected device's resolved endpoint to avoid cross-device routing.
 
 ### iOS Developer-Service Generations
 
@@ -115,6 +119,7 @@ flowchart LR
 │   └── styles.css           # Global visual styles
 ├── src-tauri/               # Tauri and Rust backend
 │   ├── src/commands/        # Device capability commands
+│   ├── src/discovery.rs      # Unified usbmuxd and Bonjour device catalog
 │   ├── src/state.rs         # Application state and task lifecycle
 │   ├── src/tunnel.rs        # RemotePairing and RSD tunnels
 │   └── Cargo.toml

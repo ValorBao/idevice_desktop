@@ -14,14 +14,15 @@ This is an independent project and is not an official `jkcoxson/idevice` applica
 
 ## Integrated Device Features
 
-- usbmuxd device discovery, hot-plug monitoring, selection, pairing, unpairing, and disconnect
+- unified usbmuxd and Bonjour discovery, hot-plug monitoring, transport merging, paired TCP Lockdown fallback, selection, pairing, unpairing, and disconnect
 - Lockdown device overview, pairing information, battery information, and AFC storage capacity
 - Diagnostics Relay queries for battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data
 - AFC file browsing, upload, download, directory creation, and recursive removal
 - Installation Proxy application listing, IPA installation, uninstallation, and progress events
+- Crash report listing, filtering, text preview, and export
 - Live structured OS Trace logs with pause, filter, and clear controls
 - Developer Mode and Developer Disk Image mounting and unmounting
-- iOS 17+ CoreDevice/RSD software tunnels, application launch, debug proxy attachment, and JIT sessions
+- device-targeted iOS 17+ RemotePairing/CoreDevice RSD tunnels, application launch, debug proxy attachment, and JIT sessions
 - DVT/RSD and legacy Lockdown location simulation transports
 
 Running the project in a regular browser automatically uses design demonstration data. Running it through Tauri automatically switches to commands backed by a real device.

@@ -38,12 +38,14 @@ rev = "8eed181f39a16ea70380ec8c3cff6bed07a1ef69"
 default-features = false
 features = [
   "ring",
+  "tcp",
   "usbmuxd",
   "pair",
   "afc",
   "diagnostics_relay",
   "installation_proxy",
   "house_arrest",
+  "crashreportcopymobile",
   "springboardservices",
   "syslog_relay",
   "screenshotr",

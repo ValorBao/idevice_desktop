@@ -16,11 +16,13 @@ export type Device = {
   cycles: number
   storageUsed: number
   storageTotal: number
+  transports?: string[]
+  connectable?: boolean
 }
 
 export const devices: Device[] = [
-  { id: 'd1', name: "Jackson's iPhone", model: 'iPhone 15 Pro', modelId: 'iPhone16,1', ios: '17.5.1', build: '21F90', udid: '00008130-001A2D3C1E88001C', serial: 'F2LX9K3PQ1NM', ecid: '0x1A2D3C1E88001C', chip: 'A17 Pro', wifi: 'F0:18:98:2A:6B:C4', conn: 'USB', battery: 87, batteryHealth: 94, cycles: 212, storageUsed: 142, storageTotal: 256 },
-  { id: 'd2', name: 'Test iPad', model: 'iPad Pro 11\"', modelId: 'iPad14,3', ios: '17.4', build: '21E219', udid: '00008027-000C5D2E1488002E', serial: 'DMPX5K9LQ2', ecid: '0x0C5D2E1488002E', chip: 'M2', wifi: 'A4:83:E7:11:09:2D', conn: 'Network', battery: 63, batteryHealth: 100, cycles: 48, storageUsed: 88, storageTotal: 512 },
+  { id: 'd1', name: "Jackson's iPhone", model: 'iPhone 15 Pro', modelId: 'iPhone16,1', ios: '17.5.1', build: '21F90', udid: '00008130-001A2D3C1E88001C', serial: 'F2LX9K3PQ1NM', ecid: '0x1A2D3C1E88001C', chip: 'A17 Pro', wifi: 'F0:18:98:2A:6B:C4', conn: 'USB', battery: 87, batteryHealth: 94, cycles: 212, storageUsed: 142, storageTotal: 256, transports: ['USB'], connectable: true },
+  { id: 'd2', name: 'Test iPad', model: 'iPad Pro 11\"', modelId: 'iPad14,3', ios: '17.4', build: '21E219', udid: '00008027-000C5D2E1488002E', serial: 'DMPX5K9LQ2', ecid: '0x0C5D2E1488002E', chip: 'M2', wifi: 'A4:83:E7:11:09:2D', conn: 'Network', battery: 63, batteryHealth: 100, cycles: 48, storageUsed: 88, storageTotal: 512, transports: ['usbmuxd Network'], connectable: true },
 ]
 
 export const gestalt = [

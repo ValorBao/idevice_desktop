@@ -569,6 +569,8 @@ pub async fn jit_start(
         .selected(udid)
         .await
         .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
+    let remote_target = state.discovery.read().await.remote_pairing_target(&udid);
+    let lockdown_target = state.discovery.read().await.lockdown_target(&udid);
     let pairing_path = remote_pairing_path(&app, &udid)?;
     let token = CancellationToken::new();
     state.replace_task("jit", token.clone()).await;
@@ -593,7 +595,7 @@ pub async fn jit_start(
                 let result: CommandResult<()> = async {
                     let provider = jit_step(
                         "connecting to the device",
-                        crate::provider::provider_for(&udid),
+                        crate::provider::routed_provider_for(&udid, lockdown_target.as_ref()),
                     )
                     .await?;
                     let generation = jit_step("reading the iOS version", ios_version(&provider))
@@ -614,6 +616,7 @@ pub async fn jit_start(
                                         &provider,
                                         &pairing_path,
                                         "idevice-desktop",
+                                        remote_target.as_ref(),
                                     )
                                     .await?;
                                     (tunnel.adapter, tunnel.handshake)

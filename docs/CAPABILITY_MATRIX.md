@@ -1,6 +1,6 @@
 # `idevice-tools` GUI Coverage Matrix
 
-> Last updated: 2026-07-22
+> Last updated: 2026-07-24
 > Upstream baseline: `jkcoxson/idevice@8eed181f39a16ea70380ec8c3cff6bed07a1ef69`
 > Goal: make upstream command-line capabilities safe and complete to operate through a macOS GUI.
 
@@ -17,14 +17,15 @@ This matrix records capability coverage, not real-device compatibility. Real-dev
 
 | Capability group | Upstream command or service | GUI status | Current entry point or gap |
 | --- | --- | --- | --- |
-| Device discovery and selection | Provider and UDID selection | Covered | Global device selector and hot-plug monitoring |
+| Device discovery and selection | Provider and UDID selection | Partial | Unified catalog, device-targeted RemotePairing, and paired Bonjour TCP Lockdown fallback are integrated; associating an unidentified Bonjour-only record after a cold start remains pending |
 | USB pairing | `pair` | Partial | Pair and unpair are available; advanced pairing information is incomplete |
-| RemotePairing | `rppairing` | Partial | Used internally for iOS 17.0–17.3 tunnels; no dedicated management interface |
+| RemotePairing | `rppairing` | Partial | iOS 17.0–17.3 tunnels use the selected device's discovered endpoint; no dedicated pairing-management interface |
 | Lockdown information | `ideviceinfo`, `lockdown`, `device_info` | Partial | Overview and Diagnostics show common fields |
 | AFC files | `afc` | Covered | Browse, upload, download, create directories, and remove |
 | App container files | House Arrest | Partial | File-sharing apps are supported; broader container access is pending |
 | CoreDevice apps and processes | `app_service` | Partial | JIT uses launch; listing, processes, signals, and standard I/O are pending |
 | Application management | `ideviceinstaller`, `instproxy`, `application_listing` | Partial | User-app list, IPA installation, uninstallation, and icons |
+| Crash reports | `crash_logs` | Partial | List, filter, preview, and export are integrated; removal and real-device validation are pending |
 | Installation coordination | `installcoordination_proxy` | Not covered | Installation sessions and diagnostics need a dedicated design |
 | Device logs | `syslog_relay`, `os_trace_relay` | Covered | Live stream, pause, filter, and clear |
 | Device diagnostics | `diagnostics`, `diagnosticsservice` | Partial | Battery, Gestalt, IORegistry, NAND, and Wi-Fi |
@@ -45,7 +46,6 @@ This matrix records capability coverage, not real-device compatibility. Real-dev
 
 | Capability | Upstream command | Suggested GUI | Priority |
 | --- | --- | --- | --- |
-| Crash reports | `crash_logs` | Report list, preview, export, and removal | P0 |
 | Process control | `process_control` | Process list, launch, stop, signal, and output | P0 |
 | Performance overview | `sysmontap`, `energy_monitor`, `graphics` | Live metrics, process filters, time-series charts, and export | P0 |
 | Packet capture | `pcapd`, `network_monitor` | Interface or process filters, start/stop, and PCAP save | P0 |

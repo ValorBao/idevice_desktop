@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 
+use crate::discovery::DiscoveryCatalog;
+
 #[derive(Default)]
 pub struct AppState {
     pub selected_udid: RwLock<Option<String>>,
+    pub discovery: RwLock<DiscoveryCatalog>,
     pub tasks: Mutex<HashMap<String, CancellationToken>>,
 }
 

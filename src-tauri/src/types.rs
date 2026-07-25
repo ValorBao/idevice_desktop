@@ -9,9 +9,12 @@ pub struct HealthResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceSummary {
+    pub id: String,
     pub udid: String,
     pub device_id: u32,
     pub connection: String,
+    pub transports: Vec<String>,
+    pub connectable: bool,
     pub paired: bool,
     pub name: Option<String>,
     pub model: Option<String>,
@@ -93,6 +96,26 @@ pub struct InstalledApp {
     pub system: bool,
     pub icon_data_url: Option<String>,
     pub raw: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrashReportSummary {
+    pub name: String,
+    pub path: String,
+    pub kind: String,
+    pub process: String,
+    pub size_bytes: Option<u64>,
+    pub modified: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrashReportContent {
+    pub path: String,
+    pub content: String,
+    pub truncated: bool,
+    pub size_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

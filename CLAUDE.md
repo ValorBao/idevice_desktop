@@ -30,6 +30,22 @@ verified in.
 call in demo mode and routes thrown errors to the page's toast. Use it for device
 operations rather than repeating the try/catch.
 
+## Never call `window.confirm`, `window.prompt`, or `window.alert`
+
+They work in the browser and are silently dead on the desktop. wry does not implement
+the WKWebView JavaScript panel delegates, so WebKit resolves them with its cancel
+result: `confirm` always returns false, `prompt` always returns null, `alert` never
+appears. Nothing throws, so the action they guard just quietly does nothing — this
+already shipped three broken buttons.
+
+- Confirming something → `dialogs.confirmDestructive` in `src/api.ts`.
+- Asking for text → the `PromptModal` component. The dialog plugin has no text input,
+  so this is an in-app modal by necessity.
+
+Any new dialog plugin call also needs its permission in
+`src-tauri/capabilities/default.json`; `confirm` and `ask` both go through
+`dialog:allow-message`.
+
 ## `src/api.ts` is an enforced contract
 
 `src-tauri/src/types.rs` pulls `src/api.ts` in with `include_str!` and compares the

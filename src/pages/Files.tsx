@@ -4,6 +4,7 @@ import { fileSystem, installedApps } from '../data'
 import { api, dialogs, errorMessage, type FileSharingApp, type RemoteFileEntry } from '../api'
 import { bytes, displaySizeToBytes } from '../lib/format'
 import { useDeviceTask } from '../lib/hooks'
+import { PromptModal } from '../components/PromptModal'
 
 type FileSource = 'media' | 'app'
 
@@ -34,6 +35,7 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
   const sharingApps = desktop ? remoteSharingApps : demoSharingApps
   const [selectedBundle, setSelectedBundle] = useState(desktop ? '' : demoSharingApps[0]?.bundleId ?? '')
   const [selected, setSelected] = useState<RemoteFileEntry | null>(null)
+  const [namingFolder, setNamingFolder] = useState(false)
   const currentPath = `/${path.join('/')}`
   const selectedApp = sharingApps.find((app) => app.bundleId === selectedBundle)
   const bundleId = source === 'app' ? selectedBundle || undefined : undefined
@@ -103,18 +105,30 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
     await api.afcDownload(selected.path, target, udid, bundleId)
     onToast(`${selected.name} downloaded`)
   })
-  const makeDirectory = () => runTask(async () => {
+  const openFolderPrompt = () => {
     if (!sourceAvailable || currentReadOnly) return
-    const name = window.prompt('Folder name')?.trim()
-    if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) return
-    await api.afcMkdir(remoteChild(name), udid, bundleId)
-    onToast(`${name} created`)
-    await refresh()
-  }, 'Folder creation is available in the desktop app')
+    setNamingFolder(true)
+  }
+  const createFolder = (name: string) => {
+    setNamingFolder(false)
+    void runTask(async () => {
+      await api.afcMkdir(remoteChild(name), udid, bundleId)
+      onToast(`${name} created`)
+      await refresh()
+    }, 'Folder creation is available in the desktop app')
+  }
   const removeEntry = () => runTask(async () => {
-    if (!selected || selectedReadOnly || !window.confirm(`Delete ${selected.name}?`)) return
-    await api.afcRemove(selected.path, selected.isDirectory, udid, bundleId)
-    onToast(`${selected.name} removed`)
+    if (!selected || selectedReadOnly) return
+    const entry = selected
+    const confirmed = await dialogs.confirmDestructive(
+      entry.isDirectory
+        ? `Delete the folder “${entry.name}” and everything inside it? This cannot be undone.`
+        : `Delete “${entry.name}”? This cannot be undone.`,
+      'Delete',
+    )
+    if (!confirmed) return
+    await api.afcRemove(entry.path, entry.isDirectory, udid, bundleId)
+    onToast(`${entry.name} removed`)
     await refresh()
   })
 
@@ -134,7 +148,7 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
         <div className="file-source-copy"><b>{source === 'media' ? 'AFC media storage' : 'Shared app documents'}</b><small>{source === 'media' ? 'Maps to /var/mobile/Media; this is not the iOS system root.' : 'Only apps that enable iOS File Sharing appear here.'}</small></div>
       </div>
       <div className="breadcrumbs"><span>{source === 'media' ? 'com.apple.afc' : 'house_arrest'}</span><ChevronRight size={13} /><button onClick={() => setPath([])}>{rootLabel}</button>{path.map((part, index) => <span className="crumb-pair" key={`${part}-${index}`}><ChevronRight size={13} /><button onClick={() => setPath(path.slice(0, index + 1))}>{part}</button></span>)}{currentReadOnly && <em className="read-only-badge">Read only</em>}</div>
-      <div className="file-actions"><button className="primary-button" onClick={() => void uploadFile()} disabled={!sourceAvailable || currentReadOnly}><Upload size={14} />Upload</button><button onClick={() => void downloadFile()} disabled={!selected || selected.isDirectory}>Download</button><button onClick={() => void makeDirectory()} disabled={!sourceAvailable || currentReadOnly}><Plus size={14} />New folder</button><button className="danger-action" onClick={() => void removeEntry()} disabled={!selected || selectedReadOnly}>Delete</button></div>
+      <div className="file-actions"><button className="primary-button" onClick={() => void uploadFile()} disabled={!sourceAvailable || currentReadOnly}><Upload size={14} />Upload</button><button onClick={() => void downloadFile()} disabled={!selected || selected.isDirectory}>Download</button><button onClick={openFolderPrompt} disabled={!sourceAvailable || currentReadOnly}><Plus size={14} />New folder</button><button className="danger-action" onClick={() => void removeEntry()} disabled={!selected || selectedReadOnly}>Delete</button></div>
       <div className="file-table card">
         <div className="file-head"><span>Name</span><span>Kind</span><span>Modified</span><span>Size</span></div>
         {!sourceAvailable ? <div className="empty-card">No installed apps currently expose Documents through iOS File Sharing.</div> : !entries.length ? <div className="empty-card">This folder is empty.</div> : entries.map((entry) => {
@@ -144,6 +158,22 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
         })}
       </div>
       <div className="table-footer"><span>{entries.length} items</span><span>{displayedPath}</span></div>
+      {namingFolder && (
+        <PromptModal
+          title="New folder"
+          description={`Created in ${displayedPath}`}
+          label="Folder name"
+          placeholder="Exports"
+          validate={(name) => {
+            if (name === '.' || name === '..') return 'That name is reserved by the file system'
+            if (/[\\/]/.test(name)) return 'A folder name cannot contain a slash'
+            if (entries.some((entry) => entry.name === name)) return 'Something with that name already exists here'
+            return undefined
+          }}
+          onSubmit={createFolder}
+          onClose={() => setNamingFolder(false)}
+        />
+      )}
     </section>
   )
 }

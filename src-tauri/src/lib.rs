@@ -1,11 +1,11 @@
-mod commands;
-mod device_version;
-mod discovery;
-mod error;
-mod provider;
+pub mod commands;
+pub mod device_version;
+pub mod discovery;
+pub mod error;
+pub mod provider;
 mod state;
-mod tunnel;
-mod types;
+pub mod tunnel;
+pub mod types;
 mod utils;
 
 use state::AppState;

@@ -23,7 +23,8 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` built and passed `hdiutil verify` on 2026-07-25 |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, and discovery transport merging; no frontend, integration, or automated real-device tests yet |
-| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging and crash reports over USB and RemotePairing/RSD; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, and legacy location |
+| Real-device verification | iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
+| Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
 | Validation branch | `agent/network-crash-report`, pending merge |
 | Worktree | The next patch includes the iOS 17 network crash-report route and legacy location cleanup fixes; both have passed targeted real-device verification |
 
@@ -32,7 +33,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Module | Code status | Current assessment | Next verification |
 | --- | --- | --- | --- |
 | Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | iOS 17.0 USB/Bonjour merging and physical transitions pass; iOS 14.2 USB discovery, pairing state, catalog entry, and routing pass | Verify multiple devices, sleeping-device behavior, and cold-start association |
-| Pair, unpair, select, and disconnect | Integrated | Build passed; real-device verification pending | Trust accepted, trust rejected, and stale pairing records |
+| Pair, unpair, select, and disconnect | Integrated | iOS 14.2 unpair and re-pair pass end to end; the USB-only guard correctly refuses a network record on iOS 17.0 | First-time trust prompt on an untrusted host, trust rejected, and stale pairing records |
 | Overview | Integrated | iOS 17.0 Lockdown, storage, battery, and RSD screenshot paths pass; iOS 14.2 legacy screenshot returned a valid 379,466-byte PNG | Missing fields and DDI retry failure behavior |
 | Diagnostics | Five query categories integrated | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi request paths pass on iOS 14.2; battery also passes on iOS 17.0 | Permission failures and payload differences across more iOS versions |
 | AFC and file sharing | Integrated | Root listing passes on iOS 14.2 and 17.0; a 43-byte iOS 14.2 test file passed upload/download equality and cleanup | Large files, read-only paths, and app containers |
@@ -41,7 +42,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 14.2 and 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
-| JIT | Integrated | Build passed; real-device verification pending | Launch, attach, stop, and device-switch cleanup |
+| JIT | Integrated | iOS 17.0 passes tunnel, RSD, DVT handshake, app launch, memory-limit removal, and failure cleanup; `vAttach` is not covered | Attach against a development-signed app with the DDI mounted, plus stop and device-switch cleanup |
 | Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
@@ -117,7 +118,11 @@ The same iOS 14.2 device exposed the legacy location service after mounting its 
 
 The iOS 14.2 feature sweep captured a valid 379,466-byte PNG, received an OS Trace event, completed all five diagnostic request paths, and listed 10 user applications with a 9,478-byte sample icon. AFC listed 14 root entries and round-tripped a unique 43-byte test file through `/PublicStaging`; byte equality and post-delete absence were both verified. No application was installed or uninstalled, and the matching DeveloperDiskImage was unmounted after the sweep.
 
-Remaining acceptance gaps are multiple simultaneously visible devices, a sleeping device, reports larger than the 4 MB preview limit, and devices on iOS 15/16 or iOS 17.4+. The iOS 17.4+ CoreDeviceProxy crash-report route is integrated but not hardware-verified.
+The 2026-07-25 JIT and pairing session used two `src-tauri/examples` harnesses that call the project's real provider, tunnel, and command code. Pairing passed on both devices: the iOS 14.2 device completed a full unpair and re-pair, and the iOS 17.0 network record was correctly refused by the USB-only guard.
+
+JIT passed every step up to attaching. On the iOS 17.0 device the RemotePairing tunnel opened in 656 ms and exposed 57 RSD services, and the DVT handshake, application launch, and memory-limit removal all succeeded. `DebugProxyClient::connect_rsd` then failed with "service not found" because the tunnel exposed no debug-proxy service. `ImageMounter::copy_devices()` returned no images, and the `devicectl --auto-mount-ddis` path failed with CoreDeviceError 4000 while the device was reachable only over Wi-Fi. Nothing in this sequence indicated a defect: the failure-cleanup path terminated the launched process exactly as `cleanup_jit_process` intends. Separately, none of the 16 installed applications carry `get-task-allow`, so `vAttach` cannot succeed on this device without a development-signed build.
+
+Remaining acceptance gaps are multiple simultaneously visible devices, a sleeping device, reports larger than the 4 MB preview limit, devices on iOS 15/16 or iOS 17.4+, JIT attach against a development-signed application, and the first-time trust prompt on a host the device has never authorized. The iOS 17.4+ CoreDeviceProxy crash-report route is integrated but not hardware-verified.
 
 ## 6. Recommended Next Phase
 
@@ -179,6 +184,9 @@ Append future validation results using this format:
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Discovery, route selection, and crash-report round trip | Pass | Identified one paired and connectable USB record; traversed 315 reports and exported a nested 530,010-byte IPS byte-for-byte without deleting the source |
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Legacy location simulation set and clear | Pass | Matching DeveloperDiskImage was required; reconnect-before-clear fixed `Broken pipe`; test coordinates were cleared and the image was unmounted |
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Screenshot, OS Trace, diagnostics, AFC, and app listing | Pass | Valid PNG and log event returned; five diagnostic requests completed; 43-byte AFC file round-tripped and was removed; 10 user apps and a sample icon returned |
+| 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Unpair and re-pair through `device_pair` | Pass | Trust record removed, then re-paired in a single call; the host ID and usbmuxd device ID both changed, and the new record opened a Lockdown session reading 14.2. The device did not re-prompt because it still authorized this host while unlocked, so the first-time trust dialog stayed uncovered |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | `device_pair` transport guard | Pass | Refused a non-USB record with "Initial pairing requires a USB connection" before touching the trust relationship |
+| 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | JIT tunnel, launch, and failure cleanup | Partial | RemotePairing tunnel opened in 656 ms exposing 57 RSD services; DVT handshake, `launch_app`, and `disable_memory_limit` passed; `DebugProxyClient::connect_rsd` returned "service not found" because no DDI was mounted, and the cleanup path then terminated the launched process as designed |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

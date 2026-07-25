@@ -109,10 +109,20 @@ flowchart LR
 | System version | Transport | DDI approach |
 | --- | --- | --- |
 | iOS 16 and earlier | Legacy Lockdown developer services | Matching `DeveloperDiskImage.dmg` and `.signature` |
-
-JIT differs between generations beyond transport. iOS 17 and later launch the application through the DVT instruments server and attach by pid. On iOS 16 and earlier that service accepts `StartService` but never responds on the socket it returns, so JIT attaches by process name to an application the user has already opened, and never terminates it.
 | iOS 17.0–17.3.x | RemotePairing and RSD/DVT | Personalized DDI |
 | iOS 17.4 and later | Lockdown CoreDeviceProxy and RSD/DVT | Personalized DDI, with automatic mounting available on macOS |
+
+The two DDI generations come from different places, which matters when mounting through Choose files:
+
+| | iOS 16 and earlier | iOS 17 and later |
+| --- | --- | --- |
+| Source | Per-version `DeveloperDiskImage.dmg` archives, which Xcode no longer ships | `/Library/Developer/DeveloperDiskImages/iOS_DDI/`, installed with Xcode |
+| Files | The image and its `.signature` | The image, `Restore/BuildManifest.plist`, and the matching `Restore/Firmware/<image>.trustcache` |
+| Mounting | `mount_developer` with the signature | Personalized mounting, which requests a TSS signature for the device |
+
+The personalized bundle contains several images with a trustcache each; an image must be paired with its own trustcache. `pymobiledevice3` is a useful reference for this flow.
+
+JIT differs between generations beyond transport. iOS 17 and later launch the application through the DVT instruments server and attach by pid. On iOS 16 and earlier that service accepts `StartService` but never responds on the socket it returns, so JIT attaches by process name to an application the user has already opened, and never terminates it.
 
 ## 5. Repository Structure
 

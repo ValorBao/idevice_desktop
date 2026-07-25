@@ -140,6 +140,7 @@ export const api = {
   afcDownload: (remotePath: string, localPath: string, udid?: string, bundleId?: string) => call<void>('afc_download', { udid, remotePath, localPath, bundleId: bundleId ?? null }),
   fileSharingApps: (udid?: string) => call<FileSharingApp[]>('file_sharing_apps', { udid }),
   appsList: (udid?: string) => call<InstalledApp[]>('apps_list', { udid }),
+  appsDebuggable: (udid?: string) => call<InstalledApp[]>('apps_debuggable', { udid }),
   appInstall: (localPath: string, udid?: string) => call<void>('app_install', { udid, localPath }),
   appUninstall: (bundleId: string, udid?: string) => call<void>('app_uninstall', { udid, bundleId }),
   crashReportsList: (udid?: string) => call<CrashReportSummary[]>('crash_reports_list', { udid }),

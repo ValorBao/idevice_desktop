@@ -10,7 +10,7 @@
 use std::time::Duration;
 
 use idevice::{
-    IdeviceService, RsdService,
+    IdeviceService, ReadWrite, RsdService,
     core_device_proxy::CoreDeviceProxy,
     debug_proxy::DebugProxyClient,
     dvt::{process_control::ProcessControlClient, remote_server::RemoteServerClient},
@@ -20,10 +20,78 @@ use idevice::{
 };
 use idevice_desktop_lib::{
     device_version::{DeveloperGeneration, ios_version},
-    error::CommandResult,
-    provider::routed_provider_for,
+    error::{CommandError, CommandResult},
+    provider::{lockdown_service_socket, routed_provider_for},
     tunnel::open_remote_pairing_tunnel,
 };
+
+/// Mirrors `LEGACY_DVT_SERVICES` in `commands/developer.rs`.
+const LEGACY_DVT_SERVICES: [&str; 2] = [
+    "com.apple.instruments.remoteserver.DVTSecureSocketProxy",
+    "com.apple.instruments.remoteserver",
+];
+
+/// Mirrors `LEGACY_DEBUGSERVER_SERVICES` in `commands/developer.rs`.
+const LEGACY_DEBUGSERVER_SERVICES: [&str; 2] = [
+    "com.apple.debugserver.DVTSecureSocketProxy",
+    "com.apple.debugserver",
+];
+
+/// Mirrors `JitTransport` in `commands/developer.rs`.
+enum Transport {
+    Rsd {
+        adapter: AdapterHandle,
+        handshake: RsdHandshake,
+    },
+    Lockdown,
+}
+
+async fn first_available(
+    provider: &impl idevice::provider::IdeviceProvider,
+    candidates: &[&str],
+) -> CommandResult<Box<dyn ReadWrite>> {
+    let mut last = None;
+    for service in candidates {
+        match lockdown_service_socket(provider, service).await {
+            Ok(socket) => {
+                println!("     lockdown service: {service}");
+                return Ok(socket);
+            }
+            Err(error) => last = Some(error),
+        }
+    }
+    Err(last.unwrap_or_else(|| CommandError::new("jit", "no candidates", false)))
+}
+
+impl Transport {
+    async fn remote_server(
+        &mut self,
+        provider: &impl idevice::provider::IdeviceProvider,
+    ) -> CommandResult<RemoteServerClient<Box<dyn ReadWrite>>> {
+        match self {
+            Self::Rsd { adapter, handshake } => {
+                Ok(RemoteServerClient::connect_rsd(adapter, handshake).await?)
+            }
+            Self::Lockdown => Ok(RemoteServerClient::new(
+                first_available(provider, &LEGACY_DVT_SERVICES).await?,
+            )),
+        }
+    }
+
+    async fn debug_proxy(
+        &mut self,
+        provider: &impl idevice::provider::IdeviceProvider,
+    ) -> CommandResult<DebugProxyClient<Box<dyn ReadWrite>>> {
+        match self {
+            Self::Rsd { adapter, handshake } => {
+                Ok(DebugProxyClient::connect_rsd(adapter, handshake).await?)
+            }
+            Self::Lockdown => Ok(DebugProxyClient::new(
+                first_available(provider, &LEGACY_DEBUGSERVER_SERVICES).await?,
+            )),
+        }
+    }
+}
 
 const STEP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -112,24 +180,23 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
         version.major, version.minor, version.patch
     );
 
-    if generation == DeveloperGeneration::Legacy {
-        println!(
-            "\nRESULT: NOT SUPPORTED — jit_start rejects iOS 16 and earlier \
-             (\"JIT on iOS 16 and earlier requires the legacy debugserver transport\")"
-        );
-        return Ok(());
+    let pairing_path = dirs_app_data().join(format!("remote-pairing-{udid}.plist"));
+    if generation != DeveloperGeneration::Legacy {
+        println!("     pairing file: {}", pairing_path.display());
     }
 
-    let pairing_path = dirs_app_data().join(format!("remote-pairing-{udid}.plist"));
-    println!("     pairing file: {}", pairing_path.display());
-
-    let (mut adapter, mut handshake) = step("opening the developer tunnel", async {
+    let mut transport = step("opening the developer transport", async {
         match generation {
+            // iOS 16 and earlier publish each developer service over lockdown.
+            DeveloperGeneration::Legacy => Ok(Transport::Lockdown),
             DeveloperGeneration::CoreDeviceRemote => {
                 let tunnel =
                     open_remote_pairing_tunnel(&provider, &pairing_path, "idevice-desktop", None)
                         .await?;
-                Ok((tunnel.adapter, tunnel.handshake))
+                Ok(Transport::Rsd {
+                    adapter: tunnel.adapter,
+                    handshake: tunnel.handshake,
+                })
             }
             DeveloperGeneration::CoreDeviceLockdown => {
                 let proxy = CoreDeviceProxy::connect(&provider).await?;
@@ -137,64 +204,96 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
                 let mut adapter = proxy.create_software_tunnel()?.to_async_handle();
                 let stream = adapter.connect(rsd_port).await?;
                 let handshake = RsdHandshake::new(stream).await?;
-                Ok((adapter, handshake))
+                Ok(Transport::Rsd { adapter, handshake })
             }
-            DeveloperGeneration::Legacy => unreachable!(),
         }
     })
     .await?;
-    println!("     RSD services: {}", handshake.services.len());
+    match &transport {
+        Transport::Rsd { handshake, .. } => {
+            println!("     RSD services: {}", handshake.services.len())
+        }
+        // iOS 16 and earlier have no RSD; each service is opened on demand.
+        Transport::Lockdown => println!("     lockdown developer services"),
+    }
 
+    let mut launched_pid: Option<u64> = None;
     let Some(bundle_id) = bundle_id else {
         list_candidates(&provider).await?;
-        println!("\nRESULT: PASS (tunnel only) — re-run with a bundle id to attach");
+        println!("\nRESULT: PASS (transport only) — re-run with a bundle id to attach");
         return Ok(());
     };
 
-    let mut remote_server = step("connecting to the remote server", async {
-        Ok(RemoteServerClient::connect_rsd(&mut adapter, &mut handshake).await?)
-    })
-    .await?;
-    step("reading the remote-server handshake", async {
-        Ok(remote_server.read_message(0).await?)
-    })
-    .await?;
+    // On iOS 16 and earlier the instruments server never answers, so the user
+    // opens the app and this attaches by process name instead of launching it.
+    let attach_command = if matches!(transport, Transport::Lockdown) {
+        let executable = step("reading the app details", async {
+            let mut client = InstallationProxyClient::connect(&provider).await?;
+            let apps = client.get_apps(None, None).await?;
+            apps.get(&bundle_id)
+                .and_then(|value| value.as_dictionary())
+                .and_then(|dict| dict.get("CFBundleExecutable"))
+                .and_then(|value| value.as_string())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| CommandError::new("jit", "not installed", false))
+        })
+        .await?;
+        println!("     attaching by name: {executable} (must already be running)");
+        let encoded: String = executable
+            .bytes()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        format!("vAttachName;{encoded}")
+    } else {
+        let mut remote_server = step(
+            "connecting to the remote server",
+            transport.remote_server(&provider),
+        )
+        .await?;
+        step("reading the remote-server handshake", async {
+            Ok(remote_server.read_message(0).await?)
+        })
+        .await?;
 
-    let pid = step("launching the app", async {
+        let pid = step("launching the app", async {
+            let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
+            let pid = process_control
+                .launch_app(bundle_id.clone(), None, None, false, false)
+                .await?;
+            Ok(pid)
+        })
+        .await?;
+        println!("     pid: {pid}");
+
         let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
-        let pid = process_control
-            .launch_app(bundle_id.clone(), None, None, false, false)
-            .await?;
-        Ok(pid)
-    })
-    .await?;
-    println!("     pid: {pid}");
+        let _ = step("disabling the app memory limit", async {
+            Ok(process_control.disable_memory_limit(pid).await?)
+        })
+        .await;
+        drop(remote_server);
+        launched_pid = Some(pid);
+        format!("vAttach;{pid:x}")
+    };
 
-    let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
-    let _ = step("disabling the app memory limit", async {
-        Ok(process_control.disable_memory_limit(pid).await?)
-    })
-    .await;
-    drop(remote_server);
-
-    let mut debug = match step("connecting to the debug server", async {
-        Ok(DebugProxyClient::connect_rsd(&mut adapter, &mut handshake).await?)
-    })
+    let mut debug = match step(
+        "connecting to the debug server",
+        transport.debug_proxy(&provider),
+    )
     .await
     {
         Ok(debug) => debug,
         Err(error) => {
-            // Production `jit_start` terminates the launched app before returning.
-            println!("  -- exercising the failure cleanup path --");
-            cleanup(&mut adapter, &mut handshake, pid).await;
+            // Production `jit_start` terminates the app only if it launched it.
+            if let Some(pid) = launched_pid {
+                println!("  -- exercising the failure cleanup path --");
+                cleanup(&mut transport, &provider, pid).await;
+            }
             return Err(error);
         }
     };
 
     let response = step("attaching to the app", async {
-        Ok(debug
-            .send_command(format!("vAttach;{pid:x}").into())
-            .await?)
+        Ok(debug.send_command(attach_command.clone().into()).await?)
     })
     .await?;
     println!("     vAttach response: {response:?}");
@@ -204,7 +303,11 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     if let Some(detail) = attach_failure(response.as_deref()) {
         println!("     attach REJECTED: {detail}");
         drop(debug);
-        cleanup(&mut adapter, &mut handshake, pid).await;
+        if let Some(pid) = launched_pid {
+            cleanup(&mut transport, &provider, pid).await;
+        } else {
+            println!("     (nothing to clean up: the app was launched by the user)");
+        }
         return Err(idevice_desktop_lib::error::CommandError::new(
             "jit",
             format!("Unable to attach to {bundle_id}: {detail}"),
@@ -218,9 +321,13 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     .await;
     drop(debug);
 
-    cleanup(&mut adapter, &mut handshake, pid).await;
-
-    println!("\nRESULT: PASS — launched, attached, detached, and cleaned up {bundle_id}");
+    if let Some(pid) = launched_pid {
+        cleanup(&mut transport, &provider, pid).await;
+        println!("\nRESULT: PASS — launched, attached, detached, and cleaned up {bundle_id}");
+    } else {
+        // The process belongs to the user; detaching is the whole cleanup.
+        println!("\nRESULT: PASS — attached to and detached from {bundle_id} (left running)");
+    }
     Ok(())
 }
 
@@ -251,9 +358,13 @@ fn attach_failure(response: Option<&str>) -> Option<String> {
 }
 
 /// Mirrors `cleanup_jit_process` in `commands/developer.rs`.
-async fn cleanup(adapter: &mut AdapterHandle, handshake: &mut RsdHandshake, pid: u64) {
+async fn cleanup(
+    transport: &mut Transport,
+    provider: &impl idevice::provider::IdeviceProvider,
+    pid: u64,
+) {
     let result = step("terminating the launched app", async {
-        let mut remote_server = RemoteServerClient::connect_rsd(adapter, handshake).await?;
+        let mut remote_server = transport.remote_server(provider).await?;
         remote_server.read_message(0).await?;
         let mut process_control = ProcessControlClient::new(&mut remote_server).await?;
         Ok(process_control.kill_app(pid).await?)

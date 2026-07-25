@@ -1,11 +1,12 @@
 use std::future::Future;
 
 use idevice::{
-    IdeviceService, RsdService,
+    IdeviceService, ReadWrite, RsdService,
     amfi::AmfiClient,
     core_device_proxy::CoreDeviceProxy,
     debug_proxy::DebugProxyClient,
     dvt::{process_control::ProcessControlClient, remote_server::RemoteServerClient},
+    installation_proxy::InstallationProxyClient,
     lockdown::LockdownClient,
     mobile_image_mounter::ImageMounter,
     provider::IdeviceProvider,
@@ -26,6 +27,52 @@ use crate::{
 };
 
 const JIT_STEP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Lockdown names for the DVT instruments server on iOS 16 and earlier.
+///
+/// Releases from iOS 14 answer on the `DVTSecureSocketProxy` variant, which
+/// wraps the session in TLS. The plain name is kept for older systems that only
+/// publish that one.
+const LEGACY_DVT_SERVICES: [&str; 2] = [
+    "com.apple.instruments.remoteserver.DVTSecureSocketProxy",
+    "com.apple.instruments.remoteserver",
+];
+
+/// Lockdown names for debugserver on iOS 16 and earlier, in the same order and
+/// for the same reason as [`LEGACY_DVT_SERVICES`].
+const LEGACY_DEBUGSERVER_SERVICES: [&str; 2] = [
+    "com.apple.debugserver.DVTSecureSocketProxy",
+    "com.apple.debugserver",
+];
+
+/// Opens the first lockdown service in `candidates` that the device accepts.
+///
+/// Both developer services exist under two names depending on the system
+/// version, and the device answers `InvalidService` for the one it does not
+/// publish, so the alternatives are tried in order.
+async fn legacy_service_socket(
+    provider: &impl IdeviceProvider,
+    candidates: &[&str],
+    purpose: &str,
+) -> CommandResult<Box<dyn ReadWrite>> {
+    let mut last_error = None;
+    for service in candidates {
+        match crate::provider::lockdown_service_socket(provider, service).await {
+            Ok(socket) => return Ok(socket),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(CommandError::new(
+        "jit",
+        format!(
+            "Unable to reach {purpose} over lockdown. Mount a DeveloperDiskImage matching this iOS version, then retry. {}",
+            last_error
+                .map(|error| error.message)
+                .unwrap_or_else(|| "No service candidates were tried".into())
+        ),
+        true,
+    ))
+}
 
 async fn jit_step<T, F>(label: &str, future: F) -> CommandResult<T>
 where
@@ -71,16 +118,136 @@ fn decode_hex_message(message: &str) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
-async fn cleanup_jit_process(
-    adapter: &mut AdapterHandle,
-    handshake: &mut RsdHandshake,
-    pid: u64,
+/// How a JIT session brings an application under debugserver.
+///
+/// The two generations differ in more than transport. iOS 17 and later expose
+/// the DVT instruments server over an RSD tunnel, so the session launches the
+/// application itself and attaches by pid. On iOS 16 and earlier that service
+/// answers `StartService` but never responds on the socket it hands back
+/// (verified on iPhone10,1 / iOS 14.2, where both a TLS and a plaintext attempt
+/// stall indefinitely while debugserver on the same transport works), so the
+/// session attaches by process name to an application the user has already
+/// opened. That also means the legacy path must never terminate the process: it
+/// belongs to the user, not to us.
+enum JitTransport<'a, P: IdeviceProvider> {
+    Rsd {
+        adapter: AdapterHandle,
+        handshake: RsdHandshake,
+    },
+    /// Lockdown services are opened per connection rather than kept alive, since
+    /// each one is a separate service invocation.
+    Lockdown { provider: &'a P },
+}
+
+/// How the attach command identifies its target, and whether the session owns
+/// the process afterwards.
+enum AttachTarget {
+    /// The session launched the application, so it may terminate it on failure.
+    Launched(u64),
+    /// The user launched the application; the session only borrows it.
+    Running(String),
+}
+
+impl AttachTarget {
+    fn command(&self) -> String {
+        match self {
+            Self::Launched(pid) => format!("vAttach;{pid:x}"),
+            Self::Running(process) => {
+                let encoded: String = process.bytes().map(|byte| format!("{byte:02x}")).collect();
+                format!("vAttachName;{encoded}")
+            }
+        }
+    }
+}
+
+/// Extracts the process id from a debugserver `qProcessInfo` reply.
+///
+/// Fields are `key:value;` pairs and the pid is hexadecimal. The legacy path
+/// attaches by name, so this is how it learns which process it landed on.
+fn process_info_pid(reply: &str) -> Option<u64> {
+    reply
+        .split(';')
+        .filter_map(|field| field.split_once(':'))
+        .find(|(key, _)| *key == "pid")
+        .and_then(|(_, value)| u64::from_str_radix(value.trim(), 16).ok())
+}
+
+/// Reads the executable name for a bundle, which is how debugserver identifies
+/// a running process.
+async fn bundle_executable(
+    provider: &impl IdeviceProvider,
+    bundle_id: &str,
+) -> CommandResult<String> {
+    let mut client = InstallationProxyClient::connect(provider)
+        .await
+        .map_err(CommandError::from)?;
+    let apps = client
+        .get_apps(None, None)
+        .await
+        .map_err(CommandError::from)?;
+    apps.get(bundle_id)
+        .and_then(plist::Value::as_dictionary)
+        .and_then(|dict| dict.get("CFBundleExecutable"))
+        .and_then(plist::Value::as_string)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| {
+            CommandError::new(
+                "jit",
+                format!("{bundle_id} is not installed on this device"),
+                false,
+            )
+        })
+}
+
+impl<P: IdeviceProvider> JitTransport<'_, P> {
+    async fn remote_server(&mut self) -> CommandResult<RemoteServerClient<Box<dyn ReadWrite>>> {
+        match self {
+            Self::Rsd { adapter, handshake } => RemoteServerClient::connect_rsd(adapter, handshake)
+                .await
+                .map_err(CommandError::from),
+            Self::Lockdown { provider } => {
+                let socket = legacy_service_socket(
+                    *provider,
+                    &LEGACY_DVT_SERVICES,
+                    "the instruments server",
+                )
+                .await?;
+                Ok(RemoteServerClient::new(socket))
+            }
+        }
+    }
+
+    async fn debug_proxy(&mut self) -> CommandResult<DebugProxyClient<Box<dyn ReadWrite>>> {
+        match self {
+            Self::Rsd { adapter, handshake } => DebugProxyClient::connect_rsd(adapter, handshake)
+                .await
+                .map_err(CommandError::from),
+            Self::Lockdown { provider } => {
+                let socket =
+                    legacy_service_socket(*provider, &LEGACY_DEBUGSERVER_SERVICES, "debugserver")
+                        .await?;
+                Ok(DebugProxyClient::new(socket))
+            }
+        }
+    }
+}
+
+/// Terminates a process the session launched.
+///
+/// Does nothing for a process the user launched, which the legacy path attaches
+/// to rather than owning.
+async fn cleanup_jit_process<P: IdeviceProvider>(
+    transport: &mut JitTransport<'_, P>,
+    target: &AttachTarget,
 ) -> CommandResult<()> {
-    let mut remote_server = jit_step("connecting to the remote server for cleanup", async {
-        RemoteServerClient::connect_rsd(adapter, handshake)
-            .await
-            .map_err(CommandError::from)
-    })
+    let AttachTarget::Launched(pid) = target else {
+        return Ok(());
+    };
+    let pid = *pid;
+    let mut remote_server = jit_step(
+        "connecting to the remote server for cleanup",
+        transport.remote_server(),
+    )
     .await?;
     jit_step("reading the cleanup handshake", async {
         remote_server
@@ -636,100 +803,104 @@ pub async fn jit_start(
                     let generation = jit_step("reading the iOS version", ios_version(&provider))
                         .await?
                         .developer_generation();
-                    if generation == DeveloperGeneration::Legacy {
-                        return Err(CommandError::new(
-                            "jit",
-                            "JIT on iOS 16 and earlier requires the legacy debugserver transport",
-                            false,
-                        ));
-                    }
-                    let (mut adapter, mut handshake) =
-                        jit_step("opening the developer tunnel", async {
-                            let result = match generation {
-                                DeveloperGeneration::CoreDeviceRemote => {
-                                    let tunnel = open_remote_pairing_tunnel(
-                                        &provider,
-                                        &pairing_path,
-                                        "idevice-desktop",
-                                        remote_target.as_ref(),
-                                    )
-                                    .await?;
-                                    (tunnel.adapter, tunnel.handshake)
+                    let mut transport = jit_step("opening the developer transport", async {
+                        let result = match generation {
+                            // iOS 16 and earlier publish debugserver and the
+                            // instruments server directly over lockdown once a
+                            // DeveloperDiskImage is mounted.
+                            DeveloperGeneration::Legacy => JitTransport::Lockdown {
+                                provider: &provider,
+                            },
+                            DeveloperGeneration::CoreDeviceRemote => {
+                                let tunnel = open_remote_pairing_tunnel(
+                                    &provider,
+                                    &pairing_path,
+                                    "idevice-desktop",
+                                    remote_target.as_ref(),
+                                )
+                                .await?;
+                                JitTransport::Rsd {
+                                    adapter: tunnel.adapter,
+                                    handshake: tunnel.handshake,
                                 }
-                                DeveloperGeneration::CoreDeviceLockdown => {
-                                    let proxy = CoreDeviceProxy::connect(&provider)
-                                        .await
-                                        .map_err(CommandError::from)?;
-                                    let rsd_port = proxy.tunnel_info().server_rsd_port;
-                                    let adapter =
-                                        proxy.create_software_tunnel().map_err(|error| {
-                                            CommandError::new("tunnel", error.to_string(), true)
-                                        })?;
-                                    let mut adapter = adapter.to_async_handle();
-                                    let stream =
-                                        adapter.connect(rsd_port).await.map_err(|error| {
-                                            CommandError::new("tunnel", error.to_string(), true)
-                                        })?;
-                                    let handshake = RsdHandshake::new(stream)
-                                        .await
-                                        .map_err(CommandError::from)?;
-                                    (adapter, handshake)
-                                }
-                                DeveloperGeneration::Legacy => unreachable!(),
-                            };
-                            Ok(result)
-                        })
-                        .await?;
+                            }
+                            DeveloperGeneration::CoreDeviceLockdown => {
+                                let proxy = CoreDeviceProxy::connect(&provider)
+                                    .await
+                                    .map_err(CommandError::from)?;
+                                let rsd_port = proxy.tunnel_info().server_rsd_port;
+                                let adapter = proxy.create_software_tunnel().map_err(|error| {
+                                    CommandError::new("tunnel", error.to_string(), true)
+                                })?;
+                                let mut adapter = adapter.to_async_handle();
+                                let stream = adapter.connect(rsd_port).await.map_err(|error| {
+                                    CommandError::new("tunnel", error.to_string(), true)
+                                })?;
+                                let handshake = RsdHandshake::new(stream)
+                                    .await
+                                    .map_err(CommandError::from)?;
+                                JitTransport::Rsd { adapter, handshake }
+                            }
+                        };
+                        Ok(result)
+                    })
+                    .await?;
 
-                    let mut remote_server = jit_step("connecting to the remote server", async {
-                        RemoteServerClient::connect_rsd(&mut adapter, &mut handshake)
-                            .await
-                            .map_err(CommandError::from)
-                    })
-                    .await?;
-                    jit_step("reading the remote-server handshake", async {
-                        remote_server
-                            .read_message(0)
-                            .await
-                            .map_err(CommandError::from)
-                    })
-                    .await?;
-                    let pid = jit_step("launching the app", async {
-                        let mut process_control = ProcessControlClient::new(&mut remote_server)
-                            .await
-                            .map_err(CommandError::from)?;
-                        let pid = process_control
-                            .launch_app(bundle_id.clone(), None, None, false, false)
-                            .await
-                            .map_err(CommandError::from)?;
-                        let _ = jit_step("disabling the app memory limit", async {
-                            process_control
-                                .disable_memory_limit(pid)
+                    let target = if generation == DeveloperGeneration::Legacy {
+                        // The instruments server is unusable here, so the user
+                        // opens the application and the session attaches to it.
+                        let process = jit_step(
+                            "reading the app details",
+                            bundle_executable(&provider, &bundle_id),
+                        )
+                        .await?;
+                        AttachTarget::Running(process)
+                    } else {
+                        let mut remote_server =
+                            jit_step("connecting to the remote server", transport.remote_server())
+                                .await?;
+                        jit_step("reading the remote-server handshake", async {
+                            remote_server
+                                .read_message(0)
                                 .await
                                 .map_err(CommandError::from)
                         })
-                        .await;
-                        Ok(pid)
-                    })
-                    .await?;
-                    drop(remote_server);
-
-                    let mut debug = match jit_step("connecting to the debug server", async {
-                        DebugProxyClient::connect_rsd(&mut adapter, &mut handshake)
-                            .await
-                            .map_err(CommandError::from)
-                    })
-                    .await
-                    {
-                        Ok(debug) => debug,
-                        Err(error) => {
-                            let _ = cleanup_jit_process(&mut adapter, &mut handshake, pid).await;
-                            return Err(error);
-                        }
+                        .await?;
+                        let pid = jit_step("launching the app", async {
+                            let mut process_control = ProcessControlClient::new(&mut remote_server)
+                                .await
+                                .map_err(CommandError::from)?;
+                            let pid = process_control
+                                .launch_app(bundle_id.clone(), None, None, false, false)
+                                .await
+                                .map_err(CommandError::from)?;
+                            let _ = jit_step("disabling the app memory limit", async {
+                                process_control
+                                    .disable_memory_limit(pid)
+                                    .await
+                                    .map_err(CommandError::from)
+                            })
+                            .await;
+                            Ok(pid)
+                        })
+                        .await?;
+                        drop(remote_server);
+                        AttachTarget::Launched(pid)
                     };
+
+                    let mut debug =
+                        match jit_step("connecting to the debug server", transport.debug_proxy())
+                            .await
+                        {
+                            Ok(debug) => debug,
+                            Err(error) => {
+                                let _ = cleanup_jit_process(&mut transport, &target).await;
+                                return Err(error);
+                            }
+                        };
                     let response = match jit_step("attaching to the app", async {
                         debug
-                            .send_command(format!("vAttach;{pid:x}").into())
+                            .send_command(target.command().into())
                             .await
                             .map_err(CommandError::from)
                     })
@@ -738,7 +909,7 @@ pub async fn jit_start(
                         Ok(response) => response,
                         Err(error) => {
                             drop(debug);
-                            let _ = cleanup_jit_process(&mut adapter, &mut handshake, pid).await;
+                            let _ = cleanup_jit_process(&mut transport, &target).await;
                             return Err(error);
                         }
                     };
@@ -748,13 +919,33 @@ pub async fn jit_start(
                     // user with a JIT badge over a process that was never attached.
                     if let Some(detail) = attach_failure(response.as_deref()) {
                         drop(debug);
-                        let _ = cleanup_jit_process(&mut adapter, &mut handshake, pid).await;
+                        let _ = cleanup_jit_process(&mut transport, &target).await;
+                        let hint = match target {
+                            // A user-launched target is the common failure here:
+                            // the application simply is not running yet.
+                            AttachTarget::Running(ref process) => {
+                                format!(" Open {process} on the device first, then retry.")
+                            }
+                            AttachTarget::Launched(_) => String::new(),
+                        };
                         return Err(CommandError::new(
                             "jit",
-                            format!("Unable to attach to {bundle_id}: {detail}"),
+                            format!("Unable to attach to {bundle_id}: {detail}{hint}"),
                             false,
                         ));
                     }
+                    // Attaching by name does not reveal the pid, so ask for it.
+                    let pid = match target {
+                        AttachTarget::Launched(pid) => pid,
+                        AttachTarget::Running(_) => debug
+                            .send_command("qProcessInfo".into())
+                            .await
+                            .ok()
+                            .flatten()
+                            .as_deref()
+                            .and_then(process_info_pid)
+                            .unwrap_or(0),
+                    };
                     let _ = app.emit(
                         "jit://status",
                         StreamStatus {
@@ -808,6 +999,48 @@ pub async fn jit_stop(state: State<'_, AppState>) -> CommandResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_pid_from_a_process_info_reply() {
+        // debugserver reports the pid in hexadecimal.
+        assert_eq!(
+            process_info_pid("pid:16350;parent-pid:1;real-uid:1f5;"),
+            Some(0x16350)
+        );
+        assert_eq!(process_info_pid("parent-pid:1;pid:2a;"), Some(0x2a));
+    }
+
+    #[test]
+    fn ignores_a_process_info_reply_without_a_pid() {
+        assert_eq!(process_info_pid("E68"), None);
+        assert_eq!(process_info_pid(""), None);
+        assert_eq!(process_info_pid("pid:zz;"), None);
+    }
+
+    #[test]
+    fn builds_the_attach_command_for_each_target() {
+        assert_eq!(AttachTarget::Launched(0x2a).command(), "vAttach;2a");
+        // "ShopeeSG" hex-encoded, as debugserver expects for vAttachName.
+        assert_eq!(
+            AttachTarget::Running("ShopeeSG".into()).command(),
+            "vAttachName;53686f7065655347"
+        );
+    }
+
+    #[test]
+    fn legacy_service_candidates_prefer_the_secure_proxy() {
+        // Order matters. The device answers InvalidService for whichever name it
+        // does not publish, and systems from iOS 14 expect the secure variant,
+        // which is the plain name plus a suffix. Trying the plain name first on
+        // those systems would open the service without TLS.
+        for candidates in [LEGACY_DVT_SERVICES, LEGACY_DEBUGSERVER_SERVICES] {
+            assert_eq!(
+                candidates[0],
+                format!("{}.DVTSecureSocketProxy", candidates[1])
+            );
+            assert!(!candidates[1].ends_with(".DVTSecureSocketProxy"));
+        }
+    }
 
     #[test]
     fn treats_stop_packets_as_a_successful_attach() {

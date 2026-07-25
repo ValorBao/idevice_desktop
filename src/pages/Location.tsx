@@ -3,7 +3,8 @@ import L, { type Map as LeafletMap, type Marker as LeafletMarker } from 'leaflet
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
 import { presets } from '../data'
-import { api, errorMessage } from '../api'
+import { api } from '../api'
+import { useDeviceTask } from '../lib/hooks'
 
 export function Location({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
   const [presetId, setPresetId] = useState('sf')
@@ -14,6 +15,7 @@ export function Location({ desktop, udid, onToast }: { desktop: boolean; udid: s
   const mapElementRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const markerRef = useRef<LeafletMarker | null>(null)
+  const runTask = useDeviceTask(desktop, onToast)
   const preset = presets.find((item) => item.id === presetId) ?? presets[0]
   const loc = custom ? { ...custom, name: 'Selected location' } : preset
   const locationChanged = useCallback(() => {
@@ -29,22 +31,19 @@ export function Location({ desktop, udid, onToast }: { desktop: boolean; udid: s
     setCustom({ lat: Math.max(-90, Math.min(90, lat)), lng: wrappedLongitude })
     locationChanged()
   }, [locationChanged])
-  const toggleSimulation = async () => {
-    if (!desktop) return setSimulating((value) => !value)
-    try {
-      if (simulating) {
-        await api.locationStop()
-        setSimulating(false)
-        setTransport('')
-        onToast('Location simulation cleared')
-      } else {
-        const session = await api.locationStart(loc.lat, loc.lng, udid)
-        setSimulating(true)
-        setTransport(session.transport)
-        onToast(`Location applied over ${session.transport}`)
-      }
-    } catch (error) { onToast(errorMessage(error)) }
-  }
+  const toggleSimulation = () => runTask(async () => {
+    if (simulating) {
+      await api.locationStop()
+      setSimulating(false)
+      setTransport('')
+      onToast('Location simulation cleared')
+    } else {
+      const session = await api.locationStart(loc.lat, loc.lng, udid)
+      setSimulating(true)
+      setTransport(session.transport)
+      onToast(`Location applied over ${session.transport}`)
+    }
+  }, () => setSimulating((value) => !value))
   useEffect(() => { simulatingRef.current = simulating }, [simulating])
   useEffect(() => () => { if (desktop && simulatingRef.current) void api.locationStop() }, [desktop])
   useEffect(() => {

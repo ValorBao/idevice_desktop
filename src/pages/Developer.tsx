@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Device } from '../data'
 import { api, dialogs, errorMessage, events, type DeveloperStatus, type InstalledApp } from '../api'
+import { useDeviceTask } from '../lib/hooks'
 
 export function Developer({ desktop, device, onToast }: { desktop: boolean; device: Device; onToast: (message: string) => void }) {
   const [jit, setJit] = useState(!desktop)
@@ -10,6 +11,7 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   const [bundleId, setBundleId] = useState('')
   const [ddiProgress, setDdiProgress] = useState<number | null>(null)
   const jitRef = useRef(jit)
+  const runTask = useDeviceTask(desktop, onToast)
 
   const refresh = useCallback(async () => {
     if (!desktop) return
@@ -32,40 +34,35 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
     return () => unlisten?.()
   }, [desktop])
 
-  const toggleJit = async () => {
-    if (!desktop) return setJit((value) => !value)
-    try {
-      if (jit) {
-        await api.jitStop()
-        setJit(false)
-        setJitInfo(null)
-      } else {
-        if (!bundleId) return onToast('Choose a user application first')
-        const session = await api.jitStart(bundleId, device.udid)
-        setJit(true)
-        setJitInfo(session)
-      }
-    } catch (error) { onToast(errorMessage(error)) }
-  }
+  const toggleJit = () => runTask(async () => {
+    if (jit) {
+      await api.jitStop()
+      setJit(false)
+      setJitInfo(null)
+    } else {
+      if (!bundleId) return onToast('Choose a debuggable app first')
+      const session = await api.jitStart(bundleId, device.udid)
+      setJit(true)
+      setJitInfo(session)
+    }
+  }, () => setJit((value) => !value))
 
-  const developerAction = async (action: 'reveal' | 'enable' | 'accept') => {
-    if (!desktop) return onToast('Developer Mode controls are available in the desktop app')
-    try {
-      if (action === 'reveal') await api.developerReveal(device.udid)
-      if (action === 'enable') await api.developerEnable(device.udid)
-      if (action === 'accept') await api.developerAccept(device.udid)
-      onToast(action === 'reveal' ? 'Developer Mode is now visible in Settings' : 'Developer Mode request sent')
-      await refresh()
-    } catch (error) { onToast(errorMessage(error)) }
-  }
+  const developerAction = (action: 'reveal' | 'enable' | 'accept') => runTask(async () => {
+    if (action === 'reveal') await api.developerReveal(device.udid)
+    if (action === 'enable') await api.developerEnable(device.udid)
+    if (action === 'accept') await api.developerAccept(device.udid)
+    onToast(action === 'reveal' ? 'Developer Mode is now visible in Settings' : 'Developer Mode request sent')
+    await refresh()
+  }, 'Developer Mode controls are available in the desktop app')
 
-  const mountDdi = async () => {
-    if (!desktop) return onToast('DDI mounting is available in the desktop app')
+  // The mount tasks clear their own progress bar before handing the error on,
+  // so the shared handler still reports it.
+  const mountDdi = () => runTask(async () => {
+    const image = await dialogs.file('Developer Disk Image', ['dmg'])
+    if (!image || Array.isArray(image)) return
+    const major = Number.parseInt(device.ios.split('.')[0] ?? '0', 10)
+    setDdiProgress(0)
     try {
-      const image = await dialogs.file('Developer Disk Image', ['dmg'])
-      if (!image || Array.isArray(image)) return
-      const major = Number.parseInt(device.ios.split('.')[0] ?? '0', 10)
-      setDdiProgress(0)
       if (major >= 17) {
         const manifest = await dialogs.file('Build Manifest', ['plist'])
         const trust = await dialogs.file('Trust cache', ['trustcache', 'img4'])
@@ -76,31 +73,33 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
         if (!signature || Array.isArray(signature)) return setDdiProgress(null)
         await api.ddiMount({ imagePath: image, signaturePath: signature }, device.udid)
       }
-      setDdiProgress(100)
-      onToast('Developer Disk Image mounted')
-      await refresh()
-    } catch (error) { setDdiProgress(null); onToast(errorMessage(error)) }
-  }
+    } catch (error) {
+      setDdiProgress(null)
+      throw error
+    }
+    setDdiProgress(100)
+    onToast('Developer Disk Image mounted')
+    await refresh()
+  }, 'DDI mounting is available in the desktop app')
 
-  const autoMountDdi = async () => {
-    if (!desktop) return onToast('DDI mounting is available in the desktop app')
+  const autoMountDdi = () => runTask(async () => {
+    setDdiProgress(0)
     try {
-      setDdiProgress(0)
       await api.ddiMountAuto(device.udid)
-      setDdiProgress(100)
-      onToast('Developer Disk Image mounted automatically')
-      await refresh()
-    } catch (error) { setDdiProgress(null); onToast(errorMessage(error)) }
-  }
+    } catch (error) {
+      setDdiProgress(null)
+      throw error
+    }
+    setDdiProgress(100)
+    onToast('Developer Disk Image mounted automatically')
+    await refresh()
+  }, 'DDI mounting is available in the desktop app')
 
-  const unmountDdi = async () => {
-    if (!desktop) return onToast('DDI mounting is available in the desktop app')
-    try {
-      await api.ddiUnmount(device.udid)
-      onToast('Developer Disk Image unmounted')
-      await refresh()
-    } catch (error) { onToast(errorMessage(error)) }
-  }
+  const unmountDdi = () => runTask(async () => {
+    await api.ddiUnmount(device.udid)
+    onToast('Developer Disk Image unmounted')
+    await refresh()
+  }, 'DDI mounting is available in the desktop app')
   return (
     <section className="developer-page page-padding">
       <div className="dev-top-grid">

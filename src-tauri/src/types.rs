@@ -170,3 +170,330 @@ pub struct LocationSession {
     pub longitude: f64,
     pub transport: String,
 }
+
+/// Contract tests between these types and their TypeScript counterparts in
+/// `src/api.ts`.
+///
+/// `src/api.ts` is the frontend-backend contract, but nothing enforced it: a
+/// renamed or added Rust field still compiled and still built on the frontend,
+/// and the mismatch only surfaced as a silently undefined value at runtime.
+/// These tests read the TypeScript declarations and compare them against what
+/// serde actually emits.
+#[cfg(test)]
+mod contract {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    const API_TS: &str = include_str!("../../src/api.ts");
+
+    /// Field names serde emits for a value, which is what the frontend receives.
+    fn rust_fields<T: Serialize>(value: &T) -> BTreeSet<String> {
+        serde_json::to_value(value)
+            .expect("serializes")
+            .as_object()
+            .expect("object")
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    /// Top-level field names of `export type <name> = { ... }` in `src/api.ts`.
+    ///
+    /// Only depth one is collected, so a nested object literal such as
+    /// `battery` contributes its own name and not its inner fields; those are
+    /// covered by the test for the corresponding Rust type.
+    fn typescript_fields(name: &str) -> BTreeSet<String> {
+        let declaration = format!("export type {name} = ");
+        let start = API_TS
+            .find(&declaration)
+            .unwrap_or_else(|| panic!("{name} is not declared in src/api.ts"));
+        let body = &API_TS[start + declaration.len()..];
+        let open = body
+            .find('{')
+            .unwrap_or_else(|| panic!("{name} is not an object type"));
+
+        let mut fields = BTreeSet::new();
+        let mut depth = 0usize;
+        let mut token = String::new();
+        for character in body[open..].chars() {
+            match character {
+                '{' => {
+                    depth += 1;
+                    token.clear();
+                }
+                '}' => {
+                    depth -= 1;
+                    token.clear();
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                ':' if depth == 1 => {
+                    if let Some(field) = token
+                        .split(|character: char| character == ';' || character.is_whitespace())
+                        .next_back()
+                        .filter(|field| !field.is_empty())
+                    {
+                        fields.insert(field.trim_end_matches('?').to_owned());
+                    }
+                    token.clear();
+                }
+                _ => token.push(character),
+            }
+        }
+        assert!(!fields.is_empty(), "{name} parsed to no fields");
+        fields
+    }
+
+    fn assert_matches<T: Serialize>(name: &str, value: &T) {
+        let rust = rust_fields(value);
+        let typescript = typescript_fields(name);
+        assert_eq!(
+            rust,
+            typescript,
+            "\n{name} has drifted.\n  only in Rust:       {:?}\n  only in TypeScript: {:?}\n",
+            rust.difference(&typescript).collect::<Vec<_>>(),
+            typescript.difference(&rust).collect::<Vec<_>>(),
+        );
+    }
+
+    fn device_summary() -> DeviceSummary {
+        DeviceSummary {
+            id: String::new(),
+            udid: String::new(),
+            device_id: 0,
+            connection: String::new(),
+            transports: Vec::new(),
+            connectable: false,
+            paired: false,
+            name: None,
+            model: None,
+            ios: None,
+        }
+    }
+
+    fn battery_summary() -> BatterySummary {
+        BatterySummary {
+            level: None,
+            health_percent: None,
+            cycle_count: None,
+            temperature_celsius: None,
+            voltage_volts: None,
+            raw: serde_json::Value::Null,
+        }
+    }
+
+    fn storage_summary() -> StorageSummary {
+        StorageSummary {
+            total_bytes: 0,
+            free_bytes: 0,
+            used_bytes: 0,
+            block_size: 0,
+        }
+    }
+
+    #[test]
+    fn device_summary_matches_typescript() {
+        assert_matches("DeviceSummary", &device_summary());
+    }
+
+    #[test]
+    fn device_change_event_matches_typescript() {
+        assert_matches(
+            "DeviceChangeEvent",
+            &DeviceChangeEvent {
+                kind: String::new(),
+                device: None,
+                device_id: None,
+            },
+        );
+    }
+
+    #[test]
+    fn device_overview_matches_typescript() {
+        assert_matches(
+            "DeviceOverview",
+            &DeviceOverview {
+                udid: String::new(),
+                name: None,
+                product_type: None,
+                product_version: None,
+                build_version: None,
+                serial_number: None,
+                unique_chip_id: None,
+                hardware_model: None,
+                hardware_platform: None,
+                wifi_address: None,
+                connection: String::new(),
+                paired: false,
+                battery: battery_summary(),
+                storage: None,
+            },
+        );
+    }
+
+    /// `battery` and `storage` are inline object literals on the TypeScript
+    /// side, so they are compared against the nested declarations directly.
+    #[test]
+    fn nested_overview_types_match_typescript() {
+        let overview = typescript_fields("DeviceOverview");
+        assert!(overview.contains("battery") && overview.contains("storage"));
+
+        let declaration = API_TS
+            .find("battery: {")
+            .expect("battery literal in DeviceOverview");
+        let battery: BTreeSet<String> = API_TS[declaration..]
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.trim_start().starts_with('}'))
+            .filter_map(|line| line.split(':').next())
+            .map(|field| field.trim().to_owned())
+            .filter(|field| !field.is_empty())
+            .collect();
+        assert_eq!(rust_fields(&battery_summary()), battery);
+
+        let declaration = API_TS
+            .find("storage: null | {")
+            .expect("storage literal in DeviceOverview");
+        let storage: BTreeSet<String> = API_TS[declaration..]
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.trim_start().starts_with('}'))
+            .filter_map(|line| line.split(':').next())
+            .map(|field| field.trim().to_owned())
+            .filter(|field| !field.is_empty())
+            .collect();
+        assert_eq!(rust_fields(&storage_summary()), storage);
+    }
+
+    #[test]
+    fn remote_file_entry_matches_typescript() {
+        assert_matches(
+            "RemoteFileEntry",
+            &RemoteFileEntry {
+                name: String::new(),
+                path: String::new(),
+                kind: String::new(),
+                is_directory: false,
+                size: 0,
+                modified: String::new(),
+            },
+        );
+    }
+
+    #[test]
+    fn file_sharing_app_matches_typescript() {
+        assert_matches(
+            "FileSharingApp",
+            &FileSharingApp {
+                bundle_id: String::new(),
+                name: String::new(),
+            },
+        );
+    }
+
+    #[test]
+    fn installed_app_matches_typescript() {
+        assert_matches(
+            "InstalledApp",
+            &InstalledApp {
+                bundle_id: String::new(),
+                name: String::new(),
+                version: String::new(),
+                size_bytes: 0,
+                system: false,
+                icon_data_url: None,
+                raw: serde_json::Value::Null,
+            },
+        );
+    }
+
+    #[test]
+    fn crash_report_types_match_typescript() {
+        assert_matches(
+            "CrashReportSummary",
+            &CrashReportSummary {
+                name: String::new(),
+                path: String::new(),
+                kind: String::new(),
+                process: String::new(),
+                size_bytes: None,
+                modified: String::new(),
+            },
+        );
+        assert_matches(
+            "CrashReportContent",
+            &CrashReportContent {
+                path: String::new(),
+                content: String::new(),
+                truncated: false,
+                size_bytes: 0,
+            },
+        );
+    }
+
+    #[test]
+    fn operation_progress_matches_typescript() {
+        assert_matches(
+            "OperationProgress",
+            &OperationProgress {
+                operation: String::new(),
+                item: String::new(),
+                percent: 0,
+            },
+        );
+    }
+
+    #[test]
+    fn device_log_matches_typescript() {
+        assert_matches(
+            "DeviceLog",
+            &DeviceLog {
+                timestamp: String::new(),
+                level: String::new(),
+                process: String::new(),
+                pid: 0,
+                message: String::new(),
+                subsystem: None,
+                category: None,
+            },
+        );
+    }
+
+    #[test]
+    fn developer_status_matches_typescript() {
+        assert_matches(
+            "DeveloperStatus",
+            &DeveloperStatus {
+                developer_mode: None,
+                ddi_mounted: false,
+                ddi_images: serde_json::Value::Null,
+                rsd_available: false,
+            },
+        );
+    }
+
+    #[test]
+    fn jit_session_matches_typescript() {
+        assert_matches(
+            "JitSession",
+            &JitSession {
+                bundle_id: String::new(),
+                pid: 0,
+                response: None,
+            },
+        );
+    }
+
+    #[test]
+    fn location_session_matches_typescript() {
+        assert_matches(
+            "LocationSession",
+            &LocationSession {
+                latitude: 0.0,
+                longitude: 0.0,
+                transport: String::new(),
+            },
+        );
+    }
+}

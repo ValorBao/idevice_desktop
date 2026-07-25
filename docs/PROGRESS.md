@@ -42,7 +42,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | Mounted-image status and iOS 17.0 RSD screenshot path verified | Mount/unmount mutations and devices from iOS 16 and 17.4+ |
 | JIT | Integrated | Build passed; real-device verification pending | Launch, attach, stop, and device-switch cleanup |
-| Location simulation | Legacy and DVT/RSD paths integrated | Interactive Leaflet map, presets, transport selection, and page-exit cleanup are integrated | Real-device map selection, presets, and restoration of real GPS |
+| Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Three themes and light/dark appearance | Integrated | Frontend build passed | Small windows, long content, and accessibility |
 
@@ -113,6 +113,8 @@ The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the follow
 
 The 2026-07-25 iPhone10,1 and iOS 14.2 session also verified a paired, connectable USB catalog entry and correct USB provider routing. The crash-report traversal found 315 reports, including nested entries, then read and exported a 530,010-byte `.ips` byte-for-byte without removing it from the phone. This device did not advertise a network route during the session.
 
+The same iOS 14.2 device exposed the legacy location service after mounting its matching DeveloperDiskImage. Setting `31.2304, 121.4737` succeeded, but the device closed that service connection after the set command, so the original same-connection clear failed with `Broken pipe`. Reconnecting before clear fixed the implementation; the repeated set/clear round trip passed and restored real GPS. The test DeveloperDiskImage was unmounted afterward.
+
 Remaining acceptance gaps are multiple simultaneously visible devices, a sleeping device, reports larger than the 4 MB preview limit, and devices on iOS 15/16 or iOS 17.4+. The iOS 17.4+ CoreDeviceProxy crash-report route is integrated but not hardware-verified.
 
 ## 6. Recommended Next Phase
@@ -173,6 +175,7 @@ Append future validation results using this format:
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | Crash-report list, preview, and export | Pass | Listed reports, previewed a 179,345-byte IPS, and verified complete export byte-for-byte; a keep-on-device baseline copied 570 reports |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | Network | Crash-report list, preview, and export over RemotePairing/RSD | Pass | The direct Lockdown service failed twice with `UnexpectedEof`; switching to the RSD shim listed and exported a 179,345-byte IPS byte-for-byte |
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Discovery, route selection, and crash-report round trip | Pass | Identified one paired and connectable USB record; traversed 315 reports and exported a nested 530,010-byte IPS byte-for-byte without deleting the source |
+| 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Legacy location simulation set and clear | Pass | Matching DeveloperDiskImage was required; reconnect-before-clear fixed `Broken pipe`; test coordinates were cleared and the image was unmounted |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

@@ -1,7 +1,7 @@
 # idevice desktop Development Progress
 
 > Last updated: 2026-07-26
-> Release: 0.0.2 release candidate; 0.0.1 is the current published build
+> Release: 0.0.2 Developer Preview
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
 The product direction is confirmed: developer tools first, macOS-only for the initial release, and long-term GUI coverage of device capabilities that currently require `idevice-tools`.

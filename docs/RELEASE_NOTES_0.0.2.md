@@ -21,7 +21,7 @@ This patch turns the first preview into a substantially more reliable device lab
 
 ## Validation
 
-The release candidate has passed the project’s frontend production build, Rust checks, unit tests, formatting, and strict linting during development. Real-device sessions cover:
+The release build passed the project’s frontend production build, Rust checks, unit tests, formatting, and strict linting. Real-device sessions cover:
 
 - iPhone10,1 on iOS 14.2 for the Legacy generation.
 - iPhone11,8 on iOS 17.0 for the CoreDevice RemotePairing generation.

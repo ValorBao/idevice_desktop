@@ -39,6 +39,7 @@ Requirements include Node.js, Rust, a working usbmuxd service, and the platform 
 
 ```bash
 npm install
+npm test
 npm run desktop:dev
 ```
 

@@ -11,6 +11,7 @@ covers only what is easy to get wrong.
 ```bash
 npm run dev              # browser demo mode — mock data, no device
 npm run desktop:dev      # Tauri desktop — real devices (use this for anything device-related)
+npm test                 # Vitest frontend regression suite
 npm run build            # tsc -b && vite build
 cargo test  --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
@@ -94,6 +95,8 @@ registers there, or the session leaks past the device it belongs to.
 - The `idevice` dependency is pinned to a git revision
   (`8eed181f39a16ea70380ec8c3cff6bed07a1ef69`). Do not bump it casually; the upgrade
   process is in `docs/PROJECT.md`.
+- Rust is pinned by `rust-toolchain.toml`; CI and local checks must use the same
+  version so new Clippy releases cannot break an unchanged commit.
 - Destructive actions — uninstall, delete, unpair — require explicit confirmation.
 - The UI is fixed to one dark theme. `.theme-clean.mode-dark` in `styles.css` carries
   the base variables; `device-lab.css` layers over it.

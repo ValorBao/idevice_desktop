@@ -174,7 +174,7 @@ JIT differs between generations beyond transport. iOS 17 and later launch the ap
 ### Requirements
 
 - Node.js and npm
-- A Rust toolchain
+- Rustup; the repository selects the verified Rust 1.89.0 toolchain and its rustfmt and Clippy components through `rust-toolchain.toml`
 - The platform development dependencies required by Tauri 2
 - An accessible usbmuxd service
 - An iPhone or iPad and a data cable for real-device work, including approval of the device trust prompt
@@ -197,6 +197,7 @@ npm run desktop:build
 - `src/api.ts` is the frontend-backend contract. Any Rust response-type change must be reflected in its TypeScript counterpart.
 - Switching or disconnecting a device must cancel tasks that depend on the previous device so log, JIT, and location sessions cannot leak.
 - Features that use iOS developer services must select a transport through `device_version.rs` instead of assuming one protocol for every system version.
+- Keep local and CI Rust checks on the version in `rust-toolchain.toml`; floating Stable Clippy releases can introduce new warnings without a source change.
 - The upstream `idevice` dependency is pinned to `8eed181f39a16ea70380ec8c3cff6bed07a1ef69`. Upgrades follow the process below.
 
 ### Upgrading the pinned `idevice` revision

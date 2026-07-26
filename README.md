@@ -8,7 +8,7 @@ This is an independent project and is not an official `jkcoxson/idevice` applica
 
 ## Release
 
-The current published release is [0.0.1 Developer Preview](https://github.com/ValorBao/idevice_desktop/releases/tag/v0.0.1). The source tree is prepared as the 0.0.2 release candidate; see the [draft release notes](docs/RELEASE_NOTES_0.0.2.md).
+The current release is [0.0.2 Developer Preview](https://github.com/ValorBao/idevice_desktop/releases/tag/v0.0.2); see the [release notes](docs/RELEASE_NOTES_0.0.2.md).
 
 Developer Preview builds are unsigned and unnotarized Apple Silicon builds.
 
@@ -66,7 +66,7 @@ npm run desktop:build -- --bundles dmg
 - Builds support Apple Silicon only and are not signed with an Apple Developer ID or notarized.
 - USB-to-network Lockdown fallback is verified on an iPhone XR running iOS 17.0.
 - USB discovery, nested crash-report export, legacy screenshots, OS Trace, diagnostics, AFC file round trips, application listing with icons, and legacy location set/clear are verified on an iPhone10,1 running iOS 14.2.
-- The published 0.0.1 build can fail to read crash reports over an iOS 17 network route and to clear a legacy simulated location. Both issues are fixed in the 0.0.2 release candidate.
+- The published 0.0.1 build can fail to read crash reports over an iOS 17 network route and to clear a legacy simulated location. Both issues are fixed in 0.0.2.
 - Validation covers one device per developer-service generation: iOS 14.2, 17.0, and 26.5. iOS 15 and 16 share the Legacy branch with 14.2 and are covered by it, except for Developer Mode, which arrived in iOS 16 and no verified device exercises.
 - Sleeping-device behavior, the first-time trust prompt on an unauthorized host, a JIT attach on iOS 17.4 or later, and reports larger than the 4 MB preview limit still require validation.
 

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event'
-import { open, save } from '@tauri-apps/plugin-dialog'
+import { confirm, open, save } from '@tauri-apps/plugin-dialog'
 
 export type CommandError = { kind: string; message: string; retryable: boolean }
 
@@ -174,6 +174,19 @@ export const dialogs = {
   file: (name: string, extensions: string[]) => open({ multiple: false, filters: [{ name, extensions }] }),
   anyFile: () => open({ multiple: false }),
   saveFile: (defaultPath: string) => save({ defaultPath }),
+  /**
+   * Confirms a destructive action.
+   *
+   * This must go through the dialog plugin rather than `window.confirm`: wry
+   * does not implement the WKWebView JavaScript panel delegates, so the native
+   * `confirm` never opens a dialog and resolves to false, silently cancelling
+   * whatever it was guarding. In browser demo mode there is no plugin, so fall
+   * back to the real `window.confirm`, which works there.
+   */
+  confirmDestructive: (message: string, actionLabel: string) =>
+    isDesktopRuntime()
+      ? confirm(message, { title: actionLabel, kind: 'warning', okLabel: actionLabel, cancelLabel: 'Cancel' })
+      : Promise.resolve(window.confirm(message)),
 }
 
 export const errorMessage = (error: unknown) => {

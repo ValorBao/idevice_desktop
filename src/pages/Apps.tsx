@@ -88,7 +88,11 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
       onToast(`${selected.name} uninstalled`)
       return
     }
-    if (!window.confirm(`Uninstall ${selected.name}?`)) return
+    const confirmed = await dialogs.confirmDestructive(
+      `Uninstall “${selected.name}”? Its data on the device is removed with it.`,
+      'Uninstall',
+    )
+    if (!confirmed) return
     try {
       setInstall({ name: selected.name, progress: 0, phase: 'Uninstalling' })
       await api.appUninstall(selected.bundle, udid)

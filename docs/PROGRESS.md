@@ -18,11 +18,12 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Item | Status |
 | --- | --- |
 | Frontend production build | Passed on 2026-07-26 with `npm run build` |
+| Frontend regression tests | Passed on 2026-07-26: 18 passed, 0 failed across five Vitest files |
 | Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.2_aarch64.dmg` built on 2026-07-26; passes `hdiutil verify`, identifies itself as 0.0.2 with a macOS 11.0 minimum, carries the CSP in its arm64 release binary, and ships both licence files byte-identical to their sources |
-| Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
+| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, and a browser-demo interaction path. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
 | Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
@@ -151,7 +152,7 @@ PRs: #23, #24, and the Files completeness follow-up.
 
 ## 5. Active Validation
 
-The frontend production build, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
+The frontend production build, 18 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
 
 The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 
@@ -212,7 +213,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 ### P1: Testing and Stability
 
 - ~~Cover the command modules that had no tests at all.~~ Started on 2026-07-26: `device.rs` and `location.rs` were the two largest untested modules, and both now cover their pure decision logic — selection routing, connection labelling, and coordinate validation. `overview.rs`, `screenshot.rs`, `diagnostics.rs`, and `logs.rs` remain untested, though they are small and mostly pass values through.
-- **Add a frontend test harness.** There is none, which leaves the UI as the only layer with no safety net: a refactor is checked by the type checker and the production build alone, and neither catches a chart that renders wrongly. Vitest with Testing Library, scoped to `useDeviceTask` branching, page rendering under `desktop` true and false, and the pure helpers in `src/lib/`. Coverage percentage is not the target.
+- ~~Add a frontend test harness.~~ Done on 2026-07-26 with Vitest, Testing Library, jsdom, and 18 focused tests. The baseline covers `useDeviceTask` branching, Tauri destructive confirmation, `PromptModal`, native drag/drop coordinate handling and cleanup, Files create/delete/folder-drop/progress/cancel flows, Apps uninstall/IPA-drop flows, and a browser-demo interaction path. Coverage percentage is deliberately not the target.
 - Integration tests are deliberately not planned. The integration boundary in this project is a real device, and a mocked stand-in would prove very little for the effort.
 
 - ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.
@@ -225,7 +226,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 - ~~Split `App.tsx` into page components, shared components, and helpers.~~ Done on 2026-07-25: the shell dropped from 1,147 to 233 lines, with eight page modules, five shared components, and two helper modules. The move was verified line by line and the production bundle was unchanged apart from module boundaries.
 - ~~Extract the repeated desktop-guard and toast-on-error pattern into a shared hook.~~ Done on 2026-07-25: `useDeviceTask` took the duplicated catch-and-toast line from 15 occurrences to 3. The remaining three are load paths whose catch clauses do more than report.
 - Consolidate device sessions, notifications, and asynchronous loading into a clear state model.
-- Add component tests for critical interactions and audit keyboard access, focus, and color contrast.
+- Expand component tests as new regressions appear, and audit keyboard access, focus, and color contrast.
 
 ### P2: Release Preparation
 

@@ -11,6 +11,7 @@ covers only what is easy to get wrong.
 ```bash
 npm run dev              # browser demo mode — mock data, no device
 npm run desktop:dev      # Tauri desktop — real devices (use this for anything device-related)
+npm test                 # Vitest frontend regression suite
 npm run build            # tsc -b && vite build
 cargo test  --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings

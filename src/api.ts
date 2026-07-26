@@ -59,6 +59,8 @@ export type RemoteFileEntry = {
   isDirectory: boolean
   size: number
   modified: string
+  /** The entry exists but its metadata could not be read; only `name` is real. */
+  unreadable: boolean
 }
 
 export type FileSharingApp = { bundleId: string; name: string }
@@ -135,9 +137,12 @@ export const api = {
   },
   afcList: (path: string, udid?: string, bundleId?: string) => call<RemoteFileEntry[]>('afc_list', { udid, path, bundleId: bundleId ?? null }),
   afcMkdir: (path: string, udid?: string, bundleId?: string) => call<void>('afc_mkdir', { udid, path, bundleId: bundleId ?? null }),
+  afcCreateFile: (path: string, udid?: string, bundleId?: string) => call<void>('afc_create_file', { udid, path, bundleId: bundleId ?? null }),
+  afcRename: (from: string, to: string, udid?: string, bundleId?: string) => call<void>('afc_rename', { udid, from, to, bundleId: bundleId ?? null }),
   afcRemove: (path: string, recursive: boolean, udid?: string, bundleId?: string) => call<void>('afc_remove', { udid, path, recursive, bundleId: bundleId ?? null }),
   afcUpload: (localPath: string, remotePath: string, udid?: string, bundleId?: string) => call<void>('afc_upload', { udid, localPath, remotePath, bundleId: bundleId ?? null }),
   afcDownload: (remotePath: string, localPath: string, udid?: string, bundleId?: string) => call<void>('afc_download', { udid, remotePath, localPath, bundleId: bundleId ?? null }),
+  afcTransferCancel: () => call<void>('afc_transfer_cancel', {}),
   fileSharingApps: (udid?: string) => call<FileSharingApp[]>('file_sharing_apps', { udid }),
   appsList: (udid?: string) => call<InstalledApp[]>('apps_list', { udid }),
   appsDebuggable: (udid?: string) => call<InstalledApp[]>('apps_debuggable', { udid }),
@@ -166,6 +171,7 @@ export const events = {
   logLine: (handler: (payload: DeviceLog) => void) => listen<DeviceLog>('logs://line', (event) => handler(event.payload)),
   appProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('apps://install-progress', (event) => handler(event.payload)),
   ddiProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('developer://ddi-progress', (event) => handler(event.payload)),
+  transferProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('files://transfer-progress', (event) => handler(event.payload)),
   raw: <T>(name: string, handler: (event: Event<T>) => void) => listen<T>(name, handler),
 }
 

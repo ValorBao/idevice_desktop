@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { Search, Upload } from 'lucide-react'
 import { installedApps, type AppInfo } from '../data'
 import { api, dialogs, errorMessage, events } from '../api'
 import { installedToApp } from '../lib/device'
+import { useFileDrop } from '../lib/useFileDrop'
 import { AppIcon } from '../components/AppIcon'
 
 export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
@@ -74,12 +75,29 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
     return () => window.clearInterval(timer)
   }, [install?.name, onToast, desktop])
 
+  /**
+   * Browser demo only. On the desktop Tauri consumes OS drags before the
+   * webview sees them, so this never fires there and `useFileDrop` handles it
+   * instead — see that hook for why a browser `File` could not have been used.
+   */
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setDragging(false)
-    const file = event.dataTransfer.files[0]
-    void startInstall(file?.name ?? 'Sideloaded.ipa', (file as File & { path?: string })?.path)
+    void startInstall(event.dataTransfer.files[0]?.name ?? 'Sideloaded.ipa')
   }
+
+  const dropZoneRef = useRef<HTMLDivElement>(null)
+  const handleDroppedIpa = useCallback((paths: string[]) => {
+    const ipa = paths.find((path) => path.toLowerCase().endsWith('.ipa'))
+    if (!ipa) {
+      onToast('Only a signed .ipa can be sideloaded')
+      return
+    }
+    void startInstall(ipa, ipa)
+    // startInstall is redefined every render but only reads current state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onToast, install, udid])
+  const nativeDragging = useFileDrop(dropZoneRef, desktop, handleDroppedIpa)
 
   const uninstallSelected = async () => {
     if (!selected) return
@@ -106,7 +124,7 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
     <section className="apps-page page-padding compact-padding">
       <div className="apps-list-panel">
         <div className="apps-toolbar"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search installed apps…" /></label><button className="primary-button" onClick={() => void startInstall()}><Upload size={15} />Install signed .ipa</button></div>
-        <div className={`drop-zone ${dragging ? 'dragging' : ''}`} onClick={() => void startInstall()} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}><span><Upload size={19} /></span><div><b>Drop a signed .ipa here to sideload</b><small>Code signature required · verified before transfer</small></div></div>
+        <div ref={dropZoneRef} className={`drop-zone ${dragging || nativeDragging ? 'dragging' : ''}`} onClick={() => void startInstall()} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}><span><Upload size={19} /></span><div><b>Drop a signed .ipa here to sideload</b><small>Code signature required · verified before transfer</small></div></div>
         {install && <div className="install-card card"><div><b>{install.name}</b><code>{install.progress}%</code></div><div className="progress"><span style={{ width: `${install.progress}%` }} /></div><small>{install.phase}…</small></div>}
         <div className="app-list">{filtered.map((app) => <button key={app.id} className={selectedId === app.id ? 'active' : ''} onClick={() => setSelectedId(app.id)}><AppIcon app={app} /><span><b>{app.name}</b><small>{app.bundle}</small></span><code className={app.fresh ? 'fresh' : ''}>{app.fresh ? 'new' : app.system ? 'system' : 'user'}</code><small className="app-size">{app.size}</small></button>)}</div>
       </div>

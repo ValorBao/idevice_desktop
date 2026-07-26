@@ -6,15 +6,119 @@ use idevice::{
     installation_proxy::InstallationProxyClient,
     services::house_arrest::HouseArrestClient,
 };
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     error::{CommandError, CommandResult},
     provider::selected_provider,
     state::AppState,
-    types::{FileSharingApp, RemoteFileEntry},
+    types::{FileSharingApp, OperationProgress, RemoteFileEntry},
     utils::dict_string,
 };
+
+/// Matches the AFC wire limit, so a chunk here is one protocol transfer rather
+/// than something the library has to split again.
+const TRANSFER_CHUNK: usize = 1024 * 1024;
+
+/// Key under which a transfer registers its cancellation token. Transfers are
+/// mutually exclusive by design: starting a second one cancels the first, and
+/// switching or disconnecting a device cancels whichever is running.
+const TRANSFER_TASK: &str = "file-transfer";
+
+/// Reports transfer progress, but only when the whole-percent figure actually
+/// changes. A gigabyte at 1 MB per chunk is a thousand iterations; emitting on
+/// each one would flood the event channel to say the same thing.
+struct TransferProgress {
+    app: AppHandle,
+    operation: &'static str,
+    item: String,
+    total: u64,
+    transferred: u64,
+    last_percent: u64,
+}
+
+impl TransferProgress {
+    fn new(app: AppHandle, operation: &'static str, item: String, total: u64) -> Self {
+        let progress = Self {
+            app,
+            operation,
+            item,
+            total,
+            transferred: 0,
+            last_percent: 0,
+        };
+        progress.emit(0);
+        progress
+    }
+
+    fn advance(&mut self, bytes: usize) {
+        self.transferred += bytes as u64;
+        let percent = transfer_percent(self.transferred, self.total);
+        if percent != self.last_percent {
+            self.last_percent = percent;
+            self.emit(percent);
+        }
+    }
+
+    fn finish(&self) {
+        if self.last_percent != 100 {
+            self.emit(100);
+        }
+    }
+
+    fn emit(&self, percent: u64) {
+        let _ = self.app.emit(
+            "files://transfer-progress",
+            OperationProgress {
+                operation: self.operation.into(),
+                item: self.item.clone(),
+                percent,
+            },
+        );
+    }
+}
+
+/// Whole-percent progress. An empty file has no meaningful ratio, so it reports
+/// complete rather than dividing by zero, and the result is clamped because a
+/// file can grow between the size reading and the transfer.
+fn transfer_percent(transferred: u64, total: u64) -> u64 {
+    if total == 0 {
+        return 100;
+    }
+    (transferred.saturating_mul(100) / total).min(100)
+}
+
+fn cancelled() -> CommandError {
+    CommandError::new("cancelled", "Transfer cancelled", false)
+}
+
+/// Records how an AFC mutation ended.
+///
+/// These operations previously logged nothing at all, on success or failure, so
+/// a delete or transfer that went wrong left no trace behind the interface and
+/// nothing to correlate against the device.
+fn log_outcome<T>(operation: &str, path: &str, result: CommandResult<T>) -> CommandResult<T> {
+    match &result {
+        Ok(_) => tracing::info!(operation, path, "afc mutation succeeded"),
+        Err(error) => tracing::warn!(
+            operation,
+            path,
+            kind = %error.kind,
+            message = %error.message,
+            "afc mutation failed"
+        ),
+    }
+    result
+}
+
+fn transfer_name(path: &str) -> String {
+    path.rsplit('/')
+        .find(|part| !part.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
 
 const PROTECTED_MEDIA_ROOTS: &[&str] =
     &["Books", "DCIM", "PhotoData", "Purchases", "iTunes_Control"];
@@ -122,8 +226,11 @@ pub async fn file_sharing_apps(
     let mut client = InstallationProxyClient::connect(&provider)
         .await
         .map_err(CommandError::from)?;
+    // Every application type, not just `User`. File sharing is a capability an
+    // app declares, and a system-registered app can declare it — the same
+    // mistake that once hid every debuggable app from the JIT selector.
     let apps = client
-        .get_apps(Some("User"), None)
+        .get_apps(None, None)
         .await
         .map_err(CommandError::from)?;
     let mut result = apps
@@ -157,7 +264,19 @@ pub async fn afc_list(
         let info = match afc.get_file_info(&remote_path).await {
             Ok(info) => info,
             Err(error) => {
+                // The directory really does contain this entry, so dropping it
+                // would show a listing shorter than the truth with nothing to
+                // say so. Keep the name and mark the rest as unknown.
                 tracing::warn!(%remote_path, ?error, "unable to read AFC file info");
+                entries.push(RemoteFileEntry {
+                    name,
+                    path: remote_path,
+                    kind: "Unreadable".into(),
+                    is_directory: false,
+                    size: 0,
+                    modified: "—".into(),
+                    unreadable: true,
+                });
                 continue;
             }
         };
@@ -179,6 +298,7 @@ pub async fn afc_list(
             is_directory,
             size: info.size as u64,
             modified: info.modified.format("%Y-%m-%d %H:%M:%S").to_string(),
+            unreadable: false,
         });
     }
     entries.sort_by(|left, right| {
@@ -199,7 +319,56 @@ pub async fn afc_mkdir(
 ) -> CommandResult<()> {
     ensure_mutation_allowed(&path, bundle_id.as_deref())?;
     let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
-    afc.mk_dir(path).await.map_err(CommandError::from)
+    let result = afc.mk_dir(&path).await.map_err(CommandError::from);
+    log_outcome("mkdir", &path, result)
+}
+
+#[tauri::command]
+pub async fn afc_create_file(
+    state: State<'_, AppState>,
+    udid: Option<String>,
+    path: String,
+    bundle_id: Option<String>,
+) -> CommandResult<()> {
+    ensure_mutation_allowed(&path, bundle_id.as_deref())?;
+    let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
+    // WrOnly is O_CREAT|O_TRUNC, so opening and closing leaves an empty file.
+    let result = async {
+        let file = afc
+            .open(&path, AfcFopenMode::WrOnly)
+            .await
+            .map_err(CommandError::from)?;
+        file.close().await.map_err(CommandError::from)
+    }
+    .await;
+    log_outcome("create_file", &path, result)
+}
+
+#[tauri::command]
+pub async fn afc_rename(
+    state: State<'_, AppState>,
+    udid: Option<String>,
+    from: String,
+    to: String,
+    bundle_id: Option<String>,
+) -> CommandResult<()> {
+    // Both ends are mutations: the old name disappears and the new one appears,
+    // so a protected root has to be refused from either direction.
+    ensure_mutation_allowed(&from, bundle_id.as_deref())?;
+    ensure_mutation_allowed(&to, bundle_id.as_deref())?;
+    if from == to {
+        return Ok(());
+    }
+    let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
+    if afc.get_file_info(&to).await.is_ok() {
+        return Err(CommandError::new(
+            "files",
+            "Something with that name already exists here",
+            false,
+        ));
+    }
+    let result = afc.rename(&from, &to).await.map_err(CommandError::from);
+    log_outcome("rename", &from, result)
 }
 
 #[tauri::command]
@@ -212,15 +381,21 @@ pub async fn afc_remove(
 ) -> CommandResult<()> {
     ensure_mutation_allowed(&path, bundle_id.as_deref())?;
     let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
-    if recursive {
-        afc.remove_all(path).await.map_err(CommandError::from)
+    let result = if recursive {
+        afc.remove_all(&path).await.map_err(CommandError::from)
     } else {
-        afc.remove(path).await.map_err(CommandError::from)
-    }
+        afc.remove(&path).await.map_err(CommandError::from)
+    };
+    log_outcome(
+        if recursive { "remove_all" } else { "remove" },
+        &path,
+        result,
+    )
 }
 
 #[tauri::command]
 pub async fn afc_upload(
+    app: AppHandle,
     state: State<'_, AppState>,
     udid: Option<String>,
     local_path: String,
@@ -228,20 +403,51 @@ pub async fn afc_upload(
     bundle_id: Option<String>,
 ) -> CommandResult<()> {
     ensure_mutation_allowed(&remote_path, bundle_id.as_deref())?;
-    let bytes = tokio::fs::read(local_path).await?;
+    let total = tokio::fs::metadata(&local_path).await?.len();
+    let mut source = tokio::fs::File::open(&local_path).await?;
+
+    let token = CancellationToken::new();
+    state.replace_task(TRANSFER_TASK, token.clone()).await;
+
     let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
     let mut file = afc
-        .open(remote_path, AfcFopenMode::WrOnly)
+        .open(remote_path.clone(), AfcFopenMode::WrOnly)
         .await
         .map_err(CommandError::from)?;
-    file.write_entire(&bytes)
-        .await
-        .map_err(CommandError::from)?;
-    file.close().await.map_err(CommandError::from)
+
+    let mut progress = TransferProgress::new(app, "upload", transfer_name(&remote_path), total);
+    let mut buffer = vec![0u8; TRANSFER_CHUNK];
+    let result = loop {
+        if token.is_cancelled() {
+            break Err(cancelled());
+        }
+        let read = match source.read(&mut buffer).await {
+            Ok(0) => break Ok(()),
+            Ok(read) => read,
+            Err(error) => break Err(CommandError::from(error)),
+        };
+        // Each write lands at the descriptor's current position, so successive
+        // chunks append rather than rewriting from the start.
+        if let Err(error) = file.write_entire(&buffer[..read]).await {
+            break Err(CommandError::from(error));
+        }
+        progress.advance(read);
+    };
+
+    file.close().await.map_err(CommandError::from)?;
+    if result.is_err() {
+        // A partial file on the device is worse than none: it looks complete in
+        // the listing and would be read as valid.
+        let _ = afc.remove(&remote_path).await;
+    }
+    log_outcome("upload", &remote_path, result)?;
+    progress.finish();
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn afc_download(
+    app: AppHandle,
     state: State<'_, AppState>,
     udid: Option<String>,
     remote_path: String,
@@ -249,14 +455,55 @@ pub async fn afc_download(
     bundle_id: Option<String>,
 ) -> CommandResult<()> {
     validate_remote_path(&remote_path)?;
+
+    let token = CancellationToken::new();
+    state.replace_task(TRANSFER_TASK, token.clone()).await;
+
     let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
+    let total = afc
+        .get_file_info(&remote_path)
+        .await
+        .map(|info| info.size as u64)
+        .unwrap_or(0);
     let mut file = afc
-        .open(remote_path, AfcFopenMode::RdOnly)
+        .open(remote_path.clone(), AfcFopenMode::RdOnly)
         .await
         .map_err(CommandError::from)?;
-    let bytes = file.read_entire().await.map_err(CommandError::from)?;
+    let mut target = tokio::fs::File::create(&local_path).await?;
+
+    let mut progress = TransferProgress::new(app, "download", transfer_name(&remote_path), total);
+    let result = loop {
+        if token.is_cancelled() {
+            break Err(cancelled());
+        }
+        let chunk = match file.read_n(TRANSFER_CHUNK).await {
+            Ok(chunk) if chunk.is_empty() => break Ok(()),
+            Ok(chunk) => chunk,
+            Err(error) => break Err(CommandError::from(error)),
+        };
+        if let Err(error) = target.write_all(&chunk).await {
+            break Err(CommandError::from(error));
+        }
+        progress.advance(chunk.len());
+    };
+
     file.close().await.map_err(CommandError::from)?;
-    tokio::fs::write(local_path, bytes).await?;
+    if let Err(error) = result {
+        // Close the handle before unlinking so the partial file does not linger
+        // as something the user could mistake for a finished download.
+        drop(target);
+        let _ = tokio::fs::remove_file(&local_path).await;
+        return log_outcome("download", &remote_path, Err(error));
+    }
+    log_outcome("download", &remote_path, Ok(()))?;
+    target.flush().await?;
+    progress.finish();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn afc_transfer_cancel(state: State<'_, AppState>) -> CommandResult<()> {
+    state.cancel_task(TRANSFER_TASK).await;
     Ok(())
 }
 
@@ -281,5 +528,42 @@ mod tests {
     fn rejects_relative_paths_and_root_mutation() {
         assert!(validate_remote_path("/Documents/../Library").is_err());
         assert!(ensure_mutation_allowed("/", Some("com.example.app")).is_err());
+    }
+
+    #[test]
+    fn reports_transfer_percent() {
+        assert_eq!(transfer_percent(0, 400), 0);
+        assert_eq!(transfer_percent(100, 400), 25);
+        assert_eq!(transfer_percent(400, 400), 100);
+    }
+
+    /// An empty file is a legitimate transfer, and dividing by its size is not.
+    #[test]
+    fn treats_an_empty_file_as_complete() {
+        assert_eq!(transfer_percent(0, 0), 100);
+    }
+
+    /// The size is read before the transfer starts, so a file that grows in
+    /// between would otherwise report more than 100.
+    #[test]
+    fn clamps_when_more_arrives_than_expected() {
+        assert_eq!(transfer_percent(900, 400), 100);
+    }
+
+    /// Renaming touches two paths, and a protected root has to be refused from
+    /// either end: moving a file out of DCIM edits the library just as moving
+    /// one in does.
+    #[test]
+    fn rename_guards_both_ends_against_protected_roots() {
+        assert!(ensure_mutation_allowed("/DCIM/IMG_0001.HEIC", None).is_err());
+        assert!(ensure_mutation_allowed("/Downloads/IMG_0001.HEIC", None).is_ok());
+        assert!(ensure_mutation_allowed("/DCIM/moved.HEIC", Some("com.example.app")).is_ok());
+    }
+
+    #[test]
+    fn names_a_transfer_by_its_last_path_component() {
+        assert_eq!(transfer_name("/Downloads/report.pdf"), "report.pdf");
+        assert_eq!(transfer_name("/Exports/"), "Exports");
+        assert_eq!(transfer_name("plain.txt"), "plain.txt");
     }
 }

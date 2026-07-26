@@ -1,7 +1,7 @@
 # idevice desktop Project Overview
 
 > Last updated: 2026-07-26
-> Current release: 0.0.1 Developer Preview; next patch in development
+> Current published release: 0.0.1 Developer Preview; 0.0.2 release candidate in development
 
 ## 1. Project Positioning
 

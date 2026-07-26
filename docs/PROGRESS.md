@@ -1,7 +1,7 @@
 # idevice desktop Development Progress
 
 > Last updated: 2026-07-26
-> Release: 0.0.1; next patch in development
+> Release: 0.0.2 release candidate; 0.0.1 is the current published build
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
 The product direction is confirmed: developer tools first, macOS-only for the initial release, and long-term GUI coverage of device capabilities that currently require `idevice-tools`.
@@ -21,7 +21,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
-| Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` rebuilt on 2026-07-25; passes `hdiutil verify`, carries the CSP in the release binary, and ships both licence files byte-identical to their sources |
+| Unsigned macOS package | Apple Silicon `idevice_0.0.2_aarch64.dmg` built on 2026-07-26; passes `hdiutil verify`, identifies itself as 0.0.2 with a macOS 11.0 minimum, carries the CSP in its arm64 release binary, and ships both licence files byte-identical to their sources |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
 | Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
@@ -233,7 +233,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 - ~~Tighten the Tauri CSP.~~ Done on 2026-07-25: scripts are limited to bundled code, images to the app, `data:` URLs, and the map tile host, and object, frame, and form directives are closed. Verified in the running application.
 - ~~Evaluate the online map dependency and an offline fallback.~~ Decided on 2026-07-25 to keep the online map with no fallback. The map is a convenience for picking coordinates, not a requirement for simulating a location, and presets remain available when tiles do not load.
 - ~~Complete the application icon and the full third-party license inventory.~~ Done on 2026-07-25: the icon is rendered from its SVG source at 1024x1024, and the notices file now lists every dependency that ships.
-- Write release notes. The interface work this was waiting on settled on 2026-07-26 with the Device Lab visual direction, so this is now unblocked.
+- ~~Write release notes.~~ Done on 2026-07-26 for the 0.0.2 Developer Preview in [`RELEASE_NOTES_0.0.2.md`](RELEASE_NOTES_0.0.2.md).
 - **macOS signing and notarization are blocked**: no Apple Developer account or certificate is available. Releases stay unsigned, so distribution has to keep the Gatekeeper warning and the instructions for opening an unsigned build.
 - ~~Verify that the project MIT License and complete third-party notices ship with every release artifact.~~ Done on 2026-07-25: both files appear in the `.app` and the `.dmg`, byte-identical to their sources, and the CSP is embedded in the release binary. The DMG passes `hdiutil verify`.
 - ~~Define an upgrade and regression process for the pinned `idevice` revision.~~ Defined on 2026-07-25 in `PROJECT.md`.

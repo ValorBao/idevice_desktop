@@ -18,12 +18,12 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Item | Status |
 | --- | --- |
 | Frontend production build | Passed on 2026-07-26 with `npm run build` |
-| Rust static check | Passed on 2026-07-25 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-26: 58 passed, 0 failed |
-| Rust formatting and linting | Passed on 2026-07-25 with `cargo fmt --check` and strict Clippy warnings |
+| Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
+| Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.1_aarch64.dmg` rebuilt on 2026-07-25; passes `hdiutil verify`, carries the CSP in the release binary, and ships both licence files byte-identical to their sources |
 | Test coverage | Covers IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; no frontend, integration, or automated real-device tests yet |
-| Known desktop-only defect class | `window.confirm`, `window.prompt`, and `window.alert` resolve to their cancel result on the desktop because wry implements no WKWebView JavaScript panel delegate. Three actions shipped dead — Files delete, Files new folder, Apps uninstall. Fixed on 2026-07-26; the rule is recorded in `CLAUDE.md` |
+| Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
 | Branches | All validation branches are merged; `master` is at the 2026-07-26 Device Lab visual direction (PR #20) |
@@ -115,9 +115,43 @@ A follow-up pass removed what the switchers left behind: the `UiStyle` and `Appe
 
 Merge commit: `a06074c Merge pull request #20 from ValorBao/agent/device-lab-visual-polish`
 
+### 2026-07-26: The Files Page Made Usable
+
+An audit prompted by the observation that hardly anything on the Files page fully
+worked. It was accurate: two of its four actions did nothing, drag-and-drop did not
+exist, and a large transfer looked like a freeze.
+
+Most of it traced to one cause — **browser APIs that work in demo mode and fail
+silently under Tauri.** Four controls had shipped dead:
+
+- `window.confirm` resolves to false, so Files delete and Apps uninstall returned at
+  their guard. Replaced with the dialog plugin, which also needed `dialog:allow-message`.
+- `window.prompt` resolves to null, so Files new folder returned at its guard and
+  `afc_mkdir` had never once run from the desktop. Replaced with `PromptModal`; the
+  plugin has no text input, so an in-app modal was the only option.
+- HTML5 `ondrop` never fires for OS drags, and the `File.path` the handler read is an
+  Electron extension WKWebView does not implement, so the Apps sideload zone could
+  not have worked either way. Replaced with `useFileDrop` over Tauri's own event.
+
+None of these threw. Each type-checked, read correctly, and passed in demo mode.
+
+Transfers were rewritten to stream. Both directions had buffered whole files in
+memory and emitted nothing, so a video from DCIM held the entire file in RAM behind
+a frozen interface. They now loop in 1 MB chunks — the library's own wire limit —
+with throttled progress, cancellation through the task registry, and cleanup of the
+partial file on failure.
+
+The remaining gaps were closed: listings keep entries whose metadata cannot be read
+instead of silently shortening, `file_sharing_apps` queries every application type,
+`rename` and empty-file creation are exposed, and AFC mutations finally log their
+outcome — they had recorded nothing at all, which is how the drop defect went so
+long without a trace.
+
+PRs: #23, #24, and the Files completeness follow-up.
+
 ## 5. Active Validation
 
-The frontend production build, Rust static check, 58 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
+The frontend production build, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
 
 The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 
@@ -248,6 +282,10 @@ Append future validation results using this format:
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Legacy JIT attach and detach | Pass | With the matching DeveloperDiskImage mounted, `debugserver.DVTSecureSocketProxy` opened in 191 ms and `vAttachName` for `ShopeeSG` returned a `T11` stop packet with full register state. Detach succeeded and the app was deliberately left running |
 | 2026-07-25 | iPhone10,1 | 14.2 (18B92) | USB | Legacy instruments server | Fail | `StartService` returns a port for `com.apple.instruments.remoteserver.DVTSecureSocketProxy`, but the socket never responds: a TLS handshake and a plaintext DVT handshake each stalled past 45 seconds. Both plain-name variants answer `InvalidService`. `assertion_agent` on the same transport works, so lockdown itself is healthy. Device logs show `handle_start_service` and `spawn_xpc_service` with the service name redacted, and nothing afterwards |
 | 2026-07-25 | iPhone11,8 | 17.0 (21A329) | USB | DDI mount and unmount cycle | Pass | Unmounted, mounted, and unmounted again. `copy_devices` reported 0, 1, then 0 images; `lookup_image("Personalized")` returned nothing, a 48-byte signature, then nothing; RSD services moved 57 → 69 → 57 with the debug proxy appearing and disappearing. `ddi_unmount` returned success and every signal returned to baseline |
+| 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Destructive-action confirmations through the interface | Pass | Files delete and Apps uninstall both open the plugin dialog and complete. All three had been dead on the desktop: wry implements no WKWebView JavaScript panel delegate, so `window.confirm` resolved to false and the guard returned early. Frontend-only, so the three systems confirm the fix rather than add generation coverage |
+| 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Folder creation through the interface | Pass | First execution of `afc_mkdir` from the desktop on any device — `window.prompt` returned null before this, so the command was unreachable and the backend path had never run |
+| 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Streaming AFC transfer with progress and cancellation | Pass | Transfers now loop in 1 MB chunks instead of buffering the whole file; progress advances and the interface stays responsive. Cancelling stops the transfer and removes the partial file |
+| 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Files dragged in from Finder | Pass | Dropping into the table uploads to the open folder and dropping onto a folder row uploads into it. The Apps sideload zone had the same defect class: Tauri consumes OS drags before the webview sees them, and the `File.path` it read is an Electron extension WKWebView does not implement |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

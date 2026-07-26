@@ -77,6 +77,9 @@ pub struct RemoteFileEntry {
     pub is_directory: bool,
     pub size: u64,
     pub modified: String,
+    /// True when the entry is present in the directory but its metadata could
+    /// not be read. The name is real; the size, kind, and timestamp are not.
+    pub unreadable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -388,6 +391,7 @@ mod contract {
                 is_directory: false,
                 size: 0,
                 modified: String::new(),
+                unreadable: false,
             },
         );
     }

@@ -240,6 +240,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .file-name-copy small { margin-top: 2px; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .file-table > button > small { color: var(--dim); font: 12px var(--mono); }
 .file-table > button > small:last-child { text-align: right; }
+.file-table > button.unreadable-entry { opacity: .62; }
+.file-table > button.unreadable-entry > span svg { color: #febc2e; }
 .file-table.drop-target { position: relative; border-color: var(--accent); }
 .file-table.drop-target > button[data-directory-path]:hover { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 .drop-overlay { position: absolute; z-index: 5; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; pointer-events: none; color: var(--accent); background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(2px); }

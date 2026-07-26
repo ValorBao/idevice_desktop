@@ -43,6 +43,8 @@ pub fn run() {
             commands::diagnostics_wifi,
             commands::afc_list,
             commands::afc_mkdir,
+            commands::afc_create_file,
+            commands::afc_rename,
             commands::afc_remove,
             commands::afc_upload,
             commands::afc_download,

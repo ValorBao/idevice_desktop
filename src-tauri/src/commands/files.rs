@@ -94,6 +94,25 @@ fn cancelled() -> CommandError {
     CommandError::new("cancelled", "Transfer cancelled", false)
 }
 
+/// Records how an AFC mutation ended.
+///
+/// These operations previously logged nothing at all, on success or failure, so
+/// a delete or transfer that went wrong left no trace behind the interface and
+/// nothing to correlate against the device.
+fn log_outcome<T>(operation: &str, path: &str, result: CommandResult<T>) -> CommandResult<T> {
+    match &result {
+        Ok(_) => tracing::info!(operation, path, "afc mutation succeeded"),
+        Err(error) => tracing::warn!(
+            operation,
+            path,
+            kind = %error.kind,
+            message = %error.message,
+            "afc mutation failed"
+        ),
+    }
+    result
+}
+
 fn transfer_name(path: &str) -> String {
     path.rsplit('/')
         .find(|part| !part.is_empty())
@@ -207,8 +226,11 @@ pub async fn file_sharing_apps(
     let mut client = InstallationProxyClient::connect(&provider)
         .await
         .map_err(CommandError::from)?;
+    // Every application type, not just `User`. File sharing is a capability an
+    // app declares, and a system-registered app can declare it — the same
+    // mistake that once hid every debuggable app from the JIT selector.
     let apps = client
-        .get_apps(Some("User"), None)
+        .get_apps(None, None)
         .await
         .map_err(CommandError::from)?;
     let mut result = apps
@@ -242,7 +264,19 @@ pub async fn afc_list(
         let info = match afc.get_file_info(&remote_path).await {
             Ok(info) => info,
             Err(error) => {
+                // The directory really does contain this entry, so dropping it
+                // would show a listing shorter than the truth with nothing to
+                // say so. Keep the name and mark the rest as unknown.
                 tracing::warn!(%remote_path, ?error, "unable to read AFC file info");
+                entries.push(RemoteFileEntry {
+                    name,
+                    path: remote_path,
+                    kind: "Unreadable".into(),
+                    is_directory: false,
+                    size: 0,
+                    modified: "—".into(),
+                    unreadable: true,
+                });
                 continue;
             }
         };
@@ -264,6 +298,7 @@ pub async fn afc_list(
             is_directory,
             size: info.size as u64,
             modified: info.modified.format("%Y-%m-%d %H:%M:%S").to_string(),
+            unreadable: false,
         });
     }
     entries.sort_by(|left, right| {
@@ -284,7 +319,56 @@ pub async fn afc_mkdir(
 ) -> CommandResult<()> {
     ensure_mutation_allowed(&path, bundle_id.as_deref())?;
     let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
-    afc.mk_dir(path).await.map_err(CommandError::from)
+    let result = afc.mk_dir(&path).await.map_err(CommandError::from);
+    log_outcome("mkdir", &path, result)
+}
+
+#[tauri::command]
+pub async fn afc_create_file(
+    state: State<'_, AppState>,
+    udid: Option<String>,
+    path: String,
+    bundle_id: Option<String>,
+) -> CommandResult<()> {
+    ensure_mutation_allowed(&path, bundle_id.as_deref())?;
+    let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
+    // WrOnly is O_CREAT|O_TRUNC, so opening and closing leaves an empty file.
+    let result = async {
+        let file = afc
+            .open(&path, AfcFopenMode::WrOnly)
+            .await
+            .map_err(CommandError::from)?;
+        file.close().await.map_err(CommandError::from)
+    }
+    .await;
+    log_outcome("create_file", &path, result)
+}
+
+#[tauri::command]
+pub async fn afc_rename(
+    state: State<'_, AppState>,
+    udid: Option<String>,
+    from: String,
+    to: String,
+    bundle_id: Option<String>,
+) -> CommandResult<()> {
+    // Both ends are mutations: the old name disappears and the new one appears,
+    // so a protected root has to be refused from either direction.
+    ensure_mutation_allowed(&from, bundle_id.as_deref())?;
+    ensure_mutation_allowed(&to, bundle_id.as_deref())?;
+    if from == to {
+        return Ok(());
+    }
+    let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
+    if afc.get_file_info(&to).await.is_ok() {
+        return Err(CommandError::new(
+            "files",
+            "Something with that name already exists here",
+            false,
+        ));
+    }
+    let result = afc.rename(&from, &to).await.map_err(CommandError::from);
+    log_outcome("rename", &from, result)
 }
 
 #[tauri::command]
@@ -297,11 +381,16 @@ pub async fn afc_remove(
 ) -> CommandResult<()> {
     ensure_mutation_allowed(&path, bundle_id.as_deref())?;
     let mut afc = afc_client(&state, udid, bundle_id.as_deref()).await?;
-    if recursive {
-        afc.remove_all(path).await.map_err(CommandError::from)
+    let result = if recursive {
+        afc.remove_all(&path).await.map_err(CommandError::from)
     } else {
-        afc.remove(path).await.map_err(CommandError::from)
-    }
+        afc.remove(&path).await.map_err(CommandError::from)
+    };
+    log_outcome(
+        if recursive { "remove_all" } else { "remove" },
+        &path,
+        result,
+    )
 }
 
 #[tauri::command]
@@ -349,9 +438,9 @@ pub async fn afc_upload(
     if result.is_err() {
         // A partial file on the device is worse than none: it looks complete in
         // the listing and would be read as valid.
-        let _ = afc.remove(remote_path).await;
+        let _ = afc.remove(&remote_path).await;
     }
-    result?;
+    log_outcome("upload", &remote_path, result)?;
     progress.finish();
     Ok(())
 }
@@ -404,8 +493,9 @@ pub async fn afc_download(
         // as something the user could mistake for a finished download.
         drop(target);
         let _ = tokio::fs::remove_file(&local_path).await;
-        return Err(error);
+        return log_outcome("download", &remote_path, Err(error));
     }
+    log_outcome("download", &remote_path, Ok(()))?;
     target.flush().await?;
     progress.finish();
     Ok(())
@@ -458,6 +548,16 @@ mod tests {
     #[test]
     fn clamps_when_more_arrives_than_expected() {
         assert_eq!(transfer_percent(900, 400), 100);
+    }
+
+    /// Renaming touches two paths, and a protected root has to be refused from
+    /// either end: moving a file out of DCIM edits the library just as moving
+    /// one in does.
+    #[test]
+    fn rename_guards_both_ends_against_protected_roots() {
+        assert!(ensure_mutation_allowed("/DCIM/IMG_0001.HEIC", None).is_err());
+        assert!(ensure_mutation_allowed("/Downloads/IMG_0001.HEIC", None).is_ok());
+        assert!(ensure_mutation_allowed("/DCIM/moved.HEIC", Some("com.example.app")).is_ok());
     }
 
     #[test]

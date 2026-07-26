@@ -59,6 +59,8 @@ export type RemoteFileEntry = {
   isDirectory: boolean
   size: number
   modified: string
+  /** The entry exists but its metadata could not be read; only `name` is real. */
+  unreadable: boolean
 }
 
 export type FileSharingApp = { bundleId: string; name: string }
@@ -135,6 +137,8 @@ export const api = {
   },
   afcList: (path: string, udid?: string, bundleId?: string) => call<RemoteFileEntry[]>('afc_list', { udid, path, bundleId: bundleId ?? null }),
   afcMkdir: (path: string, udid?: string, bundleId?: string) => call<void>('afc_mkdir', { udid, path, bundleId: bundleId ?? null }),
+  afcCreateFile: (path: string, udid?: string, bundleId?: string) => call<void>('afc_create_file', { udid, path, bundleId: bundleId ?? null }),
+  afcRename: (from: string, to: string, udid?: string, bundleId?: string) => call<void>('afc_rename', { udid, from, to, bundleId: bundleId ?? null }),
   afcRemove: (path: string, recursive: boolean, udid?: string, bundleId?: string) => call<void>('afc_remove', { udid, path, recursive, bundleId: bundleId ?? null }),
   afcUpload: (localPath: string, remotePath: string, udid?: string, bundleId?: string) => call<void>('afc_upload', { udid, localPath, remotePath, bundleId: bundleId ?? null }),
   afcDownload: (remotePath: string, localPath: string, udid?: string, bundleId?: string) => call<void>('afc_download', { udid, remotePath, localPath, bundleId: bundleId ?? null }),

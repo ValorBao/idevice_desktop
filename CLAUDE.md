@@ -30,21 +30,34 @@ verified in.
 call in demo mode and routes thrown errors to the page's toast. Use it for device
 operations rather than repeating the try/catch.
 
-## Never call `window.confirm`, `window.prompt`, or `window.alert`
+## Browser APIs that are silently dead on the desktop
 
-They work in the browser and are silently dead on the desktop. wry does not implement
-the WKWebView JavaScript panel delegates, so WebKit resolves them with its cancel
-result: `confirm` always returns false, `prompt` always returns null, `alert` never
-appears. Nothing throws, so the action they guard just quietly does nothing — this
-already shipped three broken buttons.
+This class of bug has already shipped four broken controls. Each one type-checks,
+reads correctly, works in demo mode, and fails on the desktop **without throwing** —
+so the action just quietly does not happen and review cannot see it.
+
+**`window.confirm` / `window.prompt` / `window.alert`.** wry implements no WKWebView
+JavaScript panel delegate, so WebKit resolves them with its cancel result: `confirm`
+returns false, `prompt` returns null, `alert` never appears.
 
 - Confirming something → `dialogs.confirmDestructive` in `src/api.ts`.
 - Asking for text → the `PromptModal` component. The dialog plugin has no text input,
-  so this is an in-app modal by necessity.
+  so an in-app modal is the only option.
+
+**HTML5 file drops.** Tauri consumes OS drags before the webview sees them, so
+`ondrop` never fires for them and `dataTransfer.files` stays empty. It is also the
+only source of a real path: a browser `File` carries no filesystem location, and the
+`File.path` property is an Electron extension WKWebView does not implement.
+
+- Dropped files → the `useFileDrop` hook, which wraps Tauri's `onDragDropEvent`.
+  That event is window-wide, so the hook hit-tests the pointer to scope a drop.
 
 Any new dialog plugin call also needs its permission in
 `src-tauri/capabilities/default.json`; `confirm` and `ask` both go through
 `dialog:allow-message`.
+
+When a control depends on a browser API, check how it behaves under Tauri before
+assuming demo mode proved anything.
 
 ## `src/api.ts` is an enforced contract
 

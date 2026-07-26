@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppWindow, ChevronRight, File, Folder, HardDrive, Plus, Upload } from 'lucide-react'
 import { fileSystem, installedApps } from '../data'
 import { api, dialogs, errorMessage, events, type FileSharingApp, type OperationProgress, type RemoteFileEntry } from '../api'
 import { bytes, displaySizeToBytes } from '../lib/format'
 import { useDeviceTask } from '../lib/hooks'
+import { useFileDrop } from '../lib/useFileDrop'
 import { PromptModal } from '../components/PromptModal'
 
 type FileSource = 'media' | 'app'
@@ -97,18 +98,28 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
   }
   const remoteChild = (name: string) => `${currentPath === '/' ? '' : currentPath}/${name}`
 
-  const uploadFile = () => runTask(async () => {
-    if (!sourceAvailable || currentReadOnly) return
-    const chosen = await dialogs.anyFile()
-    if (!chosen || Array.isArray(chosen)) return
-    const name = chosen.split(/[\\/]/).pop() ?? 'upload.bin'
+  /** Uploads each path in turn into `destination`, reporting once at the end. */
+  const uploadInto = useCallback((localPaths: string[], destination: string) => runTask(async () => {
     try {
-      await api.afcUpload(chosen, remoteChild(name), udid, bundleId)
-      onToast(`${name} uploaded`)
+      for (const localPath of localPaths) {
+        const name = localPath.split(/[\\/]/).pop() ?? 'upload.bin'
+        const parent = destination === '/' ? '' : destination
+        await api.afcUpload(localPath, `${parent}/${name}`, udid, bundleId)
+      }
+      onToast(localPaths.length === 1
+        ? `${localPaths[0].split(/[\\/]/).pop()} uploaded`
+        : `${localPaths.length} files uploaded`)
     } finally {
       setTransfer(null)
     }
     await refresh()
+  }, 'File operations are available in the desktop app'), [runTask, udid, bundleId, onToast, refresh])
+
+  const uploadFile = () => runTask(async () => {
+    if (!sourceAvailable || currentReadOnly) return
+    const chosen = await dialogs.anyFile()
+    if (!chosen || Array.isArray(chosen)) return
+    await uploadInto([chosen], currentPath)
   }, 'File operations are available in the desktop app')
   const downloadFile = () => runTask(async () => {
     if (!selected || selected.isDirectory) return
@@ -122,6 +133,21 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
     }
   })
   const cancelTransfer = () => { void api.afcTransferCancel() }
+
+  const tableRef = useRef<HTMLDivElement>(null)
+  const handleDroppedFiles = useCallback((paths: string[], elementAtPointer: Element | null) => {
+    if (!sourceAvailable) return
+    // A drop landing on a folder row targets that folder; anywhere else in the
+    // table means the folder currently open.
+    const row = elementAtPointer?.closest<HTMLElement>('[data-directory-path]')
+    const destination = row?.dataset.directoryPath ?? currentPath
+    if (source === 'media' && mediaPathIsProtected(destination)) {
+      onToast('This iOS-managed folder is read-only')
+      return
+    }
+    void uploadInto(paths, destination)
+  }, [sourceAvailable, currentPath, source, onToast, uploadInto])
+  const dropActive = useFileDrop(tableRef, desktop, handleDroppedFiles)
   const openFolderPrompt = () => {
     if (!sourceAvailable || currentReadOnly) return
     setNamingFolder(true)
@@ -166,13 +192,15 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
       </div>
       <div className="breadcrumbs"><span>{source === 'media' ? 'com.apple.afc' : 'house_arrest'}</span><ChevronRight size={13} /><button onClick={() => setPath([])}>{rootLabel}</button>{path.map((part, index) => <span className="crumb-pair" key={`${part}-${index}`}><ChevronRight size={13} /><button onClick={() => setPath(path.slice(0, index + 1))}>{part}</button></span>)}{currentReadOnly && <em className="read-only-badge">Read only</em>}</div>
       <div className="file-actions"><button className="primary-button" onClick={() => void uploadFile()} disabled={!sourceAvailable || currentReadOnly}><Upload size={14} />Upload</button><button onClick={() => void downloadFile()} disabled={!selected || selected.isDirectory}>Download</button><button onClick={openFolderPrompt} disabled={!sourceAvailable || currentReadOnly}><Plus size={14} />New folder</button><button className="danger-action" onClick={() => void removeEntry()} disabled={!selected || selectedReadOnly}>Delete</button></div>
-      <div className="file-table card">
+      <div className={`file-table card${dropActive ? ' drop-target' : ''}`} ref={tableRef}>
         <div className="file-head"><span>Name</span><span>Kind</span><span>Modified</span><span>Size</span></div>
         {!sourceAvailable ? <div className="empty-card">No installed apps currently expose Documents through iOS File Sharing.</div> : !entries.length ? <div className="empty-card">This folder is empty.</div> : entries.map((entry) => {
           const description = source === 'media' && currentPath === '/' ? mediaFolderDescriptions[entry.name] : ''
           const readOnlyEntry = source === 'media' && mediaPathIsProtected(entry.path)
-          return <button key={entry.name} className={selected?.path === entry.path ? 'selected' : ''} onClick={() => setSelected(entry)} onDoubleClick={() => entry.isDirectory && setPath([...path, entry.name])}><span>{entry.isDirectory ? <Folder size={17} /> : <File size={17} />}<span className="file-name-copy"><b>{entry.name}</b>{description && <small>{description}</small>}</span></span><small>{readOnlyEntry ? `${entry.kind} · read only` : entry.kind}</small><small>{entry.modified}</small><small>{entry.isDirectory ? '—' : bytes(entry.size)}</small></button>
+          const dropInto = entry.isDirectory && !readOnlyEntry ? entry.path : undefined
+          return <button key={entry.name} data-directory-path={dropInto} className={selected?.path === entry.path ? 'selected' : ''} onClick={() => setSelected(entry)} onDoubleClick={() => entry.isDirectory && setPath([...path, entry.name])}><span>{entry.isDirectory ? <Folder size={17} /> : <File size={17} />}<span className="file-name-copy"><b>{entry.name}</b>{description && <small>{description}</small>}</span></span><small>{readOnlyEntry ? `${entry.kind} · read only` : entry.kind}</small><small>{entry.modified}</small><small>{entry.isDirectory ? '—' : bytes(entry.size)}</small></button>
         })}
+        {dropActive && <div className="drop-overlay"><Upload size={18} /><b>Drop to upload</b><small>Release over a folder to put files inside it</small></div>}
       </div>
       {transfer && (
         <div className="transfer-bar" role="status">

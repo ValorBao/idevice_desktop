@@ -201,9 +201,11 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 ### P0: Maintain CLI-to-GUI Coverage
 
 - Use [`CAPABILITY_MATRIX.md`](CAPABILITY_MATRIX.md) as the capability baseline for the pinned upstream revision.
+- Use [`FEATURE_PLAN.md`](FEATURE_PLAN.md) as the delivery order and Definition of Done; do not expose a capability before its complete workflow passes.
 - Track Not integrated, Partial, Integrated, Build passed, and Real-device verified separately for each capability.
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
-- Publish the RSD crash-report fix in the next patch, then prioritize device console workflows, performance monitoring, packet capture, and process control.
+- ~~Publish the RSD crash-report fix in the next patch.~~ Shipped in 0.0.2.
+- Finish the current-surface acceptance pass, then prove the Processes backend on real hardware before adding it to the Monitor interface.
 
 ### P0: JIT Reach and Coverage
 

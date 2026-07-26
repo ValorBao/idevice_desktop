@@ -12,6 +12,7 @@
 - **Design required:** the capability is risky or interaction-heavy and needs an explicit safety design first.
 
 This matrix records capability coverage, not real-device compatibility. Real-device results belong in `PROGRESS.md`.
+Delivery order and the shared usability Definition of Done are in [`FEATURE_PLAN.md`](FEATURE_PLAN.md).
 
 ## Current Coverage
 

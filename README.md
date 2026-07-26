@@ -16,6 +16,7 @@ Developer Preview builds are unsigned and unnotarized Apple Silicon builds.
 
 - [Project overview and architecture](docs/PROJECT.md)
 - [Development progress and roadmap](docs/PROGRESS.md)
+- [Feature delivery plan](docs/FEATURE_PLAN.md)
 - [`idevice-tools` GUI coverage matrix](docs/CAPABILITY_MATRIX.md)
 
 ## Integrated Device Features

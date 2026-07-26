@@ -51,8 +51,9 @@ jobs:
 
       - name: Set up the Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy
-          rustup default stable
+          rustup show active-toolchain
+          rustc --version
+          cargo clippy --version
 
       - name: Cache Cargo dependencies and build outputs
         uses: actions/cache@v5
@@ -61,7 +62,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('src-tauri/Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-cargo-
 

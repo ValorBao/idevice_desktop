@@ -46,6 +46,7 @@ pub fn run() {
             commands::afc_remove,
             commands::afc_upload,
             commands::afc_download,
+            commands::afc_transfer_cancel,
             commands::file_sharing_apps,
             commands::apps_list,
             commands::apps_debuggable,

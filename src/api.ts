@@ -138,6 +138,7 @@ export const api = {
   afcRemove: (path: string, recursive: boolean, udid?: string, bundleId?: string) => call<void>('afc_remove', { udid, path, recursive, bundleId: bundleId ?? null }),
   afcUpload: (localPath: string, remotePath: string, udid?: string, bundleId?: string) => call<void>('afc_upload', { udid, localPath, remotePath, bundleId: bundleId ?? null }),
   afcDownload: (remotePath: string, localPath: string, udid?: string, bundleId?: string) => call<void>('afc_download', { udid, remotePath, localPath, bundleId: bundleId ?? null }),
+  afcTransferCancel: () => call<void>('afc_transfer_cancel', {}),
   fileSharingApps: (udid?: string) => call<FileSharingApp[]>('file_sharing_apps', { udid }),
   appsList: (udid?: string) => call<InstalledApp[]>('apps_list', { udid }),
   appsDebuggable: (udid?: string) => call<InstalledApp[]>('apps_debuggable', { udid }),
@@ -166,6 +167,7 @@ export const events = {
   logLine: (handler: (payload: DeviceLog) => void) => listen<DeviceLog>('logs://line', (event) => handler(event.payload)),
   appProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('apps://install-progress', (event) => handler(event.payload)),
   ddiProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('developer://ddi-progress', (event) => handler(event.payload)),
+  transferProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('files://transfer-progress', (event) => handler(event.payload)),
   raw: <T>(name: string, handler: (event: Event<T>) => void) => listen<T>(name, handler),
 }
 

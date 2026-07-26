@@ -240,6 +240,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .file-name-copy small { margin-top: 2px; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .file-table > button > small { color: var(--dim); font: 12px var(--mono); }
 .file-table > button > small:last-child { text-align: right; }
+.transfer-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; align-items: center; margin-top: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.transfer-copy { display: flex; justify-content: space-between; gap: 12px; grid-column: 1; }
+.transfer-copy b { font-size: 12.5px; font-weight: 500; }
+.transfer-copy small { color: var(--faint); font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
+.transfer-bar .progress { grid-column: 1; }
+.transfer-bar > button { grid-column: 2; grid-row: 1 / span 2; padding: 8px 14px; color: var(--dim); cursor: pointer; background: transparent; border: 1px solid var(--border2); border-radius: var(--radius-sm); font-size: 12px; }
+.transfer-bar > button:hover { color: var(--text); border-color: var(--faint); }
 .table-footer { display: flex; justify-content: space-between; margin-top: 12px; color: var(--faint); font: 11.5px var(--mono); }
 
 .apps-page { display: flex; gap: 20px; }

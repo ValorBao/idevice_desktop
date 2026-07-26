@@ -19,6 +19,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | --- | --- |
 | Frontend production build | Passed on 2026-07-26 with `npm run build` |
 | Frontend regression tests | Passed on 2026-07-26: 18 passed, 0 failed across five Vitest files |
+| GitHub Actions CI | Passed on PR #27: Frontend on Ubuntu in 26 seconds; Rust formatting, check, 63 tests, and strict Clippy on macOS 14 arm64 in 3 minutes 3 seconds |
 | Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
 | Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
@@ -214,6 +215,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 
 - ~~Cover the command modules that had no tests at all.~~ Started on 2026-07-26: `device.rs` and `location.rs` were the two largest untested modules, and both now cover their pure decision logic — selection routing, connection labelling, and coordinate validation. `overview.rs`, `screenshot.rs`, `diagnostics.rs`, and `logs.rs` remain untested, though they are small and mostly pass values through.
 - ~~Add a frontend test harness.~~ Done on 2026-07-26 with Vitest, Testing Library, jsdom, and 18 focused tests. The baseline covers `useDeviceTask` branching, Tauri destructive confirmation, `PromptModal`, native drag/drop coordinate handling and cleanup, Files create/delete/folder-drop/progress/cancel flows, Apps uninstall/IPA-drop flows, and a browser-demo interaction path. Coverage percentage is deliberately not the target.
+- ~~Run the frontend and Rust gates automatically.~~ Done on 2026-07-26: GitHub Actions runs the frontend suite and production build on Ubuntu, then Rust formatting, check, tests, and strict Clippy on macOS 14 arm64. Rust 1.89.0 is pinned for reproducible Clippy results, and both jobs passed on PR #27.
 - Integration tests are deliberately not planned. The integration boundary in this project is a real device, and a mocked stand-in would prove very little for the effort.
 
 - ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.

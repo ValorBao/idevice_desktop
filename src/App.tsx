@@ -198,7 +198,7 @@ function App() {
               </header>
             )}
 
-            <div className="page-scroll" key={page}>
+            <div className="page-scroll" key={`${page}:${device.udid}`}>
               {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
               {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
               {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}

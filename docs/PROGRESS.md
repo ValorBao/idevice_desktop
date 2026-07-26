@@ -153,7 +153,7 @@ PRs: #23, #24, and the Files completeness follow-up.
 
 ## 5. Active Validation
 
-The frontend production build, 18 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
+The frontend production build, 22 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass. Current hardware-acceptance evidence is recorded in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
 
 The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 

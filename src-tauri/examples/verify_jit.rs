@@ -377,8 +377,10 @@ async fn cleanup(
 
 async fn list_candidates(provider: &impl idevice::provider::IdeviceProvider) -> CommandResult<()> {
     let mut client = InstallationProxyClient::connect(provider).await?;
-    let apps = client.get_apps(Some("User"), None).await?;
-    println!("\n  user applications ({}):", apps.len());
+    // Match the desktop selector: sideloaded and TrollStore apps commonly
+    // register as System even though get-task-allow makes them debuggable.
+    let apps = client.get_apps(None, None).await?;
+    println!("\n  registered applications ({}):", apps.len());
     let mut rows: Vec<(String, bool)> = apps
         .into_iter()
         .filter_map(|(bundle_id, value)| {

@@ -38,3 +38,14 @@ Files, and the other device-bound pages start with state belonging to the new ph
 The local macOS session did not grant assistive-access control to the acceptance
 runner. That prevents an automated click-through from being counted as desktop-
 interface evidence; it is an environment limitation, not a product pass or failure.
+
+## 2026-07-28 — Processes protocol proof
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008110…` (iPhone14,5) | 26.5 | usbmuxd network record | Read-only process list | Pass | CoreDeviceProxy exposed 62 RSD services. `com.apple.coredevice.appservice` was absent, so the harness used `com.apple.instruments.dtservicehub`; DVT DeviceInfo returned 220 running processes. No process was changed |
+
+This proves the read-only backend path for the CoreDeviceLockdown generation. It
+does not satisfy Processes interface acceptance. Launch, PID verification, stop,
+and cleanup still require an explicit mutating harness run, and the
+CoreDeviceRemote and Legacy generations remain to be probed.

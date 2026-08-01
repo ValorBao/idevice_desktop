@@ -1,6 +1,6 @@
 # `idevice-tools` GUI Coverage Matrix
 
-> Last updated: 2026-07-25
+> Last updated: 2026-07-28
 > Upstream baseline: `jkcoxson/idevice@8eed181f39a16ea70380ec8c3cff6bed07a1ef69`
 > Goal: make upstream command-line capabilities safe and complete to operate through a macOS GUI.
 
@@ -47,7 +47,7 @@ Delivery order and the shared usability Definition of Done are in [`FEATURE_PLAN
 
 | Capability | Upstream command | Suggested GUI | Priority |
 | --- | --- | --- | --- |
-| Process control | `process_control` | Process list, launch, stop, signal, and output | P0 |
+| Process control | `device_info`, `process_control`, `app_service` | Read-only DVT listing is verified on iOS 26.5; launch, stop, signals, UI, and the other generations remain pending | P0 |
 | Performance overview | `sysmontap`, `energy_monitor`, `graphics` | Live metrics, process filters, time-series charts, and export | P0 |
 | Packet capture | `pcapd`, `network_monitor` | Interface or process filters, start/stop, and PCAP save | P0 |
 | Screen streaming | `screencapture`, `screencaptureservice` | Live image, screenshots, and recording status | P1 |

@@ -1,6 +1,6 @@
 # idevice desktop Development Progress
 
-> Last updated: 2026-07-26
+> Last updated: 2026-08-01
 > Release: 0.0.2 Developer Preview
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
@@ -17,19 +17,19 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Item | Status |
 | --- | --- |
-| Frontend production build | Passed on 2026-07-26 with `npm run build` |
-| Frontend regression tests | Passed on 2026-07-26: 18 passed, 0 failed across five Vitest files |
+| Frontend production build | Passed on 2026-08-01 with `npm run build` |
+| Frontend regression tests | Passed on 2026-08-01: 24 passed, 0 failed across seven Vitest files |
 | GitHub Actions CI | Passed on PR #27: Frontend on Ubuntu in 26 seconds; Rust formatting, check, 63 tests, and strict Clippy on macOS 14 arm64 in 3 minutes 3 seconds |
-| Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
-| Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
+| Rust static check | Passed on 2026-08-01 with `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | Passed on 2026-08-01: 63 passed, 0 failed |
+| Rust formatting and linting | Passed on 2026-08-01 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.2_aarch64.dmg` built on 2026-07-26; passes `hdiutil verify`, identifies itself as 0.0.2 with a macOS 11.0 minimum, carries the CSP in its arm64 release binary, and ships both licence files byte-identical to their sources |
-| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, and a browser-demo interaction path. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
+| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, browser-demo interaction, device-switch remounting, and automatic session teardown when a device disappears or becomes unusable. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, task cancellation, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
 | Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
-| Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
-| Branches | All validation branches are merged; `master` is at the 2026-07-26 Device Lab visual direction (PR #20) |
-| Worktree | Clean |
+| Verification harnesses | `src-tauri/examples/verify_jit.rs`, `verify_pairing.rs`, and `verify_processes.rs` drive the real provider, tunnel, and command code against an attached device |
+| Branches | Current work continues on `codex/current-surface-acceptance`; `master` does not yet contain that acceptance pass |
+| Worktree | In progress: automatic device-loss session teardown and regression coverage |
 
 ## 3. Feature Progress
 
@@ -46,6 +46,7 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | A full mount and unmount cycle passes on iOS 17.0, and every mounted-image signal the project reads agrees with the RSD service list | Devices from iOS 16 and 17.4+, and mounting through Choose files rather than devicectl |
 | JIT | Integrated for both generations | iOS 17.0 passes launch, `vAttach`, detach, and cleanup; iOS 14.2 passes attach-by-name and detach. Ending a session leaves the application running, and the task registry cancels a session on device switch. A rejected attach is reported as a failure | Exercise the full sequence through the interface rather than a harness |
+| Processes | Protocol proof in progress; no visible UI | The read-only harness listed 220 processes on iOS 26.5 through DVT DeviceInfo. That device advertised `com.apple.instruments.dtservicehub` but not `com.apple.coredevice.appservice`, so the backend must support DVT instead of assuming AppService exists on every iOS 17+ device | Verify launch, PID visibility, termination, and cleanup on iOS 26.5; repeat list and control on iOS 17.0; record Legacy as unsupported if its instruments service still stalls |
 | Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
 | Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
 | Single Device Lab theme | Integrated | The style and appearance switchers were removed on 2026-07-26; the interface is fixed to the dark Device Lab theme. Frontend build passed | Small windows, long content, and accessibility |
@@ -153,7 +154,16 @@ PRs: #23, #24, and the Files completeness follow-up.
 
 ## 5. Active Validation
 
-The frontend production build, 18 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
+The frontend production build, 24 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass. Current hardware-acceptance evidence is recorded in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
+
+The Processes protocol proof started on 2026-07-28 with
+`src-tauri/examples/verify_processes.rs`. Its default mode is read-only; an explicit
+bundle ID is required to exercise launch and stop, and every mutating step has a
+cleanup path and a 30-second timeout. On iOS 26.5, CoreDeviceProxy exposed 62 RSD
+services but did not advertise `com.apple.coredevice.appservice`. The harness fell
+back to `com.apple.instruments.dtservicehub`, completed the DVT handshake, and
+returned 220 running processes through DeviceInfo. This is backend protocol evidence,
+not interface acceptance. Launch and stop remain unverified.
 
 The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 
@@ -222,7 +232,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 
 - ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.
 - ~~Add serialization contract tests to prevent drift between Rust and TypeScript fields.~~ Done on 2026-07-25: thirteen tests compare what serde emits against the declarations parsed from `src/api.ts`. Both directions were confirmed to fail on an induced mismatch.
-- Verify that device switches, disconnects, and page unmounts reliably stop long-running tasks.
+- Frontend and task-registry tests cover device switches, explicit disconnects, page unmounts, complete device loss, and a selected device becoming unusable. A real-device mid-operation disconnect is still required for Location, JIT, crash reads, transfers, and logs.
 - Cover empty states, timeouts, permission denial, mid-operation disconnects, and large files.
 
 ### P1: Frontend Maintainability
@@ -291,6 +301,7 @@ Append future validation results using this format:
 | 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Folder creation through the interface | Pass | First execution of `afc_mkdir` from the desktop on any device — `window.prompt` returned null before this, so the command was unreachable and the backend path had never run |
 | 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Streaming AFC transfer with progress and cancellation | Pass | Transfers now loop in 1 MB chunks instead of buffering the whole file; progress advances and the interface stays responsive. Cancelling stops the transfer and removes the partial file |
 | 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Files dragged in from Finder | Pass | Dropping into the table uploads to the open folder and dropping onto a folder row uploads into it. The Apps sideload zone had the same defect class: Tauri consumes OS drags before the webview sees them, and the `File.path` it read is an Electron extension WKWebView does not implement |
+| 2026-07-28 | iPhone14,5 | 26.5 | usbmuxd network record | Processes read-only protocol proof | Pass | CoreDeviceProxy opened in 420 ms with 62 RSD services. AppService was absent, so the harness used `com.apple.instruments.dtservicehub`; the DVT handshake and DeviceInfo channel returned 220 running processes. No application was launched or stopped |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

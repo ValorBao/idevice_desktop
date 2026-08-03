@@ -52,10 +52,12 @@ features = [
   "amfi",
   "mobile_image_mounter",
   "location_simulation",
+  "core_device",
   "core_device_proxy",
   "tunnel_tcp_stack",
   "rsd",
   "dvt",
+  "device_info",
   "debug_proxy",
   "tss",
   "remote_pairing"

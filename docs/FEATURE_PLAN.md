@@ -106,7 +106,8 @@ Before adding navigation, close the highest-value acceptance gaps in existing pa
 - add regression cases when any of these sessions exposes a defect.
 
 This is complete when every current page has a recorded main path and cleanup path,
-or an explicit limitation that cannot presently be exercised.
+or an explicit limitation that cannot presently be exercised. Record each hardware
+session in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
 
 ### Feature 1: Processes
 

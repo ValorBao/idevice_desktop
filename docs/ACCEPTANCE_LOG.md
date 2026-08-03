@@ -49,3 +49,16 @@ This proves the read-only backend path for the CoreDeviceLockdown generation. It
 does not satisfy Processes interface acceptance. Launch, PID verification, stop,
 and cleanup still require an explicit mutating harness run, and the
 CoreDeviceRemote and Legacy generations remain to be probed.
+
+## 2026-08-01 — automatic device-loss lifecycle regression
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| Frontend regression | n/a | mocked desktop boundary | All devices disappear | Pass | The active device page unmounts immediately and `device_disconnect` is called, which cancels every registered device task while preserving discovery monitoring |
+| Frontend regression | n/a | mocked desktop boundary | Selected device remains visible but becomes unusable | Pass | The active page unmounts, the interface returns to prerequisite guidance, and `device_disconnect` clears the backend selection and tasks |
+
+Before this fix, discovery updated the visible connection state without ending the
+backend session. The old page could remain mounted behind onboarding and continue
+using a fallback demonstration-device identifier for desktop commands. Device-bound
+pages now render only while a usable session exists. This is regression evidence;
+the corresponding mid-operation physical-disconnect checks remain hardware gaps.

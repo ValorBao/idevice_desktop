@@ -62,6 +62,8 @@ function App() {
       if (!found.length) {
         setDeviceId('')
         setConnection('none')
+        setPage('overview')
+        await api.deviceDisconnect().catch((error) => setToast(errorMessage(error)))
         return
       }
       const current = found.find((item) => item.id === deviceIdRef.current)
@@ -72,6 +74,8 @@ function App() {
         setConnection('connected')
       } else {
         setConnection('detected')
+        setPage('overview')
+        await api.deviceDisconnect().catch((error) => setToast(errorMessage(error)))
       }
     } catch (error) {
       setConnection('none')
@@ -199,14 +203,16 @@ function App() {
             )}
 
             <div className="page-scroll" key={`${page}:${device.udid}`}>
-              {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
-              {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
-              {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'logs' && <Logs connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
-              {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
-              {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
+              {connected && <>
+                {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
+                {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
+                {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'logs' && <Logs connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
+                {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
+                {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
+              </>}
             </div>
 
             {!connected && (

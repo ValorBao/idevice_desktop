@@ -1,6 +1,6 @@
 # idevice desktop Development Progress
 
-> Last updated: 2026-07-28
+> Last updated: 2026-08-01
 > Release: 0.0.2 Developer Preview
 > Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
 
@@ -17,19 +17,19 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Item | Status |
 | --- | --- |
-| Frontend production build | Passed on 2026-07-26 with `npm run build` |
-| Frontend regression tests | Passed on 2026-07-26: 18 passed, 0 failed across five Vitest files |
+| Frontend production build | Passed on 2026-08-01 with `npm run build` |
+| Frontend regression tests | Passed on 2026-08-01: 24 passed, 0 failed across seven Vitest files |
 | GitHub Actions CI | Passed on PR #27: Frontend on Ubuntu in 26 seconds; Rust formatting, check, 63 tests, and strict Clippy on macOS 14 arm64 in 3 minutes 3 seconds |
-| Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
-| Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
+| Rust static check | Passed on 2026-08-01 with `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | Passed on 2026-08-01: 63 passed, 0 failed |
+| Rust formatting and linting | Passed on 2026-08-01 with `cargo fmt --check` and strict Clippy warnings |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.2_aarch64.dmg` built on 2026-07-26; passes `hdiutil verify`, identifies itself as 0.0.2 with a macOS 11.0 minimum, carries the CSP in its arm64 release binary, and ships both licence files byte-identical to their sources |
-| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, and a browser-demo interaction path. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
+| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, browser-demo interaction, device-switch remounting, and automatic session teardown when a device disappears or becomes unusable. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, task cancellation, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
 | Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs`, `verify_pairing.rs`, and `verify_processes.rs` drive the real provider, tunnel, and command code against an attached device |
 | Branches | Current work continues on `codex/current-surface-acceptance`; `master` does not yet contain that acceptance pass |
-| Worktree | In progress: Processes protocol harness and its first CoreDeviceLockdown result |
+| Worktree | In progress: automatic device-loss session teardown and regression coverage |
 
 ## 3. Feature Progress
 
@@ -154,7 +154,7 @@ PRs: #23, #24, and the Files completeness follow-up.
 
 ## 5. Active Validation
 
-The frontend production build, 22 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass. Current hardware-acceptance evidence is recorded in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
+The frontend production build, 24 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass. Current hardware-acceptance evidence is recorded in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
 
 The Processes protocol proof started on 2026-07-28 with
 `src-tauri/examples/verify_processes.rs`. Its default mode is read-only; an explicit
@@ -232,7 +232,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 
 - ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.
 - ~~Add serialization contract tests to prevent drift between Rust and TypeScript fields.~~ Done on 2026-07-25: thirteen tests compare what serde emits against the declarations parsed from `src/api.ts`. Both directions were confirmed to fail on an induced mismatch.
-- Verify that device switches, disconnects, and page unmounts reliably stop long-running tasks.
+- Frontend and task-registry tests cover device switches, explicit disconnects, page unmounts, complete device loss, and a selected device becoming unusable. A real-device mid-operation disconnect is still required for Location, JIT, crash reads, transfers, and logs.
 - Cover empty states, timeouts, permission denial, mid-operation disconnects, and large files.
 
 ### P1: Frontend Maintainability

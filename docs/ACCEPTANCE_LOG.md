@@ -62,3 +62,14 @@ backend session. The old page could remain mounted behind onboarding and continu
 using a fallback demonstration-device identifier for desktop commands. Device-bound
 pages now render only while a usable session exists. This is regression evidence;
 the corresponding mid-operation physical-disconnect checks remain hardware gaps.
+
+## 2026-08-04 — device-monitor concurrency regression
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| Frontend regression | n/a | mocked desktop boundary | Overlapping catalog refresh | Pass | A device event received during an in-flight listing is coalesced into a second listing; the stale first snapshot cannot select or render the wrong device |
+| Frontend regression | n/a | mocked desktop boundary | Delayed event subscription | Pass | If the component unmounts before `deviceChanged` finishes subscribing, the returned listener is immediately released |
+
+These checks harden the desktop session lifecycle without claiming real-device
+acceptance. Physical hot-plug, sleep/wake, and mid-operation disconnects remain in
+the Foundation hardware backlog.

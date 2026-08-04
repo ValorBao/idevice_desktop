@@ -49,37 +49,81 @@ function App() {
   const [deviceMenu, setDeviceMenu] = useState(false)
   const [pairOpen, setPairOpen] = useState(false)
   const [toast, setToast] = useState('')
+  const mountedRef = useRef(true)
+  const lifecycleRef = useRef(0)
+  const refreshRunningRef = useRef(false)
+  const refreshPendingRef = useRef(false)
   const device = deviceCatalog.find((item) => item.id === deviceId) ?? deviceCatalog[0] ?? devices[0]
   const connected = connection === 'connected'
   useEffect(() => { deviceIdRef.current = deviceId }, [deviceId])
+  useEffect(() => {
+    mountedRef.current = true
+    lifecycleRef.current += 1
+    return () => {
+      mountedRef.current = false
+      lifecycleRef.current += 1
+    }
+  }, [])
 
   const refreshDevices = useCallback(async () => {
-    if (!desktop) return
+    if (!desktop || !mountedRef.current) return
+    refreshPendingRef.current = true
+    if (refreshRunningRef.current) return
+
+    refreshRunningRef.current = true
+    const lifecycle = lifecycleRef.current
+    const lifecycleIsCurrent = () => mountedRef.current && lifecycleRef.current === lifecycle
     try {
-      const found = await api.deviceList()
-      const catalog = found.map(summaryToDevice)
-      setDeviceCatalog(catalog)
-      if (!found.length) {
-        setDeviceId('')
-        setConnection('none')
-        setPage('overview')
-        await api.deviceDisconnect().catch((error) => setToast(errorMessage(error)))
-        return
+      while (refreshPendingRef.current && lifecycleIsCurrent()) {
+        refreshPendingRef.current = false
+        try {
+          const found = await api.deviceList()
+          if (!lifecycleIsCurrent()) return
+          // A device event arrived while this snapshot was loading. Do not let
+          // the older catalog take over the session; fetch the latest one.
+          if (refreshPendingRef.current) continue
+
+          const catalog = found.map(summaryToDevice)
+          setDeviceCatalog(catalog)
+          if (!found.length) {
+            setDeviceId('')
+            setConnection('none')
+            setPage('overview')
+            await api.deviceDisconnect().catch((error) => {
+              if (lifecycleIsCurrent()) setToast(errorMessage(error))
+            })
+            continue
+          }
+
+          const current = found.find((item) => item.id === deviceIdRef.current)
+          const target = current ?? found.find((item) => item.paired && item.connectable) ?? found[0]
+          if (target.paired && target.connectable) {
+            if (target.id !== deviceIdRef.current) await api.deviceSelect(target.id)
+            if (!lifecycleIsCurrent()) return
+            if (refreshPendingRef.current) continue
+            setDeviceId(target.id)
+            setConnection('connected')
+          } else {
+            setDeviceId(target.id)
+            setConnection('detected')
+            setPage('overview')
+            await api.deviceDisconnect().catch((error) => {
+              if (lifecycleIsCurrent()) setToast(errorMessage(error))
+            })
+          }
+        } catch (error) {
+          if (!lifecycleIsCurrent()) return
+          if (refreshPendingRef.current) continue
+          setConnection('none')
+          setToast(errorMessage(error))
+        }
       }
-      const current = found.find((item) => item.id === deviceIdRef.current)
-      const target = current ?? found.find((item) => item.paired && item.connectable) ?? found[0]
-      setDeviceId(target.id)
-      if (target.paired && target.connectable) {
-        if (target.id !== deviceIdRef.current) await api.deviceSelect(target.id)
-        setConnection('connected')
-      } else {
-        setConnection('detected')
-        setPage('overview')
-        await api.deviceDisconnect().catch((error) => setToast(errorMessage(error)))
-      }
-    } catch (error) {
-      setConnection('none')
-      setToast(errorMessage(error))
+    } finally {
+      refreshRunningRef.current = false
+      // StrictMode can remount while the first mount still has a listing in
+      // flight. The remounted effect marks a refresh pending; start it after
+      // the obsolete runner releases the serialization lock.
+      if (refreshPendingRef.current && mountedRef.current) void refreshDevices()
     }
   }, [desktop])
 
@@ -87,8 +131,15 @@ function App() {
     if (!desktop) return
     let disposed = false
     let unlisten: (() => void) | undefined
-    events.deviceChanged(() => { if (!disposed) void refreshDevices() }).then((stop) => { unlisten = stop })
-    void api.deviceMonitorStart().then(refreshDevices).catch((error) => setToast(errorMessage(error)))
+    void events.deviceChanged(() => { if (!disposed) void refreshDevices() })
+      .then((stop) => {
+        if (disposed) stop()
+        else unlisten = stop
+      })
+      .catch((error) => { if (!disposed) setToast(errorMessage(error)) })
+    void api.deviceMonitorStart()
+      .then(() => { if (!disposed) return refreshDevices() })
+      .catch((error) => { if (!disposed) setToast(errorMessage(error)) })
     return () => {
       disposed = true
       unlisten?.()

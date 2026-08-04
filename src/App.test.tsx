@@ -63,6 +63,12 @@ const devices = [
   },
 ]
 
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 describe('device page lifecycle', () => {
   beforeEach(() => {
     backend.api.deviceList.mockResolvedValue(devices)
@@ -123,5 +129,38 @@ describe('device page lifecycle', () => {
     await waitFor(() => expect(backend.api.deviceDisconnect).toHaveBeenCalledOnce())
     expect(screen.getByRole('heading', { name: 'Alpha iPhone found on the network' })).toBeInTheDocument()
     expect(document.querySelector('.page-scroll')).toBeEmptyDOMElement()
+  })
+
+  it('discards a stale device snapshot when a newer device event arrives', async () => {
+    const firstList = deferred<typeof devices>()
+    backend.api.deviceList
+      .mockReturnValueOnce(firstList.promise)
+      .mockResolvedValueOnce([devices[1]])
+    render(<App />)
+
+    await waitFor(() => expect(backend.api.deviceList).toHaveBeenCalledOnce())
+    expect(monitor.deviceChanged).toBeDefined()
+    act(() => monitor.deviceChanged?.())
+    expect(backend.api.deviceList).toHaveBeenCalledOnce()
+
+    firstList.resolve(devices)
+
+    await waitFor(() => expect(backend.api.deviceList).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getAllByText('Beta iPhone')).toHaveLength(2))
+    expect(backend.api.deviceSelect).toHaveBeenCalledOnce()
+    expect(backend.api.deviceSelect).toHaveBeenCalledWith('device-b')
+    expect(screen.queryByText('Alpha iPhone')).not.toBeInTheDocument()
+  })
+
+  it('releases a device listener that finishes subscribing after unmount', async () => {
+    const subscription = deferred<() => void>()
+    const unlisten = vi.fn()
+    backend.events.deviceChanged.mockReturnValueOnce(subscription.promise)
+    const view = render(<App />)
+
+    view.unmount()
+    await act(async () => { subscription.resolve(unlisten) })
+
+    expect(unlisten).toHaveBeenCalledOnce()
   })
 })

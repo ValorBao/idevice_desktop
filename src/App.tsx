@@ -15,7 +15,7 @@ import { Diagnostics } from './pages/Diagnostics'
 import { Files } from './pages/Files'
 import { Apps } from './pages/Apps'
 import { CrashReports } from './pages/CrashReports'
-import { Logs } from './pages/Logs'
+import { Monitor } from './pages/Monitor'
 import { Developer } from './pages/Developer'
 import { Location } from './pages/Location'
 
@@ -25,7 +25,7 @@ const pageMeta: Record<Page, [string, string]> = {
   files: ['Files', 'com.apple.afc'],
   apps: ['Apps', 'com.apple.mobile.installation_proxy'],
   crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
-  logs: ['Logs', 'com.apple.syslog_relay'],
+  logs: ['Monitor', 'Processes and live device logs'],
   developer: ['Debug Tools', 'com.apple.dt.* services'],
   location: ['Location', 'com.apple.dt.simulatelocation'],
 }
@@ -36,7 +36,7 @@ const navItems = [
   { id: 'files', label: 'Files', icon: FolderOpen, suffix: 'AFC' },
   { id: 'apps', label: 'Apps', icon: AppWindow },
   { id: 'crashes', label: 'Crash Reports', icon: Bug },
-  { id: 'logs', label: 'Logs', icon: TerminalSquare },
+  { id: 'logs', label: 'Monitor', icon: TerminalSquare },
 ] as const
 
 function App() {
@@ -260,7 +260,7 @@ function App() {
                 {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'logs' && <Logs connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
+                {page === 'logs' && <Monitor connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
                 {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
                 {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
               </>}

@@ -143,6 +143,38 @@ pub struct DeviceLog {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProcessSummary {
+    pub pid: u32,
+    pub name: String,
+    pub executable_path: Option<String>,
+    pub is_application: bool,
+    pub can_stop: bool,
+    /// Opaque process identity used to protect stop requests from stale rows
+    /// and PID reuse. The interface must return this value unchanged.
+    pub identity: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessSnapshot {
+    pub processes: Vec<ProcessSummary>,
+    pub transport: String,
+    pub available: bool,
+    pub supports_launch: bool,
+    pub supports_stop: bool,
+    pub limitation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessLaunch {
+    pub pid: u32,
+    pub bundle_id: String,
+    pub transport: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StreamStatus {
     pub stream: String,
     pub state: String,
@@ -471,6 +503,40 @@ mod contract {
                 message: String::new(),
                 subsystem: None,
                 category: None,
+            },
+        );
+    }
+
+    #[test]
+    fn process_types_match_typescript() {
+        assert_matches(
+            "ProcessSummary",
+            &ProcessSummary {
+                pid: 0,
+                name: String::new(),
+                executable_path: None,
+                is_application: false,
+                can_stop: false,
+                identity: String::new(),
+            },
+        );
+        assert_matches(
+            "ProcessSnapshot",
+            &ProcessSnapshot {
+                processes: Vec::new(),
+                transport: String::new(),
+                available: false,
+                supports_launch: false,
+                supports_stop: false,
+                limitation: None,
+            },
+        );
+        assert_matches(
+            "ProcessLaunch",
+            &ProcessLaunch {
+                pid: 0,
+                bundle_id: String::new(),
+                transport: String::new(),
             },
         );
     }

@@ -101,6 +101,24 @@ export type DeviceLog = {
   subsystem: string | null
   category: string | null
 }
+export type ProcessSummary = {
+  pid: number
+  name: string
+  executablePath: string | null
+  isApplication: boolean
+  canStop: boolean
+  /** Opaque stale-row guard; return it unchanged when stopping a process. */
+  identity: string
+}
+export type ProcessSnapshot = {
+  processes: ProcessSummary[]
+  transport: string
+  available: boolean
+  supportsLaunch: boolean
+  supportsStop: boolean
+  limitation: string | null
+}
+export type ProcessLaunch = { pid: number; bundleId: string; transport: string }
 export type DeveloperStatus = {
   developerMode: boolean | null
   ddiMounted: boolean
@@ -153,6 +171,9 @@ export const api = {
   crashReportExport: (path: string, localPath: string, udid?: string) => call<void>('crash_report_export', { udid, path, localPath }),
   logsStart: (udid?: string, pid?: number) => call<void>('logs_start', { udid, pid }),
   logsStop: () => call<void>('logs_stop'),
+  processesList: (udid?: string) => call<ProcessSnapshot>('processes_list', { udid }),
+  processLaunch: (bundleId: string, udid?: string) => call<ProcessLaunch>('process_launch', { udid, bundleId }),
+  processStop: (pid: number, identity: string, udid?: string) => call<void>('process_stop', { udid, pid, identity }),
   developerStatus: (udid?: string) => call<DeveloperStatus>('developer_status', { udid }),
   developerReveal: (udid?: string) => call<void>('developer_mode_reveal', { udid }),
   developerEnable: (udid?: string) => call<void>('developer_mode_enable', { udid }),

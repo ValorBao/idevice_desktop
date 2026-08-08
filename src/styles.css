@@ -351,6 +351,52 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .crash-empty { min-height: 150px; display: grid; flex: 1; place-items: center; padding: 24px; color: var(--dim); font: 11px/1.5 var(--mono); text-align: center; }
 
 .logs-page { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; }
+.monitor-page { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.monitor-tabs { flex: none; margin: 0 20px; padding-top: 4px; }
+.monitor-content { min-height: 0; flex: 1; }
+.processes-page { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
+.process-toolbar { display: flex; align-items: center; gap: 8px; }
+.process-toolbar > label { min-width: 220px; flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--faint); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+.process-toolbar > label:focus-within { border-color: var(--accent); }
+.process-toolbar input { min-width: 0; flex: 1; padding: 8px 0; color: var(--text); background: transparent; border: 0; outline: 0; font: 12px var(--mono); }
+.process-toolbar > button { display: flex; align-items: center; gap: 6px; padding: 7px 11px; color: var(--dim); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 600; }
+.process-toolbar > button:hover:not(:disabled) { color: var(--text); border-color: var(--border2); }
+.process-toolbar > button:disabled { cursor: default; opacity: .45; }
+.process-toolbar > small { max-width: 300px; overflow: hidden; color: var(--faint); font: 10.5px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.process-launch { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.process-launch > div { min-width: 210px; flex: 1; }
+.process-launch b, .process-launch small { display: block; }
+.process-launch b { font-size: 12.5px; }
+.process-launch small { margin-top: 3px; color: var(--dim); font-size: 10.5px; }
+.process-launch select { width: min(360px, 38%); padding: 8px 10px; color: var(--text); background: var(--elev); border: 1px solid var(--border); border-radius: 8px; font: 11px var(--mono); outline: 0; }
+.process-launch button:disabled { cursor: default; opacity: .45; }
+.process-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; color: #ffaaa6; background: rgba(255,95,87,.08); border: 1px solid rgba(255,95,87,.25); border-radius: 8px; font-size: 11.5px; }
+.process-error button { padding: 4px 9px; color: #ffaaa6; cursor: pointer; background: transparent; border: 1px solid rgba(255,95,87,.4); border-radius: 6px; }
+.process-notice { padding: 9px 12px; color: #d5b96d; background: rgba(213,185,109,.08); border: 1px solid rgba(213,185,109,.25); border-radius: 8px; font-size: 11.5px; line-height: 1.5; }
+.process-state { min-height: 180px; display: grid; place-content: center; gap: 8px; padding: 28px; color: var(--dim); text-align: center; }
+.process-state b { color: var(--text); font-size: 14px; }
+.process-state p { max-width: 560px; margin: 0; font-size: 12px; line-height: 1.6; }
+.process-state code { color: var(--faint); font: 11px var(--mono); }
+.process-table { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.process-table > header, .process-row { display: grid; grid-template-columns: minmax(260px, 1fr) 90px 120px 90px; align-items: center; gap: 10px; }
+.process-table > header { flex: none; padding: 9px 14px; color: var(--faint); border-bottom: 1px solid var(--border); font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+.process-table > div { min-height: 0; flex: 1; overflow: auto; }
+.process-row { min-height: 48px; padding: 7px 14px; border-bottom: 1px solid rgba(255,255,255,.045); }
+.process-row:hover { background: var(--hover); }
+.process-row > span:first-child { min-width: 0; }
+.process-row b, .process-row span:first-child small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.process-row b { font-size: 12px; }
+.process-row span:first-child small { margin-top: 3px; color: var(--faint); font: 9.5px var(--mono); }
+.process-row > code { color: var(--accent); font: 11px var(--mono); }
+.process-row > small { color: var(--dim); font-size: 10.5px; }
+.process-stop { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 9px; color: #ff8d87; cursor: pointer; background: rgba(255,95,87,.07); border: 1px solid rgba(255,95,87,.25); border-radius: 7px; font-size: 10.5px; font-weight: 600; }
+.process-stop:hover:not(:disabled) { border-color: #ff5f57; }
+.process-stop:disabled { cursor: default; opacity: .45; }
+.process-protected { color: var(--faint); font: 9.5px var(--mono); }
+.process-empty { display: grid; min-height: 150px; place-items: center; color: var(--dim); font: 11px var(--mono); }
+.process-table > footer { flex: none; display: flex; justify-content: space-between; padding: 8px 14px; color: var(--faint); border-top: 1px solid var(--border); font: 9.5px var(--mono); }
+.spinning { animation: process-spin .8s linear infinite; }
+@keyframes process-spin { to { transform: rotate(360deg); } }
 .log-toolbar { flex: none; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .log-toolbar button { display: flex; align-items: center; gap: 6px; padding: 7px 13px; color: var(--dim); font-size: 12px; font-weight: 600; cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
 .log-toolbar button:hover { color: var(--text); border-color: var(--border2); }
@@ -573,6 +619,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .log-search { flex-wrap: wrap; }
   .log-search > label { width: 100%; flex-basis: 100%; }
   .log-search > small { flex: 1; }
+  .process-toolbar { flex-wrap: wrap; }
+  .process-toolbar > label { flex-basis: 100%; }
+  .process-launch { align-items: stretch; flex-direction: column; }
+  .process-launch select { width: 100%; }
+  .process-table > header, .process-row { grid-template-columns: minmax(180px, 1fr) 60px 86px 76px; }
   .tabs { overflow-x: auto; }
   .key-value-row { flex-direction: column; gap: 4px; }
   .key-value-row code { width: auto; }

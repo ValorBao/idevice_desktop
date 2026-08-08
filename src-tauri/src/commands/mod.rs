@@ -7,6 +7,7 @@ mod files;
 mod location;
 mod logs;
 mod overview;
+mod processes;
 mod screenshot;
 
 pub use apps::*;
@@ -18,6 +19,7 @@ pub use files::*;
 pub use location::*;
 pub use logs::*;
 pub use overview::*;
+pub use processes::*;
 pub use screenshot::*;
 
 #[tauri::command]

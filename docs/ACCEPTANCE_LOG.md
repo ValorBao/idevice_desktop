@@ -47,8 +47,55 @@ interface evidence; it is an environment limitation, not a product pass or failu
 
 This proves the read-only backend path for the CoreDeviceLockdown generation. It
 does not satisfy Processes interface acceptance. Launch, PID verification, stop,
-and cleanup still require an explicit mutating harness run, and the
-CoreDeviceRemote and Legacy generations remain to be probed.
+and cleanup still require an explicit mutating harness run on this generation.
+CoreDeviceRemote and Legacy remained to be probed at the end of this session.
+
+## 2026-08-04 — iOS 17 Processes protocol proof
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | USB + RemotePairing | Pairing and route prerequisite | Pass | usbmuxd reported one USB device with an existing pair record; paired Lockdown returned `ProductVersion=17.0` |
+| `00008020…` (iPhone11,8) | 17.0 | RemotePairing/RSD | Read-only process list | Pass | RSD advertised both AppService and DVT; the harness correctly preferred CoreDevice AppService and returned 473 processes |
+| `00008020…` (iPhone11,8) | 17.0 | RemotePairing/RSD | Launch, PID visibility, stop, and cleanup | Pass | AppService launched `cn.gblw.AppsDump` as new pid 1522, the next list contained it, SIGTERM succeeded, and the final list confirmed it exited |
+| `00008020…` (iPhone11,8) | 17.0 | RemotePairing/RSD | JIT transport recheck | Pass | The JIT harness launched the same test app as pid 1533, disabled its memory limit, received a successful `T11` attach reply, detached, and terminated only the launched process |
+
+This completes the Processes protocol proof for CoreDeviceRemote, including its
+mutating cleanup path. It does not add a visible Processes interface or count as
+desktop-interface acceptance. CoreDeviceLockdown still needs the mutating path and
+Legacy still needs a support boundary result.
+
+## 2026-08-08 — Processes workflow integration
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| Frontend regression | n/a | mocked desktop boundary | List and support boundary | Pass | The selected UDID loads the process snapshot; installed-user-application and protected system states render separately; Legacy returns an explicit unsupported state with no dead controls |
+| Frontend regression | n/a | mocked desktop boundary | Launch and stop | Pass | Launch targets the selected device and refreshes; stop requires destructive confirmation and returns the row's opaque process identity with its PID and UDID |
+| Frontend regression | n/a | mocked DVT boundary | Read-only stop limitation | Pass | DVT process rows remain visible and launch stays available, while the unverified Stop action is replaced by `Read only` and the interface explains how AppService becomes available |
+| Rust regression | n/a | pure decision boundary | Stop and lifecycle safety | Pass | A changed process identity is rejected as stale; AppService and DVT user-container paths plus DVT Installation Proxy names distinguish installed user applications from system applications; malformed bundle identifiers are rejected before device I/O; device-session cancellation drops an in-flight process operation |
+| Browser demonstration | n/a | mock data | Monitor layout and launch interaction | Pass (UI only) | Processes rendered without overflow at the default viewport and 820×650; search, protected rows, and demo launch state were visible; no browser warnings or errors were recorded |
+| `00008110…` (iPhone14,5) | 26.5 | usbmuxd network record | DVT read-only regression | Pass | CoreDeviceProxy opened with 62 RSD services; AppService was absent; DVT DeviceInfo returned 277 running processes. No process was launched, signalled, or stopped |
+| `00008110…` (iPhone14,5) | 26.5 | route disappeared | Production list failure path | Pass (failure path) | The production service-layer harness returned `no active usbmuxd or Bonjour Lockdown route` after the device disappeared instead of selecting another target; no process operation was attempted |
+| `00008020…` (iPhone11,8) | 17.0 | USB + RemotePairing/RSD | Production list and DVT safety classification | Pass | Before AppService was advertised, the production service selected DVT DeviceInfo, returned 419 processes, mapped executable paths from DVT's `realAppName`, and exposed only user-container or Installation Proxy-matched applications as stoppable |
+| `00008020…` (iPhone11,8) | 17.0 | DVT ProcessControl | DVT fallback stop | Blocked | `killPid:` accepted two identity-checked requests for the dedicated `cn.gblw.AppsDump` pid 3451, but the PID remained listed. No daily application was signalled. Apple `devicectl --kill` removed the test process and enabled the developer-image services, proving the process was terminable and exposing AppService |
+| `00008020…` (iPhone11,8) | 17.0 | CoreDevice AppService · RemotePairing/RSD | Production list, launch, identity check, stop, and cleanup | Pass | The production service-layer harness listed 441 processes, launched only `cn.gblw.AppsDump` as new pid 4096, found its user-container identity in a fresh list, sent SIGTERM, and confirmed the final list no longer contained the PID |
+
+These checks establish the visible workflow and safety contract. They do not count
+as real-device desktop-interface acceptance. The production AppService command path
+now has a full iOS 17.0 hardware pass. The Monitor interface still needs a desktop
+click-through, and the iOS 26.5 device must visibly confirm the DVT read-only
+limitation. DVT Stop is intentionally not advertised when AppService is unavailable.
+
+## 2026-08-09 — iOS 17 Processes desktop acceptance
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop · CoreDevice AppService · RemotePairing/RSD | Monitor list, launch, confirmed stop, and cleanup | Pass | macOS accessibility automation opened Monitor → Processes, selected the debuggable side-loaded `AppsDump2 · cn.gblw.AppsDump` entry, and pressed Launch. A production snapshot confirmed new pid 4130, its `/var/containers/Bundle/Application/.../AppsDump.app/AppsDump` identity, and `canStop=true`. The native confirmation named `AppsDump` and pid 4130 exactly. After Stop, a production snapshot dropped from 468 to 467 processes and no longer contained the PID; the visible row also disappeared after the five-second interface refresh |
+
+This closes the iOS 17.0 AppService desktop main and cleanup paths for Processes.
+The launch selector now merges ordinary user applications with debuggable side-loaded
+applications by bundle identifier, which makes the designated test build available
+without exposing all system applications. Cross-generation visible acceptance still
+needs the DVT read-only notice on iOS 26.5 and the Legacy unavailable state on iOS 14.2.
 
 ## 2026-08-01 — automatic device-loss lifecycle regression
 

@@ -28,6 +28,7 @@ Developer Preview builds are unsigned and unnotarized Apple Silicon builds.
 - Installation Proxy user-application listing with icons and filtering, IPA installation, uninstallation, and progress events
 - Crash report listing, filtering, text preview, and export
 - Live structured OS Trace logs with pause, filter, and clear controls
+- searchable iOS 17+ process monitoring with application launch, AppService-only confirmed stop, stale-PID protection, and explicit DVT-stop/Legacy support boundaries
 - Developer Mode and Developer Disk Image mounting and unmounting
 - device-targeted iOS 17+ RemotePairing/CoreDevice RSD tunnels, application launch, debug proxy attachment, and JIT sessions
 - interactive Leaflet location selection with DVT/RSD and legacy Lockdown simulation transports

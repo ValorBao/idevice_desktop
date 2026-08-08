@@ -1,6 +1,6 @@
 # idevice desktop Feature Delivery Plan
 
-> Last updated: 2026-07-26
+> Last updated: 2026-08-08
 > Principle: ship complete user workflows, not protocol exposure.
 
 This plan turns the capability backlog into a sequence of small, usable features. A
@@ -231,7 +231,12 @@ appear as convenient quick actions.
 
 ## 5. Planning Decision
 
-The next implementation cycle is the **current-surface acceptance pass**, followed
-by the **Processes protocol proof**. No Process navigation or mock-only controls are
-added until a real process list has been obtained on supported hardware and its
-cleanup behavior is known.
+The current-surface acceptance pass remains open for its recorded hardware gaps.
+The Processes protocol proof has produced real lists on both modern generations and
+a complete production AppService launch/stop cleanup result on iOS 17.0, so its
+smallest useful Monitor workflow is now integrated. DVT stop is explicitly read-only
+after an identity-checked `killPid:` failed to terminate the designated test app.
+The iOS 17.0 desktop-interface main and cleanup paths passed on 2026-08-09. The next
+gate is verification that the DVT limitation renders correctly on iOS 26.5 and the
+Legacy unavailable state renders on iOS 14.2; Performance and Network do not begin
+until those visible boundary checks are recorded.

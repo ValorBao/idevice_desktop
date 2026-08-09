@@ -30,9 +30,9 @@ Files, and the other device-bound pages start with state belonging to the new ph
 ### Still required before the Foundation gate closes
 
 - Complete Location set/clear through the desktop interface on Legacy.
-- Complete JIT attach/detach through the desktop interface.
+- Complete JIT attach/detach through the desktop interface on Legacy.
 - Preview and export an actual report larger than 4 MB.
-- Exercise cold start and sleep/wake association through the full discovery catalog.
+- Exercise sleep/wake association through the full discovery catalog.
 - Disconnect a device while a Location, JIT, crash read, and long-running log task is active.
 
 The local macOS session did not grant assistive-access control to the acceptance
@@ -106,6 +106,35 @@ The launch selector now merges ordinary user applications with debuggable side-l
 applications by bundle identifier, which makes the designated test build available
 without exposing all system applications. Cross-generation visible acceptance still
 needs the DVT read-only notice on iOS 26.5 and the Legacy unavailable state on iOS 14.2.
+
+## 2026-08-09 — connected-device cold-start association
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | USB + RemotePairing catalog | Launch the Tauri application while the phone is already connected | Pass | A fresh desktop process immediately rendered `qiu的iPhone` as `USB connected · ready`. The subsequent Debug Tools JIT command and independent Processes snapshots both targeted `00008020…`, confirming that the visible selection and backend route belonged to the same device |
+
+This closes the connected-device cold-start association check. Sleep/wake recovery
+still requires a separate physical session transition.
+
+## 2026-08-09 — iOS 17 JIT desktop acceptance
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop · RemotePairing/RSD · debugserver | Debug Tools start, attach, stop, and cleanup | Pass | The interface showed DDI `Mounted` and RSD `Available`, selected `AppsDump2 · cn.gblw.AppsDump`, and reported `debugserver attached · pid 4151`. A production Processes snapshot independently identified `AppsDump` at pid 4151. Stop returned the interface to `no process attached` and `idle · ready to attach`, while a second snapshot still found pid 4151, proving detach did not terminate the application. The production identity-checked stop path then cleaned the test process and completed a fresh launch/stop cycle as pid 4488 with no residual AppsDump process |
+
+This closes the iOS 17.0 JIT desktop attach/detach main path and confirms the
+intended stop contract: the debug session ends while the application stays open.
+The Legacy attach-by-name implementation has lower-level real-device evidence but
+still needs the same visible desktop-interface confirmation.
+
+## 2026-08-09 — large crash-report availability probe
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | USB Lockdown | Find a real report larger than the 4 MiB preview cap | Inconclusive | The read-only harness inspected 43 crash-report entries and found no report between 4 MiB and the 64 MiB safety cap. No device file was changed and no temporary export remained |
+
+The large-report preview/export acceptance item stays open until a suitable report
+exists; absence of a sample is not treated as a product pass or failure.
 
 ## 2026-08-01 — automatic device-loss lifecycle regression
 

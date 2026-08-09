@@ -29,7 +29,7 @@ Files, and the other device-bound pages start with state belonging to the new ph
 
 ### Still required before the Foundation gate closes
 
-- Complete Location set/clear through the desktop interface on Legacy and iOS 17+.
+- Complete Location set/clear through the desktop interface on Legacy.
 - Complete JIT attach/detach through the desktop interface.
 - Preview and export an actual report larger than 4 MB.
 - Exercise cold start and sleep/wake association through the full discovery catalog.
@@ -63,6 +63,16 @@ This completes the Processes protocol proof for CoreDeviceRemote, including its
 mutating cleanup path. It does not add a visible Processes interface or count as
 desktop-interface acceptance. CoreDeviceLockdown still needs the mutating path and
 Legacy still needs a support boundary result.
+
+## 2026-08-05 — iOS 17 Location desktop acceptance
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | USB + RemotePairing/RSD | Location preset set and clear through the desktop interface | Pass | The user selected Apple Park and started simulation; the interface reported an active DVT/RSD override and the phone reflected the simulated position. Stop returned the interface to real GPS and the phone restored its real location |
+
+This closes the current-surface Location main path for CoreDeviceRemote. Legacy
+still needs the same desktop-interface click-through; its lower-level Lockdown
+set, reconnect-for-clear, and real-GPS restoration path already passed on iOS 14.2.
 
 ## 2026-08-08 — Processes workflow integration
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, AppWindow, Bug, Check, ChevronDown, CircleStop, Code2, FolderOpen,
-  MapPin, Plus, Smartphone, TerminalSquare,
+  Activity, AppWindow, BadgeCheck, Beaker, Bug, Check, ChevronDown, CircleStop, ClipboardPaste, Code2, FolderOpen,
+  MapPin, Plus, ScreenShare, Smartphone, TerminalSquare,
 } from 'lucide-react'
 import { devices, type Device } from './data'
 import { api, errorMessage, events, isDesktopRuntime, type DeviceSummary } from './api'
@@ -18,6 +18,10 @@ import { CrashReports } from './pages/CrashReports'
 import { Monitor } from './pages/Monitor'
 import { Developer } from './pages/Developer'
 import { Location } from './pages/Location'
+import { LiveScreen } from './pages/LiveScreen'
+import { Profiles } from './pages/Profiles'
+import { Pasteboard } from './pages/Pasteboard'
+import { TestLab } from './pages/TestLab'
 
 const pageMeta: Record<Page, [string, string]> = {
   overview: ['Overview', 'idevice · lockdown query'],
@@ -25,8 +29,12 @@ const pageMeta: Record<Page, [string, string]> = {
   files: ['Files', 'com.apple.afc'],
   apps: ['Apps', 'com.apple.mobile.installation_proxy'],
   crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
-  logs: ['Monitor', 'Processes and live device logs'],
+  logs: ['Monitor', 'Processes, performance, network capture, and live device logs'],
+  screen: ['Live Screen', 'Live PNG device preview and still-frame capture'],
   developer: ['Debug Tools', 'com.apple.dt.* services'],
+  profiles: ['Provisioning Profiles', 'Read-only Misagent signing and expiry inspection'],
+  pasteboard: ['Pasteboard', 'Explicit bounded CoreDevice text and image transfer'],
+  xctest: ['Test Lab', 'Read-only XCTest runner and developer-service preflight'],
   location: ['Location', 'com.apple.dt.simulatelocation'],
 }
 
@@ -37,6 +45,7 @@ const navItems = [
   { id: 'apps', label: 'Apps', icon: AppWindow },
   { id: 'crashes', label: 'Crash Reports', icon: Bug },
   { id: 'logs', label: 'Monitor', icon: TerminalSquare },
+  { id: 'screen', label: 'Live Screen', icon: ScreenShare },
 ] as const
 
 function App() {
@@ -230,6 +239,9 @@ function App() {
               ))}
               <span className="nav-heading developer-heading">Developer</span>
               <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')} aria-label="Debug Tools" title="Debug Tools"><Code2 size={17} /><span>Debug Tools</span></button>
+              <button className={page === 'profiles' ? 'active' : ''} onClick={() => setPage('profiles')} aria-label="Provisioning Profiles" title="Provisioning Profiles"><BadgeCheck size={17} /><span>Profiles</span></button>
+              <button className={page === 'pasteboard' ? 'active' : ''} onClick={() => setPage('pasteboard')} aria-label="Pasteboard" title="Pasteboard"><ClipboardPaste size={17} /><span>Pasteboard</span></button>
+              <button className={page === 'xctest' ? 'active' : ''} onClick={() => setPage('xctest')} aria-label="Test Lab" title="Test Lab"><Beaker size={17} /><span>Test Lab</span></button>
               <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')} aria-label="Location" title="Location"><MapPin size={17} /><span>Location</span></button>
             </nav>
 
@@ -261,7 +273,11 @@ function App() {
                 {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'logs' && <Monitor connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
+                {page === 'screen' && <LiveScreen desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
+                {page === 'profiles' && <Profiles desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'pasteboard' && <Pasteboard desktop={desktop} udid={device.udid} deviceName={device.name} onToast={setToast} />}
+                {page === 'xctest' && <TestLab desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
               </>}
             </div>

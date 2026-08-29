@@ -119,6 +119,197 @@ export type ProcessSnapshot = {
   limitation: string | null
 }
 export type ProcessLaunch = { pid: number; bundleId: string; transport: string }
+export type PerformanceProcessSample = {
+  pid: number
+  name: string
+  identity: string
+  cpuPercent: number | null
+  memoryBytes: number | null
+}
+export type PerformanceSample = {
+  sequence: number
+  timestampMs: number
+  intervalMs: number
+  transport: string
+  systemCpuPercent: number | null
+  processes: PerformanceProcessSample[]
+}
+export type PerformanceStatus = {
+  state: string
+  message: string | null
+  transport: string | null
+  intervalMs: number
+}
+export type PerformanceExportRow = {
+  timestampMs: number
+  pid: number
+  name: string
+  identity: string
+  cpuPercent: number | null
+  memoryBytes: number | null
+}
+export type NetworkCaptureFilter = {
+  pid: number | null
+  interfaceName: string | null
+}
+export type NetworkCaptureProgress = {
+  packets: number
+  bytes: number
+  outputBytes: number
+  elapsedMs: number
+  lastProcess: string | null
+  lastInterface: string | null
+}
+export type NetworkCaptureStatus = {
+  state: string
+  message: string | null
+  destination: string
+  transport: string | null
+  filter: NetworkCaptureFilter
+}
+export type NotificationObservationEvent = {
+  sessionId: string
+  sequence: number
+  timestampMs: number
+  name: string
+}
+export type NotificationObservationStatus = {
+  sessionId: string
+  state: string
+  message: string | null
+  transport: string | null
+  subscriptions: string[]
+}
+export type LiveScreenFrame = {
+  sequence: number
+  timestampMs: number
+  width: number
+  height: number
+  bytes: number
+  fps: number
+  dataUrl: string
+}
+export type LiveScreenStatus = {
+  state: string
+  message: string | null
+  transport: string | null
+  targetFps: number
+}
+export type ProvisioningProfileSummary = {
+  id: string
+  uuid: string | null
+  name: string
+  teamName: string | null
+  teamIdentifier: string | null
+  applicationIdentifier: string | null
+  createdAt: string | null
+  expiresAt: string | null
+  daysRemaining: number | null
+  expirationState: string
+  profileType: string
+  platforms: string[]
+  deviceCount: number
+  provisionsAllDevices: boolean
+  getTaskAllow: boolean | null
+  sizeBytes: number
+  parseError: string | null
+}
+export type ProvisioningProfileSnapshot = {
+  profiles: ProvisioningProfileSummary[]
+  transport: string
+  totalCount: number
+  truncated: boolean
+}
+export type PasteboardTextSnapshot = {
+  text: string | null
+  byteLength: number
+  characterCount: number
+  changeCount: number | null
+  itemCount: number
+  state: string
+  message: string | null
+  transport: string
+}
+export type PasteboardWriteResult = {
+  byteLength: number
+  characterCount: number
+  transport: string
+}
+export type PasteboardImageSnapshot = {
+  dataUrl: string | null
+  mimeType: string | null
+  width: number | null
+  height: number | null
+  byteLength: number
+  changeCount: number | null
+  itemCount: number
+  state: string
+  message: string | null
+  transport: string
+}
+export type PasteboardImagePreparation = {
+  preparationId: string
+  dataUrl: string
+  mimeType: string
+  width: number
+  height: number
+  byteLength: number
+  fileName: string
+}
+export type PasteboardImageWriteResult = {
+  mimeType: string
+  width: number
+  height: number
+  byteLength: number
+  transport: string
+}
+export type XCTestRunnerCandidate = {
+  bundleId: string
+  name: string
+  version: string
+  executable: string | null
+  debuggable: boolean
+  isWebdriverAgent: boolean
+  configurationReady: boolean
+  issues: string[]
+}
+export type XCTestTargetApp = {
+  bundleId: string
+  name: string
+  version: string
+  debuggable: boolean
+}
+export type XCTestPreflightSnapshot = {
+  iosVersion: string
+  transport: string
+  executionSupported: boolean
+  limitation: string | null
+  runnerTotal: number
+  targetTotal: number
+  truncated: boolean
+  runners: XCTestRunnerCandidate[]
+  targets: XCTestTargetApp[]
+}
+export type XCTestPlanRequest = {
+  runnerBundleId: string
+  targetBundleId: string | null
+  mode: 'test' | 'wda'
+  testsToRun: string[]
+  testsToSkip: string[]
+  timeoutSeconds: number
+}
+export type XCTestRunPlan = {
+  runnerBundleId: string
+  runnerName: string
+  targetBundleId: string | null
+  targetName: string | null
+  mode: 'test' | 'wda'
+  testsToRun: string[]
+  testsToSkip: string[]
+  timeoutSeconds: number
+  wdaBridge: boolean
+  transport: string
+}
 export type DeveloperStatus = {
   developerMode: boolean | null
   ddiMounted: boolean
@@ -174,6 +365,35 @@ export const api = {
   processesList: (udid?: string) => call<ProcessSnapshot>('processes_list', { udid }),
   processLaunch: (bundleId: string, udid?: string) => call<ProcessLaunch>('process_launch', { udid, bundleId }),
   processStop: (pid: number, identity: string, udid?: string) => call<void>('process_stop', { udid, pid, identity }),
+  performanceStart: (udid?: string, intervalMs = 1000) => call<void>('performance_start', { udid, intervalMs }),
+  performanceStop: () => call<void>('performance_stop'),
+  performanceExportCsv: (localPath: string, rows: PerformanceExportRow[]) => call<void>('performance_export_csv', { localPath, rows }),
+  networkCaptureStart: (localPath: string, udid?: string, pid?: number, interfaceName?: string) => call<void>('network_capture_start', {
+    localPath,
+    udid,
+    pid: pid ?? null,
+    interfaceName: interfaceName?.trim() || null,
+  }),
+  networkCaptureStop: () => call<void>('network_capture_stop'),
+  networkCaptureCancel: () => call<void>('network_capture_cancel'),
+  notificationObservationStart: (subscriptions: string[], sessionId: string, udid?: string) => call<void>('notification_observation_start', {
+    udid,
+    sessionId,
+    subscriptions,
+  }),
+  notificationObservationStop: () => call<void>('notification_observation_stop'),
+  liveScreenStart: (udid?: string) => call<void>('live_screen_start', { udid }),
+  liveScreenStop: () => call<void>('live_screen_stop'),
+  liveScreenExportFrame: (localPath: string) => call<void>('live_screen_export_frame', { localPath }),
+  provisioningProfiles: (udid?: string) => call<ProvisioningProfileSnapshot>('provisioning_profiles_list', { udid }),
+  pasteboardTextRead: (udid?: string) => call<PasteboardTextSnapshot>('pasteboard_text_read', { udid }),
+  pasteboardTextWrite: (text: string, udid?: string) => call<PasteboardWriteResult>('pasteboard_text_write', { udid, text }),
+  pasteboardImageRead: (udid?: string) => call<PasteboardImageSnapshot>('pasteboard_image_read', { udid }),
+  pasteboardImagePrepare: (localPath: string, udid?: string) => call<PasteboardImagePreparation>('pasteboard_image_prepare', { udid, localPath }),
+  pasteboardImageWrite: (preparationId: string, udid?: string) => call<PasteboardImageWriteResult>('pasteboard_image_write', { udid, preparationId }),
+  pasteboardImageDiscard: (preparationId: string) => call<boolean>('pasteboard_image_discard', { preparationId }),
+  xctestPreflight: (udid?: string) => call<XCTestPreflightSnapshot>('xctest_preflight', { udid }),
+  xctestPlanPrepare: (request: XCTestPlanRequest, udid?: string) => call<XCTestRunPlan>('xctest_plan_prepare', { udid, request }),
   developerStatus: (udid?: string) => call<DeveloperStatus>('developer_status', { udid }),
   developerReveal: (udid?: string) => call<void>('developer_mode_reveal', { udid }),
   developerEnable: (udid?: string) => call<void>('developer_mode_enable', { udid }),
@@ -190,6 +410,14 @@ export const api = {
 export const events = {
   deviceChanged: (handler: (payload: DeviceChangeEvent) => void) => listen<DeviceChangeEvent>('device://changed', (event) => handler(event.payload)),
   logLine: (handler: (payload: DeviceLog) => void) => listen<DeviceLog>('logs://line', (event) => handler(event.payload)),
+  performanceSample: (handler: (payload: PerformanceSample) => void) => listen<PerformanceSample>('performance://sample', (event) => handler(event.payload)),
+  performanceStatus: (handler: (payload: PerformanceStatus) => void) => listen<PerformanceStatus>('performance://status', (event) => handler(event.payload)),
+  networkCaptureProgress: (handler: (payload: NetworkCaptureProgress) => void) => listen<NetworkCaptureProgress>('network-capture://progress', (event) => handler(event.payload)),
+  networkCaptureStatus: (handler: (payload: NetworkCaptureStatus) => void) => listen<NetworkCaptureStatus>('network-capture://status', (event) => handler(event.payload)),
+  notificationObservationEvent: (handler: (payload: NotificationObservationEvent) => void) => listen<NotificationObservationEvent>('notifications://event', (event) => handler(event.payload)),
+  notificationObservationStatus: (handler: (payload: NotificationObservationStatus) => void) => listen<NotificationObservationStatus>('notifications://status', (event) => handler(event.payload)),
+  liveScreenFrame: (handler: (payload: LiveScreenFrame) => void) => listen<LiveScreenFrame>('live-screen://frame', (event) => handler(event.payload)),
+  liveScreenStatus: (handler: (payload: LiveScreenStatus) => void) => listen<LiveScreenStatus>('live-screen://status', (event) => handler(event.payload)),
   appProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('apps://install-progress', (event) => handler(event.payload)),
   ddiProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('developer://ddi-progress', (event) => handler(event.payload)),
   transferProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('files://transfer-progress', (event) => handler(event.payload)),
@@ -201,6 +429,8 @@ export const dialogs = {
   file: (name: string, extensions: string[]) => open({ multiple: false, filters: [{ name, extensions }] }),
   anyFile: () => open({ multiple: false }),
   saveFile: (defaultPath: string) => save({ defaultPath }),
+  pcapDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'Packet capture', extensions: ['pcap'] }] }),
+  pngDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'PNG image', extensions: ['png'] }] }),
   /**
    * Confirms a destructive action.
    *

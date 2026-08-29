@@ -31,6 +31,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 mdns-sd = "0.19"
 zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
+libc = "0.2"
 
 [dependencies.idevice]
 git = "https://github.com/jkcoxson/idevice.git"
@@ -58,6 +59,10 @@ features = [
   "rsd",
   "dvt",
   "device_info",
+  "sysmontap",
+  "pcapd",
+  "misagent",
+  "notification_proxy",
   "debug_proxy",
   "tss",
   "remote_pairing"

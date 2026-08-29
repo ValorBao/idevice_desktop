@@ -8,6 +8,7 @@ pub mod tunnel;
 pub mod types;
 mod utils;
 
+use commands::{LiveScreenState, NetworkCaptureState, PasteboardState};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,6 +26,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .manage(NetworkCaptureState::default())
+        .manage(LiveScreenState::default())
+        .manage(PasteboardState::default())
         .invoke_handler(tauri::generate_handler![
             commands::health,
             commands::device_list,
@@ -62,6 +66,26 @@ pub fn run() {
             commands::processes_list,
             commands::process_launch,
             commands::process_stop,
+            commands::performance_start,
+            commands::performance_stop,
+            commands::performance_export_csv,
+            commands::network_capture_start,
+            commands::network_capture_stop,
+            commands::network_capture_cancel,
+            commands::notification_observation_start,
+            commands::notification_observation_stop,
+            commands::live_screen_start,
+            commands::live_screen_stop,
+            commands::live_screen_export_frame,
+            commands::provisioning_profiles_list,
+            commands::pasteboard_text_read,
+            commands::pasteboard_text_write,
+            commands::pasteboard_image_read,
+            commands::pasteboard_image_prepare,
+            commands::pasteboard_image_write,
+            commands::pasteboard_image_discard,
+            commands::xctest_preflight,
+            commands::xctest_plan_prepare,
             commands::developer_status,
             commands::developer_mode_reveal,
             commands::developer_mode_enable,

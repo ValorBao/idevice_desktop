@@ -32,6 +32,9 @@ vi.mock('./pages/Apps', () => ({ Apps: () => <div>Apps</div> }))
 vi.mock('./pages/CrashReports', () => ({ CrashReports: () => <div>Crash Reports</div> }))
 vi.mock('./pages/Logs', () => ({ Logs: () => <div>Logs</div> }))
 vi.mock('./pages/Developer', () => ({ Developer: () => <div>Developer</div> }))
+vi.mock('./pages/TestLab', () => ({
+  TestLab: ({ udid }: { udid: string }) => <div data-testid="test-lab-page">{udid}</div>,
+}))
 vi.mock('./pages/Location', () => ({
   Location: ({ udid }: { udid: string }) => <div data-testid="location-page">{udid}</div>,
 }))
@@ -97,6 +100,17 @@ describe('device page lifecycle', () => {
 
     await waitFor(() => expect(screen.getByTestId('location-page')).toHaveTextContent('udid-b'))
     expect(screen.getByTestId('location-page')).not.toBe(firstPage)
+  })
+
+  it('opens Test Lab for the currently selected device', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Select device' })
+    await user.click(screen.getByRole('button', { name: 'Test Lab' }))
+
+    expect(screen.getByTestId('test-lab-page')).toHaveTextContent('udid-a')
+    expect(screen.getByRole('heading', { name: 'Test Lab' })).toBeInTheDocument()
   })
 
   it('ends the backend session and unmounts the active page when every device disappears', async () => {

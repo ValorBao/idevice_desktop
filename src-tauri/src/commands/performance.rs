@@ -1,12 +1,13 @@
 use std::{cmp::Ordering, future::Future, time::Duration};
 
 use idevice::{
-    IdeviceService, RsdService,
+    IdeviceError, IdeviceService, ReadWrite, RsdService,
     core_device_proxy::CoreDeviceProxy,
     dvt::{
         device_info::DeviceInfoClient,
-        remote_server::RemoteServerClient,
-        sysmontap::{SysmontapClient, SysmontapConfig, SysmontapSample},
+        message::AuxValue,
+        remote_server::{Channel, RemoteServerClient},
+        sysmontap::SysmontapSample,
     },
     rsd::RsdHandshake,
 };
@@ -28,6 +29,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 const REMOTE_PAIRING_ATTEMPTS: usize = 3;
 const DEFAULT_INTERVAL_MS: u32 = 1_000;
 const VALID_INTERVALS: [u32; 3] = [500, 1_000, 2_000];
+const SYSMONTAP_OUTPUT_FREQUENCY_MS: i64 = 1;
 const MAX_PROCESSES_PER_SAMPLE: usize = 80;
 const MAX_EXPORT_ROWS: usize = 10_000;
 const LEGACY_LIMITATION: &str = "Performance sampling is unavailable on iOS 16 and earlier because the verified Legacy instruments service does not provide a reliable sysmontap stream.";
@@ -43,6 +45,125 @@ struct PerformanceContext {
 enum PerformanceEnd {
     Stopped,
     Unavailable,
+}
+
+struct PerformanceSysmontapClient<'a, R: ReadWrite> {
+    channel: Channel<'a, R>,
+}
+
+impl<'a, R: ReadWrite> PerformanceSysmontapClient<'a, R> {
+    async fn new(client: &'a mut RemoteServerClient<R>) -> Result<Self, IdeviceError> {
+        let channel = client
+            .make_channel("com.apple.instruments.server.services.sysmontap")
+            .await?;
+        Ok(Self { channel })
+    }
+
+    async fn set_config(
+        &mut self,
+        interval_ms: u32,
+        process_attributes: &[String],
+        system_attributes: &[String],
+    ) -> Result<(), IdeviceError> {
+        self.channel
+            .call_method(
+                Some(Value::String("setConfig:".into())),
+                Some(vec![AuxValue::archived_value(Value::Dictionary(
+                    sysmontap_config(interval_ms, process_attributes, system_attributes),
+                ))]),
+                false,
+            )
+            .await
+    }
+
+    async fn start(&mut self) -> Result<(), IdeviceError> {
+        self.channel
+            .call_method(Some(Value::String("start".into())), None, false)
+            .await?;
+        self.channel.read_message().await?;
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<(), IdeviceError> {
+        self.channel
+            .call_method(Some(Value::String("stop".into())), None, false)
+            .await
+    }
+
+    async fn next_sample(&mut self) -> Result<SysmontapSample, IdeviceError> {
+        loop {
+            let message = self.channel.read_message().await?;
+            let Some(decoded) = message.data else {
+                continue;
+            };
+            let rows = match decoded {
+                Value::Array(rows) => rows,
+                Value::Dictionary(row) => vec![Value::Dictionary(row)],
+                _ => continue,
+            };
+            for row in rows {
+                let Some(row) = row.into_dictionary() else {
+                    continue;
+                };
+                if row.contains_key("Processes")
+                    || row.contains_key("System")
+                    || row.contains_key("SystemCPUUsage")
+                {
+                    return Ok(SysmontapSample {
+                        processes: row.get("Processes").and_then(Value::as_dictionary).cloned(),
+                        system: row.get("System").and_then(Value::as_array).cloned(),
+                        system_cpu_usage: row
+                            .get("SystemCPUUsage")
+                            .and_then(Value::as_dictionary)
+                            .cloned(),
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn sysmontap_config(
+    interval_ms: u32,
+    process_attributes: &[String],
+    system_attributes: &[String],
+) -> Dictionary {
+    let mut config = Dictionary::new();
+    // `ur` is the output frequency and is independent from the requested
+    // sample period. Using the sample period here can suppress process rows
+    // for hundreds of seconds on a real device.
+    config.insert(
+        "ur".into(),
+        Value::Integer(SYSMONTAP_OUTPUT_FREQUENCY_MS.into()),
+    );
+    config.insert("bm".into(), Value::Integer(0i64.into()));
+    config.insert(
+        "procAttrs".into(),
+        Value::Array(
+            process_attributes
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect(),
+        ),
+    );
+    config.insert(
+        "sysAttrs".into(),
+        Value::Array(
+            system_attributes
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect(),
+        ),
+    );
+    config.insert("cpuUsage".into(), Value::Boolean(true));
+    config.insert("physFootprint".into(), Value::Boolean(true));
+    config.insert(
+        "sampleInterval".into(),
+        Value::Integer(((interval_ms as i64) * 1_000_000).into()),
+    );
+    config
 }
 
 #[derive(Debug)]
@@ -309,6 +430,13 @@ fn system_cpu_percent(system_cpu_usage: Option<&Dictionary>) -> Option<f64> {
     }
 }
 
+fn has_process_rows(sample: &SysmontapSample) -> bool {
+    sample
+        .processes
+        .as_ref()
+        .is_some_and(|processes| !processes.is_empty())
+}
+
 fn process_order(left: &PerformanceProcessSample, right: &PerformanceProcessSample) -> Ordering {
     right
         .cpu_percent
@@ -432,18 +560,14 @@ async fn run_stream(
         "opening sysmontap",
         CONNECT_TIMEOUT,
         &token,
-        SysmontapClient::new(&mut remote),
+        PerformanceSysmontapClient::new(&mut remote),
     )
     .await?;
     timeout(
         "configuring sysmontap",
         CONNECT_TIMEOUT,
         &token,
-        sysmontap.set_config(&SysmontapConfig {
-            interval_ms,
-            process_attributes,
-            system_attributes,
-        }),
+        sysmontap.set_config(interval_ms, &process_attributes, &system_attributes),
     )
     .await?;
     timeout(
@@ -456,8 +580,9 @@ async fn run_stream(
 
     let transport = format!("DVT Sysmontap · {route}");
     emit_status(&app, "running", None, Some(transport.clone()), interval_ms);
-    let sample_timeout = Duration::from_millis((interval_ms as u64 * 8).max(10_000));
+    let sample_timeout = Duration::from_millis((interval_ms as u64 * 12).max(30_000));
     let mut sequence = 0u64;
+    let mut latest_system_cpu_percent = None;
     loop {
         tokio::select! {
             _ = token.cancelled() => {
@@ -472,8 +597,17 @@ async fn run_stream(
                         true,
                     ))?
                     .map_err(CommandError::from)?;
+                if let Some(value) = system_cpu_percent(raw.system_cpu_usage.as_ref()) {
+                    latest_system_cpu_percent = Some(value);
+                }
+                if !has_process_rows(&raw) {
+                    continue;
+                }
                 sequence = sequence.saturating_add(1);
-                let sample = normalize_sample(raw, &indexes, sequence, interval_ms, &transport);
+                let mut sample = normalize_sample(raw, &indexes, sequence, interval_ms, &transport);
+                if sample.system_cpu_percent.is_none() {
+                    sample.system_cpu_percent = latest_system_cpu_percent;
+                }
                 let _ = app.emit("performance://sample", sample);
             }
         }
@@ -605,6 +739,38 @@ mod tests {
         }
         assert!(validated_interval(Some(250)).is_err());
         assert!(validated_interval(Some(10_000)).is_err());
+    }
+
+    #[test]
+    fn keeps_output_frequency_independent_from_the_sample_interval() {
+        let config = sysmontap_config(1_000, &["pid".into()], &["cpuCount".into()]);
+        assert_eq!(
+            config.get("ur").and_then(value_u64),
+            Some(SYSMONTAP_OUTPUT_FREQUENCY_MS as u64)
+        );
+        assert_eq!(
+            config.get("sampleInterval").and_then(value_u64),
+            Some(1_000_000_000)
+        );
+    }
+
+    #[test]
+    fn ignores_system_only_rows_before_updating_the_process_snapshot() {
+        let system_only = SysmontapSample {
+            processes: None,
+            system: Some(Vec::new()),
+            system_cpu_usage: Some(Dictionary::new()),
+        };
+        assert!(!has_process_rows(&system_only));
+
+        let mut processes = Dictionary::new();
+        processes.insert("42".into(), Value::Array(Vec::new()));
+        let process_sample = SysmontapSample {
+            processes: Some(processes),
+            system: None,
+            system_cpu_usage: None,
+        };
+        assert!(has_process_rows(&process_sample));
     }
 
     #[test]

@@ -159,3 +159,19 @@ the corresponding mid-operation physical-disconnect checks remain hardware gaps.
 These checks harden the desktop session lifecycle without claiming real-device
 acceptance. Physical hot-plug, sleep/wake, and mid-operation disconnects remain in
 the Foundation hardware backlog.
+
+## 2026-08-29 — 0.0.3 read-only desktop acceptance and Performance repair
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop · USB + RemotePairing/RSD | Performance live CPU and memory | Pass after repair | The first desktop run showed changing system CPU but zero process rows. A bounded raw harness proved that the upstream Sysmontap client sent the 1-second sample period as the `ur` output frequency, suppressing process rows, and that system-only rows alternate with process rows. Production now sends `ur=1`, keeps `sampleInterval` independent, and emits only non-empty process snapshots. The rebuilt interface advanced from 7 to 26 one-second samples, retained 80 processes, and displayed both live CPU and memory without an error |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop · DVT Screenshot · RemotePairing/RSD | Live Screen preview and hidden-window pause | Partial pass | The interface displayed 828 × 1792 PNG frames, reached frame 25 at a measured 1.9 FPS against the 2 FPS target, and visibly entered the hidden-window paused state. Save Frame, explicit Stop, and a traced page-exit cleanup remain open |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop · Lockdown Misagent | Provisioning Profiles read-only inspection | Pass | One installed profile rendered with name, UUID, Ad Hoc scope, team, application identifier, one registered device, disabled debug entitlement, 13 KB signed size, and a two-day expiry warning. No profile was installed or removed |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop · Installation Proxy metadata | Test Lab empty-runner preflight | Pass | The page found 23 optional target applications and no `.xctrunner`, showed installation guidance, and surfaced the iOS 17.0–17.3 `RemotePairing/RSD route pending` limitation. No test plan or process was started |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop | Pasteboard privacy initial state | Pass (boundary only) | The page showed no device items or last write and did not read clipboard contents until the manual control is pressed. No clipboard data was read or written |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop | Notification Observation explicit-selection state | Pass (boundary only) | Start remained disabled with zero selected names and zero events. No Notification Proxy subscription was opened |
+| `00008020…` (iPhone11,8) | 17.0 | Tauri desktop | Network Capture safe initial state | Pass (boundary only) | The page showed zero packets, no destination, and no active transport until Start. No packet capture or local PCAP file was created |
+
+This session used only read-only device operations. It deliberately did not start a
+packet capture, inspect or replace clipboard contents, subscribe to device
+notifications, run XCTest, mutate profiles, or launch and stop applications.

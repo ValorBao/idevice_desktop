@@ -10,6 +10,8 @@ This is an independent project and is not an official `jkcoxson/idevice` applica
 
 The current release is [0.0.2 Developer Preview](https://github.com/ValorBao/idevice_desktop/releases/tag/v0.0.2); see the [release notes](docs/RELEASE_NOTES_0.0.2.md).
 
+Development on the `0.0.3` preview is tracked in [its draft release notes](docs/RELEASE_NOTES_0.0.3.md).
+
 Developer Preview builds are unsigned and unnotarized Apple Silicon builds.
 
 ## Documentation

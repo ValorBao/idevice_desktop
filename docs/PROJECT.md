@@ -1,7 +1,8 @@
 # idevice desktop Project Overview
 
-> Last updated: 2026-07-26
+> Last updated: 2026-08-29
 > Current release: 0.0.2 Developer Preview
+> Development version: 0.0.3
 
 ## 1. Project Positioning
 

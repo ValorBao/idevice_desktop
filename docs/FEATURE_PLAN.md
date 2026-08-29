@@ -1,6 +1,6 @@
 # idevice desktop Feature Delivery Plan
 
-> Last updated: 2026-08-10
+> Last updated: 2026-08-29
 > Principle: ship complete user workflows, not protocol exposure.
 
 This plan turns the capability backlog into a sequence of small, usable features. A
@@ -376,3 +376,14 @@ checks for runner metadata, debug entitlement, Developer Mode, DDI, and the sele
 generation's TestManager/DVT route. It passes automated checks but does not launch
 tests; the iOS 17.0–17.3 RemotePairing adapter, lifecycle/event controls, WDA bridge,
 and hardware acceptance remain pending.
+
+On 2026-08-29 development moved to the 0.0.3 release branch and returned to
+hardware acceptance. The first Performance desktop run exposed a real Sysmontap
+configuration defect: output frequency had been coupled to the requested sample
+period, and system-only protocol rows erased the visible process list. After
+separating those concerns, the rebuilt app sustained 26 one-second samples with 80
+visible process CPU/memory rows on iOS 17.0. The same session accepted the Live
+Screen main preview, read-only Lockdown profile inspection, and Test Lab's
+empty-runner/unsupported-route state. Network Capture, Notifications, and Pasteboard
+were intentionally limited to their safe initial states so no packet file,
+subscription, or clipboard access occurred without a dedicated acceptance action.

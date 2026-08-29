@@ -1,4 +1,4 @@
-# idevice desktop Feature Delivery Plan
+# idevice_desktop Feature Delivery Plan
 
 > Last updated: 2026-08-29
 > Principle: ship complete user workflows, not protocol exposure.

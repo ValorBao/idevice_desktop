@@ -1,4 +1,4 @@
-# idevice desktop 0.0.3 Developer Preview
+# idevice_desktop 0.0.3 Developer Preview
 
 > Draft — in development. This version has not been published.
 

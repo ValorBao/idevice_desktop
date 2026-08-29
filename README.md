@@ -1,4 +1,4 @@
-# idevice desktop
+# idevice_desktop
 
 A macOS developer tool for iPhone and iPad, built with React, Tauri 2, and [`jkcoxson/idevice`](https://github.com/jkcoxson/idevice). The Rust dependency is pinned to commit `8eed181f39a16ea70380ec8c3cff6bed07a1ef69` so upstream API changes cannot break the build unexpectedly.
 
@@ -102,4 +102,4 @@ Core device communication is provided by [`jkcoxson/idevice`](https://github.com
 
 ## Licensing
 
-idevice desktop is available under the [MIT License](LICENSE). `idevice` is also available under the MIT License; its separate copyright and license notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+idevice_desktop is available under the [MIT License](LICENSE). `idevice` is also available under the MIT License; its separate copyright and license notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

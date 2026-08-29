@@ -2,7 +2,7 @@
 name = "idevice-desktop"
 version = "0.0.3"
 description = "Desktop UI for jkcoxson/idevice"
-authors = ["idevice desktop contributors"]
+authors = ["idevice_desktop contributors"]
 edition = "2024"
 license = "MIT"
 

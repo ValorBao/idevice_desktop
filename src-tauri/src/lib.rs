@@ -99,5 +99,5 @@ pub fn run() {
             commands::location_stop,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running idevice desktop");
+        .expect("error while running idevice_desktop");
 }

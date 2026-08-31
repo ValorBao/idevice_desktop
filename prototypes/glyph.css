@@ -1,0 +1,207 @@
+.glyph-shell {
+  position: relative;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --acid: #5cffe7;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: #f2fffb;
+  background:
+    radial-gradient(circle at 62% 44%, rgba(92, 255, 231, 0.16), transparent 28%),
+    #000;
+  font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+.glyph-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: radial-gradient(rgba(92, 255, 231, 0.55) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+  mask-image: radial-gradient(circle at 62% 48%, #000 0 18%, transparent 58%);
+}
+.glyph-bar, .glyph-body, .glyph-status { position: relative; z-index: 1; }
+.glyph-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 18px;
+}
+.glyph-lights { display: flex; gap: 7px; }
+.glyph-lights i { width: 10px; height: 10px; border-radius: 50%; background: #ff5f57; }
+.glyph-lights i:nth-child(2) { background: #febc2e; }
+.glyph-lights i:nth-child(3) { background: #28c840; }
+.glyph-word {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+.glyph-pips { display: flex; gap: 4px; }
+.glyph-pips i {
+  width: 6px;
+  height: 14px;
+  background: rgba(92, 255, 231, 0.16);
+  border-radius: 1px;
+}
+.glyph-pips i:nth-child(2),
+.glyph-pips i:nth-child(5),
+.glyph-pips i:nth-child(8) { background: var(--acid); height: 18px; }
+.glyph-pips i:nth-child(3),
+.glyph-pips i:nth-child(6) { background: rgba(92, 255, 231, 0.55); height: 10px; }
+.glyph-lock {
+  margin-left: auto;
+  color: var(--acid);
+  font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.2em;
+}
+.glyph-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 320px 1fr;
+  min-height: 0;
+  align-items: stretch;
+  padding: 8px 28px 28px;
+}
+.glyph-col {
+  max-height: 100%;
+  overflow: auto;
+  padding-right: 12px;
+}
+.glyph-col h2 {
+  margin: 0 0 16px;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(242, 255, 251, 0.45);
+}
+.glyph-modes { display: flex; flex-direction: column; gap: 8px; }
+.glyph-modes button,
+.glyph-list button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 4px;
+  color: rgba(242, 255, 251, 0.4);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(92, 255, 231, 0.12);
+  cursor: pointer;
+  font: 700 18px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  transition: transform 160ms var(--ease-out), color 160ms var(--ease-out);
+}
+.glyph-modes button[data-on],
+.glyph-list button[data-on] { color: var(--acid); }
+.glyph-modes button small,
+.glyph-list button small {
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.14em;
+}
+.glyph-modes button:active,
+.glyph-list button:active { transform: scale(0.97); }
+.glyph-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.glyph-mid .proto-phone { animation: glyph-arrive 240ms var(--ease-out) both; }
+.glyph-mid .proto-phone-body {
+  border-color: var(--acid);
+  box-shadow: 0 0 0 8px rgba(92, 255, 231, 0.08), 0 0 90px rgba(92, 255, 231, 0.22);
+}
+.glyph-digits {
+  display: grid;
+  gap: 18px;
+  align-content: center;
+  justify-items: end;
+}
+.glyph-digits span {
+  display: block;
+  color: rgba(242, 255, 251, 0.38);
+  font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.2em;
+}
+.glyph-digits b {
+  display: block;
+  margin-top: 4px;
+  font-size: 44px;
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  font-variant-numeric: tabular-nums;
+}
+.glyph-status {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 22px 18px 22px;
+  color: rgba(242, 255, 251, 0.4);
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.glyph-name {
+  margin: 0 0 20px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  color: inherit;
+  transition: transform 160ms var(--ease-out);
+}
+.glyph-name:active { transform: scale(0.97); }
+.glyph-menu {
+  position: absolute;
+  z-index: 8;
+  top: 56px;
+  right: 24px;
+  width: 240px;
+  padding: 8px;
+  background: #050807;
+  border: 1px solid rgba(92, 255, 231, 0.3);
+  border-radius: 4px;
+  transform-origin: 100% 0;
+  animation: glyph-pop 180ms var(--ease-out) both;
+}
+.glyph-menu button {
+  width: 100%;
+  padding: 8px;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.glyph-toast {
+  position: absolute;
+  z-index: 9;
+  right: 24px;
+  bottom: 72px;
+  padding: 10px 12px;
+  color: #04110e;
+  background: var(--acid);
+  font: 700 12px ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: transform 220ms var(--ease-out), opacity 220ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes glyph-arrive {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes glyph-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glyph-mid .proto-phone, .glyph-menu, .glyph-toast { animation: none; }
+}

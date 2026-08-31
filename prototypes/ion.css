@@ -1,0 +1,211 @@
+.ion-shell {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --cyan: #5cf0ff;
+  --mag: #ff4d8d;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 228px 1fr;
+  grid-template-rows: 48px 1fr;
+  color: #eef7ff;
+  background:
+    radial-gradient(circle at 70% 40%, rgba(255, 77, 141, 0.12), transparent 34%),
+    radial-gradient(circle at 58% 55%, rgba(92, 240, 255, 0.18), transparent 42%),
+    #050608;
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+.ion-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: rgba(8, 10, 12, 0.55);
+  border-bottom: 1px solid rgba(92, 240, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.ion-lights { display: flex; gap: 7px; }
+.ion-lights i { width: 10px; height: 10px; border-radius: 50%; background: #ff5f57; }
+.ion-lights i:nth-child(2) { background: #febc2e; }
+.ion-lights i:nth-child(3) { background: #28c840; }
+.ion-bar b {
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+.ion-bar em {
+  margin-left: auto;
+  color: var(--cyan);
+  font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.16em;
+  font-style: normal;
+}
+.ion-side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 40%);
+  border-right: 1px solid rgba(92, 240, 255, 0.1);
+}
+.ion-device {
+  padding: 12px;
+  text-align: left;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(92, 240, 255, 0.16);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out);
+}
+.ion-device:active { transform: scale(0.97); }
+.ion-device strong, .ion-device small { display: block; }
+.ion-device small { margin-top: 4px; color: rgba(238, 247, 255, 0.45); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ion-ticks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ion-ticks span {
+  padding: 7px 8px;
+  color: rgba(238, 247, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+}
+.ion-ticks span[data-on] {
+  color: var(--cyan);
+  border-color: rgba(92, 240, 255, 0.45);
+  box-shadow: 0 0 16px rgba(92, 240, 255, 0.16);
+}
+.ion-modes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ion-modes button {
+  position: relative;
+  overflow: hidden;
+  height: 48px;
+  padding: 0 14px;
+  color: rgba(238, 247, 255, 0.55);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: transform 160ms var(--ease-out), color 160ms var(--ease-out);
+}
+.ion-modes button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(92, 240, 255, 0.85), rgba(255, 77, 141, 0.55));
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 220ms var(--ease-out);
+}
+.ion-modes button[data-on] { color: #041016; }
+.ion-modes button[data-on]::before { clip-path: inset(0 0 0 0); }
+.ion-modes button span { position: relative; }
+.ion-modes button:active { transform: scale(0.97); }
+.ion-main { position: relative; min-width: 0; overflow: hidden; }
+.ion-cage {
+  position: relative;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+.ion-cage .ring {
+  position: absolute;
+  border: 1px solid rgba(92, 240, 255, 0.22);
+  border-radius: 28px;
+  pointer-events: none;
+  box-shadow: 0 0 24px rgba(92, 240, 255, 0.08);
+}
+.ion-cage .r1 { width: 240px; height: 420px; }
+.ion-cage .r2 { width: 280px; height: 460px; border-color: rgba(255, 77, 141, 0.18); }
+.ion-cage .r3 { width: 320px; height: 500px; opacity: 0.45; }
+.ion-cage .proto-phone { animation: ion-arrive 240ms var(--ease-out) both; }
+.ion-callout {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(238, 247, 255, 0.8);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.ion-callout i {
+  width: 64px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan));
+}
+.ion-callout b { font-size: 18px; font-weight: 560; letter-spacing: -0.03em; }
+.c1 { top: 18%; left: 8%; }
+.c2 { top: 46%; right: 8%; flex-direction: row-reverse; }
+.c2 i { background: linear-gradient(90deg, var(--mag), transparent); }
+.c3 { bottom: 16%; left: 10%; }
+.ion-board { height: 100%; padding: 28px 32px 40px; overflow: auto; }
+.ion-board h2 { margin: 0 0 16px; font-size: 22px; }
+.ion-line {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 0;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 160ms var(--ease-out);
+}
+.ion-line:active { transform: scale(0.99); }
+.ion-menu {
+  position: absolute;
+  z-index: 8;
+  top: 60px;
+  left: 14px;
+  width: 220px;
+  padding: 8px;
+  background: rgba(8, 10, 14, 0.9);
+  border: 1px solid rgba(92, 240, 255, 0.2);
+  border-radius: 12px;
+  transform-origin: 20px 0;
+  animation: ion-pop 180ms var(--ease-out) both;
+}
+.ion-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.ion-toast {
+  position: absolute;
+  z-index: 9;
+  top: 14px;
+  right: 18px;
+  padding: 10px 14px;
+  color: #041016;
+  background: var(--cyan);
+  border-radius: 10px;
+  font-weight: 700;
+  transition: transform 220ms var(--ease-out), opacity 220ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateX(12px) scale(0.97);
+  }
+}
+@keyframes ion-arrive {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ion-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ion-cage .proto-phone, .ion-menu, .ion-toast { animation: none; }
+  .ion-modes button::before { transition: none; }
+}

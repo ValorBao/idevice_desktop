@@ -2,13 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { GlyphShell } from './GlyphShell'
 import { IonShell } from './IonShell'
+import { RipperShell } from './RipperShell'
 import { VoidShell } from './VoidShell'
 import { useLab } from './useLab'
 import './harness.css'
 import './picker.css'
 import './phone.css'
 
-const names = ['Void', 'Ion', 'Glyph'] as const
+const names = ['Ripper Bay', 'Void', 'Ion', 'Glyph'] as const
 
 function Picker({
   index,
@@ -64,8 +65,9 @@ function Picker({
 
 function Stage({ index }: { index: number }) {
   const lab = useLab()
-  if (index === 0) return <VoidShell lab={lab} />
-  if (index === 1) return <IonShell lab={lab} />
+  if (index === 0) return <RipperShell lab={lab} />
+  if (index === 1) return <VoidShell lab={lab} />
+  if (index === 2) return <IonShell lab={lab} />
   return <GlyphShell lab={lab} />
 }
 

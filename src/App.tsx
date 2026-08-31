@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, AppWindow, Bug, Check, ChevronDown, CircleStop, Code2, FolderOpen,
-  MapPin, Plus, Smartphone, TerminalSquare,
+  Activity, AppWindow, BadgeCheck, Beaker, Bug, Check, ChevronDown, CircleStop, ClipboardPaste, Code2, FolderOpen,
+  MapPin, Plus, ScreenShare, Smartphone, TerminalSquare,
 } from 'lucide-react'
 import { devices, type Device } from './data'
 import { api, errorMessage, events, isDesktopRuntime, type DeviceSummary } from './api'
@@ -15,9 +15,13 @@ import { Diagnostics } from './pages/Diagnostics'
 import { Files } from './pages/Files'
 import { Apps } from './pages/Apps'
 import { CrashReports } from './pages/CrashReports'
-import { Logs } from './pages/Logs'
+import { Monitor } from './pages/Monitor'
 import { Developer } from './pages/Developer'
 import { Location } from './pages/Location'
+import { LiveScreen } from './pages/LiveScreen'
+import { Profiles } from './pages/Profiles'
+import { Pasteboard } from './pages/Pasteboard'
+import { TestLab } from './pages/TestLab'
 
 const pageMeta: Record<Page, [string, string]> = {
   overview: ['Overview', 'idevice · lockdown query'],
@@ -25,8 +29,12 @@ const pageMeta: Record<Page, [string, string]> = {
   files: ['Files', 'com.apple.afc'],
   apps: ['Apps', 'com.apple.mobile.installation_proxy'],
   crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
-  logs: ['Logs', 'com.apple.syslog_relay'],
+  logs: ['Monitor', 'Processes, performance, network capture, and live device logs'],
+  screen: ['Live Screen', 'Live PNG device preview and still-frame capture'],
   developer: ['Debug Tools', 'com.apple.dt.* services'],
+  profiles: ['Provisioning Profiles', 'Read-only Misagent signing and expiry inspection'],
+  pasteboard: ['Pasteboard', 'Explicit bounded CoreDevice text and image transfer'],
+  xctest: ['Test Lab', 'Read-only XCTest runner and developer-service preflight'],
   location: ['Location', 'com.apple.dt.simulatelocation'],
 }
 
@@ -36,7 +44,8 @@ const navItems = [
   { id: 'files', label: 'Files', icon: FolderOpen, suffix: 'AFC' },
   { id: 'apps', label: 'Apps', icon: AppWindow },
   { id: 'crashes', label: 'Crash Reports', icon: Bug },
-  { id: 'logs', label: 'Logs', icon: TerminalSquare },
+  { id: 'logs', label: 'Monitor', icon: TerminalSquare },
+  { id: 'screen', label: 'Live Screen', icon: ScreenShare },
 ] as const
 
 function App() {
@@ -49,33 +58,81 @@ function App() {
   const [deviceMenu, setDeviceMenu] = useState(false)
   const [pairOpen, setPairOpen] = useState(false)
   const [toast, setToast] = useState('')
+  const mountedRef = useRef(true)
+  const lifecycleRef = useRef(0)
+  const refreshRunningRef = useRef(false)
+  const refreshPendingRef = useRef(false)
   const device = deviceCatalog.find((item) => item.id === deviceId) ?? deviceCatalog[0] ?? devices[0]
   const connected = connection === 'connected'
   useEffect(() => { deviceIdRef.current = deviceId }, [deviceId])
+  useEffect(() => {
+    mountedRef.current = true
+    lifecycleRef.current += 1
+    return () => {
+      mountedRef.current = false
+      lifecycleRef.current += 1
+    }
+  }, [])
 
   const refreshDevices = useCallback(async () => {
-    if (!desktop) return
+    if (!desktop || !mountedRef.current) return
+    refreshPendingRef.current = true
+    if (refreshRunningRef.current) return
+
+    refreshRunningRef.current = true
+    const lifecycle = lifecycleRef.current
+    const lifecycleIsCurrent = () => mountedRef.current && lifecycleRef.current === lifecycle
     try {
-      const found = await api.deviceList()
-      const catalog = found.map(summaryToDevice)
-      setDeviceCatalog(catalog)
-      if (!found.length) {
-        setDeviceId('')
-        setConnection('none')
-        return
+      while (refreshPendingRef.current && lifecycleIsCurrent()) {
+        refreshPendingRef.current = false
+        try {
+          const found = await api.deviceList()
+          if (!lifecycleIsCurrent()) return
+          // A device event arrived while this snapshot was loading. Do not let
+          // the older catalog take over the session; fetch the latest one.
+          if (refreshPendingRef.current) continue
+
+          const catalog = found.map(summaryToDevice)
+          setDeviceCatalog(catalog)
+          if (!found.length) {
+            setDeviceId('')
+            setConnection('none')
+            setPage('overview')
+            await api.deviceDisconnect().catch((error) => {
+              if (lifecycleIsCurrent()) setToast(errorMessage(error))
+            })
+            continue
+          }
+
+          const current = found.find((item) => item.id === deviceIdRef.current)
+          const target = current ?? found.find((item) => item.paired && item.connectable) ?? found[0]
+          if (target.paired && target.connectable) {
+            if (target.id !== deviceIdRef.current) await api.deviceSelect(target.id)
+            if (!lifecycleIsCurrent()) return
+            if (refreshPendingRef.current) continue
+            setDeviceId(target.id)
+            setConnection('connected')
+          } else {
+            setDeviceId(target.id)
+            setConnection('detected')
+            setPage('overview')
+            await api.deviceDisconnect().catch((error) => {
+              if (lifecycleIsCurrent()) setToast(errorMessage(error))
+            })
+          }
+        } catch (error) {
+          if (!lifecycleIsCurrent()) return
+          if (refreshPendingRef.current) continue
+          setConnection('none')
+          setToast(errorMessage(error))
+        }
       }
-      const current = found.find((item) => item.id === deviceIdRef.current)
-      const target = current ?? found.find((item) => item.paired && item.connectable) ?? found[0]
-      setDeviceId(target.id)
-      if (target.paired && target.connectable) {
-        if (target.id !== deviceIdRef.current) await api.deviceSelect(target.id)
-        setConnection('connected')
-      } else {
-        setConnection('detected')
-      }
-    } catch (error) {
-      setConnection('none')
-      setToast(errorMessage(error))
+    } finally {
+      refreshRunningRef.current = false
+      // StrictMode can remount while the first mount still has a listing in
+      // flight. The remounted effect marks a refresh pending; start it after
+      // the obsolete runner releases the serialization lock.
+      if (refreshPendingRef.current && mountedRef.current) void refreshDevices()
     }
   }, [desktop])
 
@@ -83,8 +140,15 @@ function App() {
     if (!desktop) return
     let disposed = false
     let unlisten: (() => void) | undefined
-    events.deviceChanged(() => { if (!disposed) void refreshDevices() }).then((stop) => { unlisten = stop })
-    void api.deviceMonitorStart().then(refreshDevices).catch((error) => setToast(errorMessage(error)))
+    void events.deviceChanged(() => { if (!disposed) void refreshDevices() })
+      .then((stop) => {
+        if (disposed) stop()
+        else unlisten = stop
+      })
+      .catch((error) => { if (!disposed) setToast(errorMessage(error)) })
+    void api.deviceMonitorStart()
+      .then(() => { if (!disposed) return refreshDevices() })
+      .catch((error) => { if (!disposed) setToast(errorMessage(error)) })
     return () => {
       disposed = true
       unlisten?.()
@@ -175,6 +239,9 @@ function App() {
               ))}
               <span className="nav-heading developer-heading">Developer</span>
               <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')} aria-label="Debug Tools" title="Debug Tools"><Code2 size={17} /><span>Debug Tools</span></button>
+              <button className={page === 'profiles' ? 'active' : ''} onClick={() => setPage('profiles')} aria-label="Provisioning Profiles" title="Provisioning Profiles"><BadgeCheck size={17} /><span>Profiles</span></button>
+              <button className={page === 'pasteboard' ? 'active' : ''} onClick={() => setPage('pasteboard')} aria-label="Pasteboard" title="Pasteboard"><ClipboardPaste size={17} /><span>Pasteboard</span></button>
+              <button className={page === 'xctest' ? 'active' : ''} onClick={() => setPage('xctest')} aria-label="Test Lab" title="Test Lab"><Beaker size={17} /><span>Test Lab</span></button>
               <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')} aria-label="Location" title="Location"><MapPin size={17} /><span>Location</span></button>
             </nav>
 
@@ -198,15 +265,21 @@ function App() {
               </header>
             )}
 
-            <div className="page-scroll" key={page}>
-              {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
-              {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
-              {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'logs' && <Logs connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
-              {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
-              {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
+            <div className="page-scroll" key={`${page}:${device.udid}`}>
+              {connected && <>
+                {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
+                {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
+                {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'logs' && <Monitor connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
+                {page === 'screen' && <LiveScreen desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
+                {page === 'profiles' && <Profiles desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'pasteboard' && <Pasteboard desktop={desktop} udid={device.udid} deviceName={device.name} onToast={setToast} />}
+                {page === 'xctest' && <TestLab desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
+              </>}
             </div>
 
             {!connected && (

@@ -1,6 +1,6 @@
 # `idevice-tools` GUI Coverage Matrix
 
-> Last updated: 2026-07-25
+> Last updated: 2026-08-29
 > Upstream baseline: `jkcoxson/idevice@8eed181f39a16ea70380ec8c3cff6bed07a1ef69`
 > Goal: make upstream command-line capabilities safe and complete to operate through a macOS GUI.
 
@@ -24,22 +24,26 @@ Delivery order and the shared usability Definition of Done are in [`FEATURE_PLAN
 | Lockdown information | `ideviceinfo`, `lockdown`, `device_info` | Partial | Overview and Diagnostics show common fields |
 | AFC files | `afc` | Covered | Browse, upload, download, create directories, and remove |
 | App container files | House Arrest | Partial | File-sharing apps are supported; broader container access is pending |
-| CoreDevice apps and processes | `app_service` | Partial | JIT uses launch; listing, processes, signals, and standard I/O are pending |
+| CoreDevice apps and processes | `app_service` | Partial | Monitor exposes search and refresh through AppService or DVT, application launch on both protocol routes, and confirmed stop only when AppService is advertised. The complete iOS 17.0 Tauri AppService workflow is accepted; DVT stop is explicitly read-only after `killPid:` failed to terminate an identity-checked test process. The DVT and Legacy visible limitations remain pending. Standard I/O is outside the first slice |
 | Application management | `ideviceinstaller`, `instproxy`, `application_listing` | Partial | User-app list with icons and filtering, IPA installation, and uninstallation; broader installation coordination is pending |
+| Provisioning profiles | `misagent` | Partial | A dedicated read-only page lists profiles through USB Lockdown or modern RSD, parses signing scope, team, application identifier, registered-device coverage, debug entitlement, and expiration state, and exposes search plus attention/development/distribution filters. The complete read-only Lockdown desktop path is accepted on iOS 17.0; cryptographic signer-chain verification, modern RSD acceptance, install, and confirmed removal remain pending |
 | Crash reports | `crash_logs` | Partial | List, filter, preview, and export use Lockdown over USB and the RSD shim over iOS 17 network routes; report removal is not exposed |
 | Installation coordination | `installcoordination_proxy` | Not covered | Installation sessions and diagnostics need a dedicated design |
 | Device logs | `syslog_relay`, `os_trace_relay` | Covered | Live stream, pause, filter, and clear |
+| Performance sampling | `sysmontap` | Partial | Monitor exposes iOS 17+ system/process CPU and memory sampling, stable-identity rolling history, filtering, pause/resume, bounded retention, and CSV export. The iOS 17.0 desktop main path is accepted after repairing Sysmontap output frequency and system/process row merging; interval changes, export, cleanup, and iOS 17.4+ acceptance remain. Energy and graphics metrics are outside this slice, and Legacy devices show an explicit unavailable state |
+| Packet capture | `pcapd` | Partial | Monitor streams device packets directly into an adjacent partial file, exposes packet/byte/duration progress and optional PID/interface filters, then atomically saves a Wireshark-compatible PCAP or deletes it on cancel. USB and modern RSD routes are integrated with disk and size safeguards; real-device acceptance is pending |
+| Notification observation | `notification_proxy` | Partial | Monitor requires an explicit preset or custom subscription list, shows a searchable newest-first timeline, bounds retained names to 500, isolates restarted sessions, and stops on pause, page exit, device switch, or disconnect. USB Lockdown and modern RSD routes are integrated; the upstream client relays names rather than payloads. Posting is not exposed and hardware acceptance is pending |
 | Device diagnostics | `diagnostics`, `diagnosticsservice` | Partial | Battery, Gestalt, IORegistry, NAND, and Wi-Fi |
 | Screenshot | `screenshot` | Covered | Device preview and refresh in Overview |
-| Screen streaming | `screencapture`, `screencaptureservice` | Not covered | Planned as a dedicated live-screen tool |
+| Screen streaming | `screenshot`, DVT screenshot | Partial | A dedicated Live Screen tool refreshes PNG frames at a 2 FPS target across Legacy Screenshotr and modern DVT/RSD routes, reports measured frame rate and resolution, supports fit/100% scaling and still export, and tears down on stop, page exit, hidden window, device switch, or disconnect. The iOS 17.0 DVT preview and hidden-window pause are accepted at 1.9 FPS; still export, explicit cleanup, Legacy, and high-frame-rate HEVC streaming remain pending |
 | Developer Mode | `amfi` | Covered | Reveal, enable, and accept Developer Mode |
 | DDI management | `mounter` | Covered | Manual and automatic mounting, unmounting, and progress |
-| Debug and JIT | `debug_proxy`, `process_control` | Partial | JIT covers both generations: iOS 17 and later launch the app and attach by pid, while iOS 16 and earlier attach by process name to an app the user opened. General process control is pending |
+| Debug and JIT | `debug_proxy`, `process_control` | Partial | JIT covers both generations: iOS 17 and later launch the app and attach by pid, while iOS 16 and earlier attach by process name to an app the user opened. Monitor exposes application launch on modern routes and identity-checked stop through AppService; interface acceptance remains pending |
 | Location simulation | `location_simulation`, `location` | Covered | Presets, map selection, DVT/RSD, and Lockdown transports |
 | SpringBoard | `springboard`, `rotate` | Partial | App icons are used; wallpaper, orientation, and other controls are not exposed |
-| CoreDevice pasteboard | `pasteboard` | Not covered | Text and image read/write plus privacy guidance need design |
+| CoreDevice pasteboard | `pasteboard` | Partial | A dedicated iOS 17+ page performs user-triggered UTF-8 text and PNG/JPEG image reads plus confirmed replacement writes through RemotePairing or CoreDeviceProxy RSD. Reads promise all payloads and resolve only the selected supported type when its advertised size is known and within the 1 MB text or 12 MB image limit. Image writes are locally validated, previewed, bound to the selected device through a one-use preparation token, and cleared on exit. There is no background monitoring, host clipboard access, TIFF, or transcoding; hardware acceptance remains pending |
 | CoreDevice and RSD inspection | `remotexpc` | Partial | Used internally by screenshots, JIT, and location; no service browser |
-| XCTest | `xctest` | Not covered | Runner selection, status, and output are planned |
+| XCTest | `xctest` | Partial | Test Lab performs bounded read-only discovery of installed `.xctrunner` candidates and optional target apps, checks required path/container/`-Runner` metadata plus `get-task-allow`, and combines the selection with Developer Mode, DDI, and RSD readiness. The iOS 17.0 desktop empty-runner path is accepted with 23 optional targets and the correct RemotePairing limitation. No process is launched; runner-present hardware acceptance, RemotePairing execution, event output, runtime timeout enforcement, Stop/cleanup, and WDA networking remain pending |
 
 ## Capabilities to Add
 
@@ -47,14 +51,14 @@ Delivery order and the shared usability Definition of Done are in [`FEATURE_PLAN
 
 | Capability | Upstream command | Suggested GUI | Priority |
 | --- | --- | --- | --- |
-| Process control | `process_control` | Process list, launch, stop, signal, and output | P0 |
-| Performance overview | `sysmontap`, `energy_monitor`, `graphics` | Live metrics, process filters, time-series charts, and export | P0 |
-| Packet capture | `pcapd`, `network_monitor` | Interface or process filters, start/stop, and PCAP save | P0 |
-| Screen streaming | `screencapture`, `screencaptureservice` | Live image, screenshots, and recording status | P1 |
-| Notification observation | `notifications`, `notification_proxy` | Subscription list, live events, and supported notification posting | P1 |
-| Provisioning profiles | `misagent` | List, inspect, install, remove, and expiration warnings | P1 |
-| XCTest and WDA | `xctest` | Runner selection, launch parameters, logs, and port bridging | P1 |
-| Pasteboard | `pasteboard` | Text and image read/write | P1 |
+| Process control | `device_info`, `process_control`, `app_service` | Monitor workflow integrated with search, refresh, launch, AppService-only confirmed stop, stale-PID protection, and explicit Legacy/DVT stop limitations. DVT read-only listing is verified on iOS 26.5; the complete Tauri AppService list/launch/confirmation/stop/cleanup path is accepted on iOS 17.0. DVT and Legacy visible limitations remain pending | P0 |
+| Performance overview | `sysmontap`, `energy_monitor`, `graphics` | Sysmontap CPU/memory main path accepted on iOS 17.0 after a real-device output-frequency repair; remaining interval/export/cleanup and iOS 17.4+ acceptance plus later energy/graphics scope remain | P0 |
+| Packet capture | `pcapd`, `network_monitor` | Pcapd workflow integrated with destination selection, PID/interface filters, live statistics, stop-and-save, cancel-and-delete, and disk safeguards; hardware acceptance and richer Network Monitor events remain | P0 |
+| Screen streaming | `screencapture`, `screencaptureservice` | Compatible PNG-refresh preview is accepted on iOS 17.0; still export, Legacy acceptance, HEVC live video, and recording status remain | P1 |
+| Notification observation | `notifications`, `notification_proxy` | Read-only subscription list and bounded live name timeline are integrated; hardware acceptance and any separately designed posting workflow remain | P1 |
+| Provisioning profiles | `misagent` | Read-only Lockdown list and detail inspection are accepted on iOS 17.0; modern RSD acceptance, install, and confirmed removal remain | P1 |
+| XCTest and WDA | `xctest` | Read-only runner/target selection, prerequisite inspection, and validated Standard XCTest/WDA plan previews are integrated; process launch, event output, timeout enforcement, Stop/cleanup, RemotePairing support, WDA readiness, and localhost port bridging remain | P1 |
+| Pasteboard | `pasteboard` | Bounded text and PNG/JPEG read/write are integrated with local image preview, device-bound preparation, confirmation, privacy guidance, and cleanup; hardware acceptance and broader formats remain | P1 |
 
 ### Specialized and Advanced Capabilities
 

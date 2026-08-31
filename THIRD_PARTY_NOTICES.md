@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-idevice desktop is distributed under the MIT License and links third-party
+idevice_desktop is distributed under the MIT License and links third-party
 open-source software. This inventory is generated from the resolved
 dependency graph for `aarch64-apple-darwin`, the only platform the project
 builds for, so it reflects what a release actually ships rather than every

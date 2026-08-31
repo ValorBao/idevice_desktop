@@ -89,6 +89,15 @@ export const liveLogPool = [
   ['DEBUG', 'afcd', 'READDIR /DCIM/100APPLE entries=4'], ['WARN', 'thermalmonitord', 'pressure level Nominal'],
 ] as const
 
+export const demoProcesses = [
+  { pid: 1294, name: 'CrossCode', executablePath: '/private/var/containers/Bundle/Application/DEMO/CrossCode.app/CrossCode', isApplication: true, canStop: true, identity: 'demo:1294:CrossCode' },
+  { pid: 842, name: 'MobileSafari', executablePath: '/Applications/MobileSafari.app/MobileSafari', isApplication: true, canStop: false, identity: 'demo:842:MobileSafari' },
+  { pid: 691, name: 'SpringBoard', executablePath: '/System/Library/CoreServices/SpringBoard.app/SpringBoard', isApplication: true, canStop: false, identity: 'demo:691:SpringBoard' },
+  { pid: 93, name: 'locationd', executablePath: '/usr/libexec/locationd', isApplication: false, canStop: false, identity: 'demo:93:locationd' },
+  { pid: 78, name: 'installd', executablePath: '/usr/libexec/installd', isApplication: false, canStop: false, identity: 'demo:78:installd' },
+  { pid: 61, name: 'lockdownd', executablePath: '/usr/libexec/lockdownd', isApplication: false, canStop: false, identity: 'demo:61:lockdownd' },
+]
+
 export const presets = [
   { id: 'sf', name: 'San Francisco, CA', lat: 37.7749, lng: -122.4194, x: 42, y: 48 },
   { id: 'cupertino', name: 'Apple Park', lat: 37.3349, lng: -122.009, x: 40, y: 56 },

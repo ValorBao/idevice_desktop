@@ -1,6 +1,6 @@
-# idevice desktop Feature Delivery Plan
+# idevice_desktop Feature Delivery Plan
 
-> Last updated: 2026-07-26
+> Last updated: 2026-08-29
 > Principle: ship complete user workflows, not protocol exposure.
 
 This plan turns the capability backlog into a sequence of small, usable features. A
@@ -106,7 +106,8 @@ Before adding navigation, close the highest-value acceptance gaps in existing pa
 - add regression cases when any of these sessions exposes a defect.
 
 This is complete when every current page has a recorded main path and cleanup path,
-or an explicit limitation that cannot presently be exercised.
+or an explicit limitation that cannot presently be exercised. Record each hardware
+session in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
 
 ### Feature 1: Processes
 
@@ -216,13 +217,122 @@ Smallest useful workflow:
 Recording, input injection, and remote control remain out of the first slice because
 they add separate performance, privacy, and safety requirements.
 
+The first slice is now integrated as a bounded 2 FPS PNG-refresh session. It keeps
+one screenshot service open, supports Legacy Screenshotr plus modern DVT/RSD,
+validates every PNG and retains only the latest raw frame for still export. The
+interface registers listeners before startup, preserves the last frame after Stop,
+supports fit and 100% scale, and stops on page exit, hidden window, device switch,
+or disconnect. Automated checks pass; hardware acceptance and the upstream HEVC
+display stream remain separate follow-up work.
+
+### Feature 5: Provisioning Profiles
+
+**Outcome:** understand which signing profiles are installed and which require
+attention without changing device configuration.
+
+The read-only first slice is integrated. It lists profiles through Misagent over
+USB Lockdown or modern RSD, extracts the embedded plist locally, and normalizes
+name, UUID, team, application identifier, platform, device scope, debug entitlement,
+type, creation date, and expiration state. Search and attention/development/
+distribution filters are available, and an unreadable profile remains visible as
+an error row rather than making the whole list fail. Parsing is bounded to 512
+profiles and 8 MB per profile. Automated checks pass; hardware acceptance remains
+pending. This slice extracts metadata from the device-returned profile but does not
+independently verify its CMS signer chain.
+
+Installation and removal remain out of this slice. Both mutate signing state and
+need file validation, a precise target confirmation, post-operation refresh, and a
+tested recovery path before controls are exposed.
+
+### Feature 6: Notification Observation
+
+**Outcome:** watch selected device-state notifications without posting commands or
+collecting unrelated events.
+
+The read-only first slice is integrated as a Monitor tab. Listening starts only
+after the user explicitly selects one or more common or custom notification names.
+The backend validates and deduplicates at most 32 names, routes Notification Proxy
+through USB Lockdown or the appropriate modern RSD tunnel, and attaches a session
+identifier to every state change and event so a cancelled listener cannot overwrite
+a restarted one. Pause, page exit, device switch, and disconnect stop the device
+task. The interface retains the newest 500 names, supports filtering and clearing,
+and has bounded synthetic demo events.
+
+The pinned upstream Notification Proxy client relays the notification name only;
+there is no payload in this workflow. Posting is intentionally absent and would
+require a separate allowlist and safety design. Automated checks pass; hardware
+acceptance remains pending.
+
+### Feature 7: Pasteboard Text and Image Transfer
+
+**Outcome:** move deliberate plain-text snippets or bounded images to or from a
+modern device without silently inspecting or synchronizing clipboard contents.
+
+The first slice is integrated as a dedicated Developer page for iOS 17 and later.
+Device text is read only after the user presses the read control. The backend first
+requests promised metadata for every pasteboard item, then resolves only a supported
+plain-text UTI whose advertised size is at most 1 MB. Empty, non-text, invalid
+UTF-8, unknown-size, and oversized states remain explicit instead of being coerced
+into text.
+
+Writing accepts at most 1 MB of UTF-8 text and requires a confirmation naming the
+target device and exact character/byte count because it replaces the general
+pasteboard. Both directions use the generation-appropriate RemotePairing or
+CoreDeviceProxy RSD tunnel, time out after 45 seconds, and are cancelled when the
+device session changes. iOS 16 and earlier show an explicit unsupported error.
+
+The image mode follows the same explicit lifecycle for PNG and JPEG only. Device
+reads request promised metadata first and refuse unknown-size or larger-than-12-MB
+items without resolving them. Local writes require an absolute selected file,
+matching extension and signature, bounded encoded size, dimensions no larger than
+8,192 per side, and a 32-megapixel preview budget. A device-bound preparation token
+retains the validated bytes only until the user clears the selection, leaves the
+page, changes devices, or completes a confirmed write. The preview and confirmation
+name the file, target, dimensions, MIME type, and byte size. TIFF, transcoding,
+background monitoring, and automatic host clipboard access are absent. Automated
+checks pass; hardware acceptance remains pending.
+
+### Feature 8: XCTest Runner Preflight and Run Planning
+
+**Outcome:** identify a usable XCTest runner and every missing prerequisite before
+the application is allowed to launch a test process.
+
+The read-only preflight slice is integrated as Test Lab. It queries Installation
+Proxy once for all registered applications, retains at most 128 `.xctrunner` or
+`-Runner` candidates and 512 ordinary user/debuggable target applications, and
+never fetches icons or application bytes. Each runner reports its executable,
+required application path/container metadata, `get-task-allow` entitlement, and
+whether it appears to be WebDriverAgent. Search, runner selection, and an optional
+target selection are available in both desktop and bounded demonstration modes.
+
+The page combines the selected candidate with iOS generation, Developer Mode,
+Developer Disk Image, and RSD readiness. Legacy Lockdown TestManager/DVT and iOS
+17.4+ CoreDeviceProxy/RSD are represented as executable routes. iOS 17.0–17.3 is
+explicitly blocked because the application has not yet adapted XCTest to its
+RemotePairing/RSD tunnel; the interface does not mistake a mounted image for a
+working execution route. Refresh is cancellable on a device-session change and
+times out after 45 seconds.
+
+The plan editor records Standard XCTest or WDA bridge intent, an optional target,
+deduplicated include/skip identifiers, and a bounded timeout. Validation re-reads
+Installation Proxy metadata instead of trusting the visible snapshot, rejects a
+removed or no-longer-debuggable runner/target, prevents overlapping filters, and
+applies separate Standard XCTest and WDA timeout limits. WDA plans accept only a
+WDA-classified runner and clear target and filter fields. The validated preview is
+discarded whenever any input changes.
+
+This slice deliberately exposes no Run button. Listener-first event output,
+wall-clock timeout enforcement, deterministic Stop and cleanup behavior, WDA
+readiness, and localhost HTTP/MJPEG bridging must be delivered together before
+process launch is enabled. Automated checks pass; hardware acceptance remains
+pending.
+
 ### Later, driven by validated demand
 
-1. Provisioning profile inspection, expiry warnings, install, and confirmed removal.
-2. Notification observation with an explicit subscription list.
-3. Pasteboard text transfer with privacy guidance; image transfer later.
-4. XCTest and WDA only after runner selection, logs, cancellation, and port bridging
-   can be presented as one understandable workflow.
+1. Provisioning profile install and confirmed removal after the read-only workflow is accepted.
+2. Complete XCTest and WDA execution only when launch parameters, event output,
+   timeout, Stop, RemotePairing support, cleanup, readiness, and port bridging can
+   be presented as one understandable workflow.
 
 High-risk activation, backup/restore, restore mode, HID injection, and Preboard do
 not enter the near-term roadmap. They require dedicated safety designs and must not
@@ -230,7 +340,50 @@ appear as convenient quick actions.
 
 ## 5. Planning Decision
 
-The next implementation cycle is the **current-surface acceptance pass**, followed
-by the **Processes protocol proof**. No Process navigation or mock-only controls are
-added until a real process list has been obtained on supported hardware and its
-cleanup behavior is known.
+The current-surface acceptance pass remains open for its recorded hardware gaps.
+The Processes protocol proof has produced real lists on both modern generations and
+a complete production AppService launch/stop cleanup result on iOS 17.0, so its
+smallest useful Monitor workflow is integrated. DVT stop remains explicitly read-only
+after an identity-checked `killPid:` failed to terminate the designated test app.
+
+On 2026-08-09 the user chose to stop additional boundary testing and continue new
+feature development. Performance moved ahead of Network Capture and its smallest
+CPU/memory workflow is integrated: dynamic sysmontap schemas, stable process identity,
+bounded rolling history, pause/resume, filtering, missing-value handling, and CSV
+export. Network Capture then followed with streaming PCAP output, live statistics,
+optional PID/interface filters, disk safeguards, atomic stop-and-save, and
+cancel-and-delete cleanup. Both workflows pass their automated frontend and Rust
+checks. Live Screen followed as a separate visual tool using a persistent Screenshotr
+or DVT screenshot session, bounded PNG events, current-frame export, and automatic
+cleanup. It also passes automated checks. Hardware acceptance is intentionally still
+pending. Provisioning Profiles then added a separate read-only Misagent workflow
+with local signed-plist parsing, expiry warnings, search, filters, and malformed-row
+isolation. It passes automated checks but has not been accepted on hardware; install
+and removal are intentionally absent. Notification Observation then added explicit
+read-only subscriptions, a bounded/filterable name timeline, generation-aware
+transport routing, session isolation, and automatic cleanup. It passes automated
+checks but has not been accepted on hardware; payload display and posting are
+intentionally absent. Capability coverage remains Partial and no real-device result
+is implied. Pasteboard transfer followed with explicit reads, confirmed writes,
+promised-metadata filtering, a 1 MB UTF-8 text limit, modern-generation RSD routing,
+and device-session cancellation. The workflow then added PNG/JPEG reads and writes
+with a 12 MB encoded limit, safe dimension budget, local preview, device-bound
+preparation tokens, and cleanup on clear, page exit, device change, or successful
+write. It passes automated checks but has not been accepted on hardware; background
+monitoring, host clipboard access, TIFF, and transcoding are intentionally absent.
+Test Lab then added bounded, read-only runner and target discovery plus explicit
+checks for runner metadata, debug entitlement, Developer Mode, DDI, and the selected
+generation's TestManager/DVT route. It passes automated checks but does not launch
+tests; the iOS 17.0–17.3 RemotePairing adapter, lifecycle/event controls, WDA bridge,
+and hardware acceptance remain pending.
+
+On 2026-08-29 development moved to the 0.0.3 release branch and returned to
+hardware acceptance. The first Performance desktop run exposed a real Sysmontap
+configuration defect: output frequency had been coupled to the requested sample
+period, and system-only protocol rows erased the visible process list. After
+separating those concerns, the rebuilt app sustained 26 one-second samples with 80
+visible process CPU/memory rows on iOS 17.0. The same session accepted the Live
+Screen main preview, read-only Lockdown profile inspection, and Test Lab's
+empty-runner/unsupported-route state. Network Capture, Notifications, and Pasteboard
+were intentionally limited to their safe initial states so no packet file,
+subscription, or clipboard access occurred without a dedicated acceptance action.

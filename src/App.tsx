@@ -1,52 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Activity, AppWindow, Bug, Check, ChevronDown, CircleStop, Code2, FolderOpen,
-  MapPin, Plus, Smartphone, TerminalSquare,
-} from 'lucide-react'
+import { Check } from 'lucide-react'
 import { devices, type Device } from './data'
-import { api, errorMessage, events, isDesktopRuntime, type DeviceSummary } from './api'
-import type { Connection, Page } from './types'
+import { api, errorMessage, events, isDesktopRuntime } from './api'
+import type { Connection, WorkbenchMode } from './types'
 import { summaryToDevice } from './lib/device'
 import { TitleBar } from './components/TitleBar'
+import { LeftRail } from './components/LeftRail'
 import { Onboarding } from './components/Onboarding'
 import { PairModal } from './components/PairModal'
-import { Overview } from './pages/Overview'
-import { Diagnostics } from './pages/Diagnostics'
+import { InspectWorkbench, type InspectSubView } from './pages/InspectWorkbench'
 import { Files } from './pages/Files'
-import { Apps } from './pages/Apps'
-import { CrashReports } from './pages/CrashReports'
-import { Logs } from './pages/Logs'
-import { Developer } from './pages/Developer'
-import { Location } from './pages/Location'
+import { AppsWorkbench, type AppsSubView } from './pages/AppsWorkbench'
+import { WatchWorkbench, type WatchInstrument } from './pages/WatchWorkbench'
 
-const pageMeta: Record<Page, [string, string]> = {
-  overview: ['Overview', 'idevice · lockdown query'],
-  diagnostics: ['Diagnostics', 'com.apple.mobile.diagnostics_relay'],
-  files: ['Files', 'com.apple.afc'],
-  apps: ['Apps', 'com.apple.mobile.installation_proxy'],
-  crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
-  logs: ['Logs', 'com.apple.syslog_relay'],
-  developer: ['Debug Tools', 'com.apple.dt.* services'],
-  location: ['Location', 'com.apple.dt.simulatelocation'],
+const workbenchMeta: Record<WorkbenchMode, [string, string]> = {
+  inspect: ['Inspect Bench', 'Hardware telemetry · Diagnostics relay · Crash logs'],
+  files: ['Files Explorer', 'Apple File Conduit (AFC) · Application sandboxes'],
+  apps: ['Applications & JIT', 'Installation proxy · Sideloading · Debugger tunnel'],
+  watch: ['Live Watch Station', 'OS Trace stream · Location spoofer probe · Signal monitors'],
 }
-
-const navItems = [
-  { id: 'overview', label: 'Overview', icon: AppWindow },
-  { id: 'diagnostics', label: 'Diagnostics', icon: Activity },
-  { id: 'files', label: 'Files', icon: FolderOpen, suffix: 'AFC' },
-  { id: 'apps', label: 'Apps', icon: AppWindow },
-  { id: 'crashes', label: 'Crash Reports', icon: Bug },
-  { id: 'logs', label: 'Logs', icon: TerminalSquare },
-] as const
 
 function App() {
   const desktop = useMemo(isDesktopRuntime, [])
-  const [page, setPage] = useState<Page>('overview')
+  const [mode, setMode] = useState<WorkbenchMode>('inspect')
+  const [inspectSubView, setInspectSubView] = useState<InspectSubView>('overview')
+  const [appsSubView, setAppsSubView] = useState<AppsSubView>('manager')
+  const [watchInstrument, setWatchInstrument] = useState<WatchInstrument>('logs')
   const [deviceCatalog, setDeviceCatalog] = useState<Device[]>(desktop ? [] : devices)
   const [deviceId, setDeviceId] = useState(desktop ? '' : 'd1')
   const deviceIdRef = useRef(deviceId)
   const [connection, setConnection] = useState<Connection>(desktop ? 'none' : 'connected')
-  const [deviceMenu, setDeviceMenu] = useState(false)
   const [pairOpen, setPairOpen] = useState(false)
   const [toast, setToast] = useState('')
   const device = deviceCatalog.find((item) => item.id === deviceId) ?? deviceCatalog[0] ?? devices[0]
@@ -100,7 +83,6 @@ function App() {
 
   const selectDevice = async (id: string) => {
     setDeviceId(id)
-    setDeviceMenu(false)
     if (!desktop) {
       setConnection('connected')
       return
@@ -117,8 +99,7 @@ function App() {
   const disconnect = async () => {
     if (desktop) await api.deviceDisconnect().catch((error) => setToast(errorMessage(error)))
     setConnection('none')
-    setDeviceMenu(false)
-    setPage('overview')
+    setMode('inspect')
   }
 
   const finishPairing = async () => {
@@ -141,72 +122,66 @@ function App() {
       <div className="window-shell">
         <TitleBar device={device} connection={connection} />
         <div className="window-body">
-          <aside className="sidebar">
-            <div className="device-select-wrap">
-              <button className="device-card" onClick={() => setDeviceMenu((value) => !value)} aria-expanded={deviceMenu} aria-label="Select device" title={connected ? device.name : 'Select device'}>
-                <span className={`device-icon status-${connection}`}><Smartphone size={19} /><i /></span>
-                <span className="device-card-copy">
-                  <b>{connected ? device.name : connection === 'detected' ? device.model : 'No device'}</b>
-                  <small>{connected ? device.model : connection === 'detected' ? device.connectable === false ? 'Network only · connect USB once' : 'Awaiting trust…' : 'Connect to begin'}</small>
-                </span>
-                <ChevronDown size={14} />
-              </button>
-              {deviceMenu && (
-                <div className="device-menu">
-                  {deviceCatalog.map((item) => (
-                    <button key={item.id} onClick={() => void selectDevice(item.id)}>
-                      <i className={item.id === deviceId ? 'selected-dot' : ''} />
-                      <span><b>{item.name}</b><small>{item.conn}{item.ios !== '—' ? ` · iOS ${item.ios}` : ''}</small></span>
-                    </button>
-                  ))}
-                  <hr />
-                  <button className="accent-action" onClick={() => { setPairOpen(true); setDeviceMenu(false) }}><Plus size={15} />Pair new device…</button>
-                  <button className="danger-action" onClick={() => void disconnect()}><CircleStop size={15} />Disconnect device</button>
-                </div>
-              )}
-            </div>
-
-            <nav className={connected ? '' : 'nav-disabled'}>
-              <span className="nav-heading">Device</span>
-              {navItems.map(({ id, label, icon: Icon, ...item }) => (
-                <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)} aria-label={label} title={label}>
-                  <Icon size={17} /><span>{label}</span>{'suffix' in item && <small>{item.suffix}</small>}
-                </button>
-              ))}
-              <span className="nav-heading developer-heading">Developer</span>
-              <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')} aria-label="Debug Tools" title="Debug Tools"><Code2 size={17} /><span>Debug Tools</span></button>
-              <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')} aria-label="Location" title="Location"><MapPin size={17} /><span>Location</span></button>
-            </nav>
-
-            <div className="sidebar-footer">
-              <i />
-              <span><b>Trusted & Paired</b><small>{device.udid.slice(0, 8)}…{device.udid.slice(-6)}</small></span>
-            </div>
-          </aside>
+          <LeftRail
+            device={device}
+            deviceCatalog={deviceCatalog}
+            connection={connection}
+            desktop={desktop}
+            mode={mode}
+            onSelectMode={setMode}
+            onSelectDevice={(id) => void selectDevice(id)}
+            onPairOpen={() => setPairOpen(true)}
+            onDisconnect={() => void disconnect()}
+            onToast={setToast}
+          />
 
           <main className="main-panel">
-            {page !== 'overview' && (
-              <header className="page-header">
-                <div><h1>{pageMeta[page][0]}</h1><p>{pageMeta[page][1]}</p></div>
-                <div className="header-spacer" />
-                <div className="header-device-state">
-                  <span className="header-state-dot" />
-                  <span>{connected ? device.conn : 'Offline'}</span>
-                  <i />
-                  <span>{connected ? `iOS ${device.ios}` : 'No session'}</span>
-                </div>
-              </header>
-            )}
+            <header className="page-header">
+              <div>
+                <h1>{workbenchMeta[mode][0]}</h1>
+                <p>{workbenchMeta[mode][1]}</p>
+              </div>
+              <div className="header-spacer" />
+              <div className="header-device-state">
+                <span className="header-state-dot" />
+                <span>{connected ? device.conn : 'Offline'}</span>
+                <i />
+                <span>{connected ? `iOS ${device.ios}` : 'No session'}</span>
+              </div>
+            </header>
 
-            <div className="page-scroll" key={page}>
-              {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
-              {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
-              {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
-              {page === 'logs' && <Logs connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
-              {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
-              {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
+            <div className="page-scroll" key={mode}>
+              {mode === 'inspect' && (
+                <InspectWorkbench
+                  device={device}
+                  desktop={desktop}
+                  subView={inspectSubView}
+                  onSubViewChange={setInspectSubView}
+                  onError={setToast}
+                />
+              )}
+              {mode === 'files' && (
+                <Files desktop={desktop} udid={device.udid} onToast={setToast} />
+              )}
+              {mode === 'apps' && (
+                <AppsWorkbench
+                  desktop={desktop}
+                  device={device}
+                  subView={appsSubView}
+                  onSubViewChange={setAppsSubView}
+                  onToast={setToast}
+                />
+              )}
+              {mode === 'watch' && (
+                <WatchWorkbench
+                  connected={connected}
+                  desktop={desktop}
+                  device={device}
+                  activeInstrument={watchInstrument}
+                  onInstrumentChange={setWatchInstrument}
+                  onError={setToast}
+                />
+              )}
             </div>
 
             {!connected && (

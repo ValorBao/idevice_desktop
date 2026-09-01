@@ -14,10 +14,10 @@ import { AppsWorkbench, type AppsSubView } from './pages/AppsWorkbench'
 import { WatchWorkbench, type WatchInstrument } from './pages/WatchWorkbench'
 
 const workbenchMeta: Record<WorkbenchMode, [string, string]> = {
-  inspect: ['Inspect Bench', 'Hardware telemetry · Diagnostics relay · Crash logs'],
-  files: ['Files Explorer', 'Apple File Conduit (AFC) · Application sandboxes'],
-  apps: ['Applications & JIT', 'Installation proxy · Sideloading · Debugger tunnel'],
-  watch: ['Live Watch Station', 'OS Trace stream · Location spoofer probe · Signal monitors'],
+  inspect: ['Inspect Station', 'Vehicle Telemetry · Diagnostics Relay · Crash Analytics'],
+  files: ['Payload Files', 'Apple File Conduit (AFC) · Application Sandboxes'],
+  apps: ['Applications & JIT', 'Installation Proxy · Sideloading · Debugger Tunnel'],
+  watch: ['Live Blackbox', 'OS Trace Stream · Location Probe · Telemetry Logs'],
 }
 
 function App() {

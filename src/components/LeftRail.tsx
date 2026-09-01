@@ -181,7 +181,7 @@ export function LeftRail({
 
       {/* Hardware / Session Lab Probes */}
       <div className="session-probes">
-        <span className="probe-heading">SESSION PROBES</span>
+        <span className="probe-heading">SESSION TELEMETRY</span>
         <div className="probe-list">
           <div className="probe-row" title="Device pairing status">
             <span className="probe-name">PAIR</span>
@@ -215,7 +215,7 @@ export function LeftRail({
 
       {/* 4 Primary Workbenches */}
       <div className="bench-nav-wrap">
-        <span className="probe-heading">WORKBENCHES</span>
+        <span className="probe-heading">STATIONS</span>
         <nav className={`bench-nav ${connected ? '' : 'nav-disabled'}`}>
           {modes.map(({ id, label, icon: Icon, sub }) => (
             <button
@@ -238,8 +238,8 @@ export function LeftRail({
       <div className="left-rail-footer">
         <i />
         <span>
-          <b>idevice desktop</b>
-          <small>v0.0.2 · macOS lab</small>
+          <b>VOID STATION</b>
+          <small>v0.0.2 · macOS ground</small>
         </span>
       </div>
     </aside>

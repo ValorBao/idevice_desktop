@@ -16,10 +16,10 @@ describe('App workbench UI', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByText('Inspect Bench')).toBeInTheDocument()
+    expect(screen.getByText('Inspect Station')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'WATCH' }))
-    expect(screen.getByText('Live Watch Station')).toBeInTheDocument()
+    expect(screen.getByText('Live Blackbox')).toBeInTheDocument()
     expect(screen.getByText('OS Logs Console')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'APPS' }))

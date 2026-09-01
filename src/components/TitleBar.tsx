@@ -31,8 +31,8 @@ export function TitleBar({ device, connection }: { device: Device; connection: C
         <button type="button" aria-label="Enter or exit fullscreen" title="Fullscreen" onClick={() => controlWindow('fullscreen')}><i /></button>
       </div>
       <div className="app-title" data-tauri-drag-region>
-        <span className="brand-mark"><i /><i /><i /></span>
-        <b>DEVICE LAB</b>
+        <span className="brand-mark"><i /></span>
+        <b>VOID</b>
         <small>{connection === 'connected' ? device.name : connection === 'detected' ? `${device.model} · untrusted` : 'No device'}</small>
       </div>
       <div className="titlebar-spacer" data-tauri-drag-region />

@@ -239,7 +239,7 @@ export function LeftRail({
         <i />
         <span>
           <b>VOID STATION</b>
-          <small>v0.0.2 · macOS ground</small>
+          <small>v0.0.3 · macOS ground</small>
         </span>
       </div>
     </aside>

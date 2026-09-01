@@ -1,8 +1,8 @@
-# idevice desktop Development Progress
+# idevice_desktop Development Progress
 
-> Last updated: 2026-07-26
-> Release: 0.0.2 Developer Preview
-> Stage: most MVP capabilities are integrated; the project is entering real-device validation, stability work, and code organization.
+> Last updated: 2026-08-29
+> Release: 0.0.2 Developer Preview; 0.0.3 in development
+> Stage: the MVP surface is integrated; 0.0.3 is focused on real-device acceptance, stability, and release preparation.
 
 The product direction is confirmed: developer tools first, macOS-only for the initial release, and long-term GUI coverage of device capabilities that currently require `idevice-tools`.
 
@@ -17,25 +17,26 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Item | Status |
 | --- | --- |
-| Frontend production build | Passed on 2026-07-26 with `npm run build` |
-| Frontend regression tests | Passed on 2026-07-26: 18 passed, 0 failed across five Vitest files |
+| Frontend production build | Passed on 2026-08-29 with `npm run build` and the 0.0.3 debug `.app` bundle |
+| Frontend regression tests | Passed on 2026-08-29: 87 passed, 0 failed across fifteen Vitest files |
 | GitHub Actions CI | Passed on PR #27: Frontend on Ubuntu in 26 seconds; Rust formatting, check, 63 tests, and strict Clippy on macOS 14 arm64 in 3 minutes 3 seconds |
-| Rust static check | Passed on 2026-07-26 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-07-26: 63 passed, 0 failed |
-| Rust formatting and linting | Passed on 2026-07-26 with `cargo fmt --check` and strict Clippy warnings |
+| Rust static check | Passed on 2026-08-29 with `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | Passed on 2026-08-29: 123 passed, 0 failed |
+| Rust formatting and linting | Passed on 2026-08-29 with `cargo fmt --check` and strict Clippy across all targets |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.2_aarch64.dmg` built on 2026-07-26; passes `hdiutil verify`, identifies itself as 0.0.2 with a macOS 11.0 minimum, carries the CSP in its arm64 release binary, and ships both licence files byte-identical to their sources |
-| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, and a browser-demo interaction path. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, debuggable-application filtering, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
+| 0.0.3 release candidate | Unsigned Apple Silicon `idevice_desktop_0.0.3_aarch64.dmg` built on 2026-08-29; the image passes `hdiutil verify`, contains an arm64 app identifying itself as 0.0.3 with a macOS 11.0 minimum, and ships the project license plus third-party notices byte-identical to their sources |
+| Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, Processes list/launch/confirmed stop/unsupported states, Performance listener-first startup, missing metrics, pause/resume interval changes, late-start rejection, CSV export and page-exit cleanup, Network Capture listener-first startup, filters, progress, PID rejection, stop/save, cancel/delete and page-exit cleanup, Notification Observation explicit selection, listener-first startup, custom names, bounded retention, stale-session rejection, pause/clear behavior and page-exit cleanup, Pasteboard manual text/image reads, non-text/non-image states, local text editing, image preparation and preview, exact target/size/format confirmation, confirmation cancellation, explicit prepared-image clearing, page-exit cleanup, limit rejection, and demo isolation, Test Lab runner loading/search/selection, optional targets, malformed metadata, entitlement failures, no-launch boundary, Standard XCTest plan requests, WDA bridge-only plans, preview invalidation, readiness gating, desktop failure, demo isolation, and navigation, Live Screen listener-first startup, frame display, stop/still retention, PNG export, hidden-window pause, and page-exit cleanup, Provisioning Profiles loading, normalized search, attention filters, expiry/scope detail, malformed-row isolation, desktop failure, and demo behavior, browser-demo interaction, device-switch remounting, automatic session teardown when a device disappears or becomes unusable, stale device-catalog refresh rejection, and delayed listener cleanup. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, process identity and stop safety, Performance interval/schema/identity/missing-value/CPU/CSV handling, PCAP destination/filter/header/partial-file/save/delete handling, notification subscription validation/deduplication/limits and generation-aware transport selection, Pasteboard UTF-8 sizing, text/image candidate selection, PNG/JPEG header and dimension parsing, format matching, pixel/byte budgets, invalid/oversized data handling, and CoreDevice-only routing, XCTest runner classification, required metadata and debug-entitlement reporting, target filtering, supported route boundaries, plan filter normalization/conflict limits, fresh runner/target validation, WDA restrictions, Live Screen PNG dimensions/signature/size and export-path validation, provisioning profile transport selection, embedded-plist parsing, classification, expiry calculations, malformed-row preservation and payload limits, debuggable-application filtering, task cancellation, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
 | Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
-| Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, and the JIT transport; iPhone11,8 on iOS 17.0 passed USB/Bonjour merging, crash reports over USB and RemotePairing/RSD, and the JIT tunnel through application launch; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
-| Verification harnesses | `src-tauri/examples/verify_jit.rs` and `verify_pairing.rs` drive the real provider, tunnel, and command code against an attached device |
-| Branches | All validation branches are merged; `master` is at the 2026-07-26 Device Lab visual direction (PR #20) |
-| Worktree | Clean |
+| Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, JIT transport, and DVT process listing; iPhone11,8 on iOS 17.0 additionally passed the 0.0.3 Performance live CPU/memory workflow, Live Screen preview, Provisioning Profiles inspection, Test Lab empty-runner preflight, and safe initial states for Network Capture, Notifications, and Pasteboard; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
+| Verification harnesses | `src-tauri/examples/verify_jit.rs`, `verify_pairing.rs`, `verify_processes.rs`, `verify_processes_command.rs`, `verify_performance.rs`, and `verify_large_crash.rs` drive real device paths or acceptance contracts against an attached device; the Performance harness records the device-provided schema and six bounded read-only stream rows |
+| Branches | 0.0.3 work continues on `codex/release-0.0.3`; `master` does not yet contain the current acceptance or release work |
+| Worktree | In progress: 0.0.3 version baseline, Performance real-device repair, acceptance evidence, and release documentation |
 
 ## 3. Feature Progress
 
 | Module | Code status | Current assessment | Next verification |
 | --- | --- | --- | --- |
-| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | iOS 17.0 USB/Bonjour merging and physical transitions pass; iOS 14.2 USB discovery and routing pass; two devices attached at once stay separate with the correct transport each | Verify sleeping-device behavior and cold-start association |
+| Device discovery and hot plug | usbmuxd and Bonjour catalog integrated | iOS 17.0 USB/Bonjour merging and physical transitions pass; iOS 14.2 USB discovery and routing pass; two devices attached at once stay separate with the correct transport each. A fresh Tauri launch with the iOS 17.0 phone already attached selected the same visible device and backend UDID | Verify sleeping-device behavior and wake-time reassociation |
 | Pair, unpair, select, and disconnect | Integrated | iOS 14.2 unpair and re-pair pass end to end; the USB-only guard correctly refuses a network record on iOS 17.0 | First-time trust prompt on an untrusted host, trust rejected, and stale pairing records |
 | Overview | Integrated | iOS 17.0 Lockdown, storage, battery, and RSD screenshot paths pass; iOS 14.2 legacy screenshot returned a valid 379,466-byte PNG | Missing fields and DDI retry failure behavior |
 | Diagnostics | Five query categories integrated | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi request paths pass on iOS 14.2; battery also passes on iOS 17.0 | Permission failures and payload differences across more iOS versions |
@@ -45,10 +46,18 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Live logs | Integrated | OS Trace connection and event receipt verified on iOS 14.2 and 17.0 | Long sessions, pause, disconnects, and high throughput |
 | Developer Mode | Integrated | Status query verified on iOS 17.0 | Enable flow, reboot or confirmation, and failure recovery |
 | DDI mount and unmount | Legacy and personalized paths integrated | A full mount and unmount cycle passes on iOS 17.0, and every mounted-image signal the project reads agrees with the RSD service list | Devices from iOS 16 and 17.4+, and mounting through Choose files rather than devicectl |
-| JIT | Integrated for both generations | iOS 17.0 passes launch, `vAttach`, detach, and cleanup; iOS 14.2 passes attach-by-name and detach. Ending a session leaves the application running, and the task registry cancels a session on device switch. A rejected attach is reported as a failure | Exercise the full sequence through the interface rather than a harness |
-| Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear | Verify frontend map selection and the iOS 17+ DVT/RSD path |
-| Browser demo mode | Integrated | Frontend build passed | Visual and state consistency with desktop mode |
-| Single Device Lab theme | Integrated | The style and appearance switchers were removed on 2026-07-26; the interface is fixed to the dark Device Lab theme. Frontend build passed | Small windows, long content, and accessibility |
+| JIT | iOS 17 desktop path accepted; Legacy interface pending | On iOS 17.0, the Tauri interface selected `cn.gblw.AppsDump`, launched and attached pid 4151, visibly returned to idle after Stop, and a production process snapshot confirmed the application remained alive until explicit cleanup. Lower-level evidence still covers iOS 17.0 launch/`vAttach`/detach and iOS 14.2 attach-by-name/detach. A rejected attach is reported as a failure, and the task registry cancels a session on device switch | Confirm the Legacy attach-by-name flow through the desktop interface |
+| Processes | iOS 17 AppService desktop path accepted; cross-generation boundaries pending | Searchable manual/5-second process refresh and installed-app launch are wired across AppService and DVT; the launch selector merges ordinary user apps with debuggable side-loaded builds by bundle ID. Confirmed stop is advertised only for AppService and revalidates an opaque identity before acting, rejecting stale rows and PID reuse; only user-container or Installation Proxy-matched applications are stoppable. List and control commands register cancellable device tasks, and RemotePairing setup retries bounded transient failures. The iOS 17.0 Tauri workflow launched `cn.gblw.AppsDump` as pid 4130, displayed a target-specific native confirmation, stopped it, and removed its row after refresh. Because DVT `killPid:` did not terminate the designated test app, production reports that route as read-only for Stop. An iOS 26.5 read-only regression returned 277 processes through DVT. Legacy is explicitly unavailable | Confirm the visible DVT read-only notice on iOS 26.5 and the visible Legacy limitation on iOS 14.2 |
+| Performance | iOS 17.0 CPU/memory desktop path accepted; other generations pending | The 2026-08-29 desktop pass exposed two real-device defects that automated schema tests missed: the upstream client coupled Sysmontap's `ur` output frequency to the sample period, suppressing process rows, and production emitted alternating system-only rows as empty process snapshots. Production now keeps the 1 ms output frequency independent, carries the latest system CPU into process snapshots, and emits only non-empty process rows. The repaired interface retained 80 processes with live CPU and memory and advanced from 7 to 26 one-second samples without an error. History remains bounded to 180 samples and follows stable process identity instead of PID alone | Exercise 500 ms/2 s changes, pause/resume, CSV export, page-exit cleanup, and the iOS 17.4+ CoreDeviceLockdown route |
+| Network Capture | Streaming PCAP workflow integrated; capture round trip pending | The iOS 17.0 desktop page passed its safe initial-state check with zero packets, no destination, and no background capture until Start. Once started, production streams normalized pcapd frames to a unique adjacent partial file without retaining packet payloads in application memory. Stop syncs and atomically publishes the file; cancel and failure paths delete the partial file, with disk and 2 GB safeguards | Verify that a deliberately started file opens with packets in Wireshark, plus stop/cancel/disconnect cleanup |
+| Live Screen | iOS 17.0 DVT preview accepted; Legacy and export pending | The 2026-08-29 desktop pass displayed valid 828 × 1792 frames through RemotePairing/RSD, reached 25 frames at a measured 1.9 FPS against the 2 FPS target, and visibly changed to the hidden-window paused state. The dedicated page still bounds every PNG to 12 MB and retains only the latest frame | Exercise Save Frame, explicit Stop, page-exit cleanup, and the Legacy Screenshotr path |
+| Provisioning Profiles | iOS 17.0 read-only desktop path accepted | The 2026-08-29 desktop pass read one profile through Lockdown Misagent and displayed its name, UUID, Ad Hoc scope, team, application identifier, registered-device count, debug entitlement, signed size, and two-day expiry warning. Search and attention/development/distribution filters remain integrated, with 8 MB/profile and 512-row bounds. No install or removal command is exposed | Cross-check signer and expiry details against a trusted reference; exercise modern RSD and malformed-profile isolation on hardware |
+| Notification Observation | Read-only workflow integrated; safe initial state accepted | The iOS 17.0 desktop page retained zero events and kept Start disabled with no selected names, proving that opening Monitor does not subscribe implicitly. Explicit presets/custom names, bounded history, generation-aware routing, and session isolation remain covered automatically | Select a deliberate test notification, trigger it over USB and one modern network route, and confirm pause/tab-exit/disconnect cleanup |
+| Pasteboard Text and Image Transfer | Explicit bounded CoreDevice workflow integrated; privacy initial state accepted | The iOS 17.0 desktop page opened with device items and last write unset, displayed the manual Read control, and did not read clipboard contents automatically. Text remains capped at 1 MB and PNG/JPEG at 12 MB with dimension budgets, device-bound preparation, and per-write confirmation | With explicit test content, compare multilingual text and PNG/JPEG round trips; confirm unsupported/unknown-size items and preparation cleanup |
+| XCTest Runner Preflight and Run Planning | iOS 17.0 empty-runner desktop state accepted; execution not implemented | Test Lab read 23 optional target apps, found no installed `.xctrunner`, and correctly rendered the empty-runner guidance plus the iOS 17.0–17.3 `RemotePairing/RSD route pending` limitation without exposing Run. Automated checks still cover valid and malformed runner metadata and plan normalization | Install a dedicated signed runner to verify candidate metadata; complete RemotePairing execution, events, timeout, Stop/cleanup, WDA readiness, and port bridging before exposing Run |
+| Location simulation | Legacy and DVT/RSD paths integrated | iOS 14.2 Lockdown set/clear and restoration of real GPS pass after reconnecting for clear. On iOS 17.0, the desktop interface applied the Apple Park preset over DVT/RSD, the phone reported the simulated position, and Stop restored real GPS | Exercise the same desktop-interface workflow on Legacy |
+| Browser demo mode | Integrated | Monitor/Processes list, search, and launch interaction passed in the browser demonstration on 2026-08-08; Performance, Network Capture, Notification Observation, Pasteboard Text and Image Transfer, XCTest Runner Preflight and Run Planning, Live Screen, and Provisioning Profiles have bounded synthetic data and the same safety controls without calling Tauri | State consistency with desktop mode |
+| Single Device Lab theme | Integrated | The interface is fixed to the dark Device Lab theme. Monitor/Processes passed visual inspection at the default viewport and 820×650 on 2026-08-08 | Long content and accessibility |
 
 ## 4. Completed Milestones
 
@@ -153,7 +162,39 @@ PRs: #23, #24, and the Files completeness follow-up.
 
 ## 5. Active Validation
 
-The frontend production build, 18 frontend regression tests, Rust static check, 63 Rust unit tests, formatting check, strict Clippy check, and browser interaction check pass.
+The frontend production build, 87 frontend regression tests, Rust static check, 123 Rust unit tests, formatting check, strict all-target Clippy check, and browser interaction check pass. Current hardware-acceptance evidence is recorded in [`ACCEPTANCE_LOG.md`](ACCEPTANCE_LOG.md).
+
+The 2026-08-29 0.0.3 session converted the new surface from automation-only evidence into bounded desktop acceptance on iOS 17.0. Performance exposed and fixed a real Sysmontap output-frequency defect, then sustained 26 visible one-second samples with 80 processes and live CPU/memory. Live Screen reached 25 valid frames at 1.9 FPS, Profiles parsed one installed profile, and Test Lab correctly represented a device with 23 target apps but no installed runner. Network Capture, Notification Observation, and Pasteboard were opened only far enough to verify that they remain idle until an explicit user action; no packet capture, notification subscription, or clipboard read/write occurred.
+
+The Processes workflow is now integrated under Monitor. The production commands
+select CoreDevice AppService when advertised and fall back to DVT DeviceInfo and
+ProcessControl. The interface provides search, manual and restrained five-second
+refresh, installed-application launch, and confirmed AppService stop. Stop requests carry an
+opaque identity from the displayed row; the backend refreshes the process list and
+rejects a changed identity before terminating an application. Only processes tied
+to an Installation Proxy user application or an executable in iOS's user application
+container are stoppable; system applications and daemons are read-only in this
+first slice. Browser demo interaction and an 820×650 layout pass were completed on
+2026-08-08. The complete iOS 17.0 Tauri AppService workflow passed on 2026-08-09:
+the interface launched the designated side-loaded test app as pid 4130, displayed
+the exact target in a native confirmation, stopped it, and removed its row.
+
+The Processes protocol proof started on 2026-07-28 with
+`src-tauri/examples/verify_processes.rs`. Its default mode is read-only; an explicit
+bundle ID is required to exercise launch and stop, and every mutating step has a
+cleanup path and a 30-second timeout. On iOS 26.5, CoreDeviceProxy exposed 62 RSD
+services but did not advertise `com.apple.coredevice.appservice`. The harness fell
+back to `com.apple.instruments.dtservicehub`, completed the DVT handshake, and
+returned 220 running processes through DeviceInfo. This is backend protocol evidence,
+not interface acceptance. On iOS 17.0, the same harness selected CoreDevice
+AppService, returned 473 processes, launched `cn.gblw.AppsDump` as pid 1522,
+confirmed it in a fresh listing, sent SIGTERM, and confirmed it exited. The iOS
+26.5 mutating path and the Legacy generation remain unverified. On 2026-08-08 the
+production service-layer harness repeated the iOS 17.0 AppService path end to end:
+it launched the dedicated app as pid 4096, verified its opaque identity, stopped
+it, and confirmed cleanup. Before AppService became available, DVT listed safely
+but its `killPid:` request did not terminate the same dedicated app; production now
+shows that fallback as read-only for Stop rather than exposing an unreliable control.
 
 The 2026-07-25 iPhone11,8 and iOS 17.0 acceptance session established the following:
 
@@ -205,7 +246,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 - Track Not integrated, Partial, Integrated, Build passed, and Real-device verified separately for each capability.
 - When upgrading `idevice`, compare command and feature changes and update the matrix before scheduling work.
 - ~~Publish the RSD crash-report fix in the next patch.~~ Shipped in 0.0.2.
-- Finish the current-surface acceptance pass, then prove the Processes backend on real hardware before adding it to the Monitor interface.
+- Finish the current-surface acceptance pass, then complete Processes desktop-interface acceptance on iOS 17.0 and the DVT mutation proof on iOS 26.5 before marking the workflow Covered.
 
 ### P0: JIT Reach and Coverage
 
@@ -222,7 +263,7 @@ iOS 15 and 16 are not tracked as a separate gap. `developer_generation()` in `de
 
 - ~~Add unit tests for version selection, path normalization, cross-boundary data conversion, and error mapping.~~ Done on 2026-07-25. The first three were already covered; error mapping was not, and `CommandError` itself had been missed by the contract tests despite crossing the boundary on every failed command.
 - ~~Add serialization contract tests to prevent drift between Rust and TypeScript fields.~~ Done on 2026-07-25: thirteen tests compare what serde emits against the declarations parsed from `src/api.ts`. Both directions were confirmed to fail on an induced mismatch.
-- Verify that device switches, disconnects, and page unmounts reliably stop long-running tasks.
+- Frontend and task-registry tests cover device switches, explicit disconnects, page unmounts, complete device loss, and a selected device becoming unusable. A real-device mid-operation disconnect is still required for Location, JIT, crash reads, transfers, and logs.
 - Cover empty states, timeouts, permission denial, mid-operation disconnects, and large files.
 
 ### P1: Frontend Maintainability
@@ -291,6 +332,7 @@ Append future validation results using this format:
 | 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Folder creation through the interface | Pass | First execution of `afc_mkdir` from the desktop on any device — `window.prompt` returned null before this, so the command was unreachable and the backend path had never run |
 | 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Streaming AFC transfer with progress and cancellation | Pass | Transfers now loop in 1 MB chunks instead of buffering the whole file; progress advances and the interface stays responsive. Cancelling stops the transfer and removes the partial file |
 | 2026-07-26 | iPhone10,1 + iPhone11,8 + iPhone14,5 | 14.2 + 17.0 + 26.5 | USB | Files dragged in from Finder | Pass | Dropping into the table uploads to the open folder and dropping onto a folder row uploads into it. The Apps sideload zone had the same defect class: Tauri consumes OS drags before the webview sees them, and the `File.path` it read is an Electron extension WKWebView does not implement |
+| 2026-07-28 | iPhone14,5 | 26.5 | usbmuxd network record | Processes read-only protocol proof | Pass | CoreDeviceProxy opened in 420 ms with 62 RSD services. AppService was absent, so the harness used `com.apple.instruments.dtservicehub`; the DVT handshake and DeviceInfo channel returned 220 running processes. No application was launched or stopped |
 | YYYY-MM-DD | Device model | Version | USB/Network | Feature name | Pass/Fail/Partial | Error or environment details |
 
 ## 9. Update Checklist

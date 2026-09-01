@@ -8,6 +8,9 @@ vite.config.js
 vite.config.d.ts
 .claude/
 
+# The product website is maintained as its own Git repository.
+website/
+
 # Data captured from a real device must never be committed
 *.ips
 *.crash

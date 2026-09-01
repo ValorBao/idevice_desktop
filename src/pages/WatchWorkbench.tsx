@@ -1,11 +1,10 @@
-import { useState } from 'react'
-import { TerminalSquare, MapPin, Bug, Layers, Radio } from 'lucide-react'
+import { MapPin, ScreenShare, TerminalSquare } from 'lucide-react'
 import type { Device } from '../data'
-import { Logs } from './Logs'
+import { Monitor } from './Monitor'
 import { Location } from './Location'
-import { CrashReports } from './CrashReports'
+import { LiveScreen } from './LiveScreen'
 
-export type WatchInstrument = 'logs' | 'location' | 'crashes'
+export type WatchInstrument = 'monitor' | 'location' | 'screen'
 
 export function WatchWorkbench({
   connected,
@@ -28,44 +27,47 @@ export function WatchWorkbench({
         <div className="workbench-tabs" role="tablist" aria-label="Watch instruments">
           <button
             role="tab"
-            aria-selected={activeInstrument === 'logs'}
-            className={activeInstrument === 'logs' ? 'active' : ''}
-            onClick={() => onInstrumentChange('logs')}
+            aria-label="Monitor"
+            aria-selected={activeInstrument === 'monitor'}
+            className={activeInstrument === 'monitor' ? 'active' : ''}
+            onClick={() => onInstrumentChange('monitor')}
           >
             <TerminalSquare size={14} />
-            <span>OS Logs Console</span>
+            <span>Monitor</span>
             <span className="live-chip"><i /> live</span>
           </button>
           <button
             role="tab"
+            aria-label="Location"
             aria-selected={activeInstrument === 'location'}
             className={activeInstrument === 'location' ? 'active' : ''}
             onClick={() => onInstrumentChange('location')}
           >
             <MapPin size={14} />
-            <span>Location Simulator Probe</span>
+            <span>Location</span>
           </button>
           <button
             role="tab"
-            aria-selected={activeInstrument === 'crashes'}
-            className={activeInstrument === 'crashes' ? 'active' : ''}
-            onClick={() => onInstrumentChange('crashes')}
+            aria-label="Live Screen"
+            aria-selected={activeInstrument === 'screen'}
+            className={activeInstrument === 'screen' ? 'active' : ''}
+            onClick={() => onInstrumentChange('screen')}
           >
-            <Bug size={14} />
-            <span>Crash Monitor</span>
+            <ScreenShare size={14} />
+            <span>Live Screen</span>
           </button>
         </div>
       </div>
 
       <div className="workbench-content">
-        {activeInstrument === 'logs' && (
-          <Logs connected={connected} desktop={desktop} udid={device.udid} onError={onError} />
+        {activeInstrument === 'monitor' && (
+          <Monitor connected={connected} desktop={desktop} udid={device.udid} onError={onError} />
         )}
         {activeInstrument === 'location' && (
           <Location desktop={desktop} udid={device.udid} onToast={onError} />
         )}
-        {activeInstrument === 'crashes' && (
-          <CrashReports desktop={desktop} udid={device.udid} onToast={onError} />
+        {activeInstrument === 'screen' && (
+          <LiveScreen desktop={desktop} udid={device.udid} onToast={onError} />
         )}
       </div>
     </div>

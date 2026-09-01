@@ -1,11 +1,12 @@
-# idevice desktop Project Overview
+# idevice_desktop Project Overview
 
-> Last updated: 2026-07-26
+> Last updated: 2026-08-29
 > Current release: 0.0.2 Developer Preview
+> Development version: 0.0.3
 
 ## 1. Project Positioning
 
-idevice desktop is a macOS developer tool for iPhone and iPad development and testing. It presents device discovery, pairing, information, file management, application management, crash reports, live logs, and developer capabilities through a graphical interface. Its purpose is to lower the barrier to using usbmuxd, Lockdown, AFC, CoreDevice/DVT, and related low-level services directly.
+idevice_desktop is a macOS developer tool for iPhone and iPad development and testing. It presents device discovery, pairing, information, file management, application management, crash reports, live logs, and developer capabilities through a graphical interface. Its purpose is to lower the barrier to using usbmuxd, Lockdown, AFC, CoreDevice/DVT, and related low-level services directly.
 
 The long-term goal is to make the device capabilities currently exposed through `idevice-tools` usable through a GUI. The GUI is more than a command launcher: it must handle device and parameter selection, prerequisites, input validation, progress, understandable errors, destructive-action confirmation, and cleanup of long-running tasks.
 
@@ -238,7 +239,7 @@ An upgrade that cannot be validated on hardware for a generation is recorded as 
 | 2026-07-22 | Support macOS only for the initial release | Focus builds, signing, notarization, test coverage, and documentation on macOS |
 | 2026-07-22 | Make GUI coverage of `idevice-tools` the long-term product goal | Track coverage and implement capabilities by frequency, complexity, and risk |
 | 2026-07-22 | Credit `jkcoxson/idevice` and retain its MIT license text for GitHub publication | Add a README acknowledgement and third-party license notice |
-| 2026-07-22 | License idevice desktop under the MIT License | Permit broad use and contribution while retaining copyright and license notices |
+| 2026-07-22 | License idevice_desktop under the MIT License | Permit broad use and contribution while retaining copyright and license notices |
 | 2026-07-25 | Publish 0.0.1 as an unsigned Apple Silicon Developer Preview | Distribute through GitHub prerelease with Gatekeeper and compatibility warnings |
 | 2026-07-25 | Keep releases unsigned until an Apple Developer account exists | Signing and notarization stay out of scope; every release must document how to open an unsigned build |
 | 2026-07-26 | Fix the interface to a single dark Device Lab theme | The style and appearance switchers are removed; visual work targets one direction instead of keeping three in step |

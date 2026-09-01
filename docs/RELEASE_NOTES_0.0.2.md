@@ -1,4 +1,4 @@
-# idevice desktop 0.0.2 Developer Preview
+# idevice_desktop 0.0.2 Developer Preview
 
 This patch turns the first preview into a substantially more reliable device lab. It fixes several workflows that appeared to work in browser demo mode but silently failed in the Tauri desktop application, and it publishes the real-device hardening completed since 0.0.1.
 

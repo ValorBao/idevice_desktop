@@ -1,29 +1,192 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const backend = vi.hoisted(() => ({
+  api: {
+    deviceList: vi.fn(),
+    deviceSelect: vi.fn(),
+    deviceDisconnect: vi.fn(),
+    deviceMonitorStart: vi.fn(),
+    deviceMonitorStop: vi.fn(),
+    developerStatus: vi.fn(),
+    screenshot: vi.fn(),
+    ddiMountAuto: vi.fn(),
+  },
+  events: {
+    deviceChanged: vi.fn(),
+  },
+}))
+
+const monitor = vi.hoisted(() => ({
+  deviceChanged: undefined as undefined | (() => void),
+}))
+
+vi.mock('./api', () => ({
+  ...backend,
+  errorMessage: (error: unknown) => String(error),
+  isDesktopRuntime: () => true,
+}))
+
+vi.mock('./pages/Overview', () => ({ Overview: () => <div>Overview</div> }))
+vi.mock('./pages/Diagnostics', () => ({ Diagnostics: () => <div>Diagnostics</div> }))
+vi.mock('./pages/Files', () => ({ Files: () => <div>Files</div> }))
+vi.mock('./pages/Apps', () => ({ Apps: () => <div>Apps</div> }))
+vi.mock('./pages/CrashReports', () => ({ CrashReports: () => <div>Crash Reports</div> }))
+vi.mock('./pages/Logs', () => ({ Logs: () => <div>Logs</div> }))
+vi.mock('./pages/Monitor', () => ({ Monitor: () => <div>Monitor</div> }))
+vi.mock('./pages/Developer', () => ({ Developer: () => <div>Developer</div> }))
+vi.mock('./pages/Profiles', () => ({ Profiles: () => <div>Profiles</div> }))
+vi.mock('./pages/Pasteboard', () => ({ Pasteboard: () => <div>Pasteboard</div> }))
+vi.mock('./pages/LiveScreen', () => ({ LiveScreen: () => <div>Live Screen</div> }))
+vi.mock('./pages/TestLab', () => ({
+  TestLab: ({ udid }: { udid: string }) => <div data-testid="test-lab-page">{udid}</div>,
+}))
+vi.mock('./pages/Location', () => ({
+  Location: ({ udid }: { udid: string }) => <div data-testid="location-page">{udid}</div>,
+}))
+
 import App from './App'
 
-describe('App workbench UI', () => {
-  it('renders LeftRail with all 4 primary workbenches', () => {
-    render(<App />)
-    expect(screen.getByRole('button', { name: 'INSPECT' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'FILES' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'APPS' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'WATCH' })).toBeInTheDocument()
+const devices = [
+  {
+    id: 'device-a',
+    udid: 'udid-a',
+    name: 'Alpha iPhone',
+    model: 'iPhone A',
+    ios: '17.0',
+    connection: 'USB',
+    transports: ['USB'],
+    paired: true,
+    connectable: true,
+  },
+  {
+    id: 'device-b',
+    udid: 'udid-b',
+    name: 'Beta iPhone',
+    model: 'iPhone B',
+    ios: '14.2',
+    connection: 'USB',
+    transports: ['USB'],
+    paired: true,
+    connectable: true,
+  },
+]
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
+describe('device page lifecycle', () => {
+  beforeEach(() => {
+    backend.api.deviceList.mockResolvedValue(devices)
+    backend.api.deviceSelect.mockResolvedValue(undefined)
+    backend.api.deviceDisconnect.mockResolvedValue(undefined)
+    backend.api.deviceMonitorStart.mockResolvedValue(undefined)
+    backend.api.deviceMonitorStop.mockResolvedValue(undefined)
+    backend.api.developerStatus.mockResolvedValue({ ddiMounted: false, developerMode: null, rsdAvailable: false })
+    backend.api.screenshot.mockRejectedValue(new Error('no screenshot'))
+    backend.events.deviceChanged.mockImplementation((handler: () => void) => {
+      monitor.deviceChanged = handler
+      return Promise.resolve(vi.fn())
+    })
+    monitor.deviceChanged = undefined
   })
 
-  it('switches workbenches smoothly when clicked', async () => {
+  it('remounts the active page when the selected device changes', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByText('Inspect Station')).toBeInTheDocument()
-
+    await screen.findByRole('button', { name: 'Select device' })
     await user.click(screen.getByRole('button', { name: 'WATCH' }))
-    expect(screen.getByText('Live Blackbox')).toBeInTheDocument()
-    expect(screen.getByText('OS Logs Console')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Location' }))
+    const firstPage = screen.getByTestId('location-page')
+    expect(firstPage).toHaveTextContent('udid-a')
 
+    await user.click(screen.getByRole('button', { name: 'Select device' }))
+    await user.click(screen.getByRole('button', { name: /Beta iPhone/ }))
+
+    await waitFor(() => expect(screen.getByTestId('location-page')).toHaveTextContent('udid-b'))
+    expect(screen.getByTestId('location-page')).not.toBe(firstPage)
+  })
+
+  it('opens Test Lab for the currently selected device', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Select device' })
     await user.click(screen.getByRole('button', { name: 'APPS' }))
-    expect(screen.getByText('Applications & JIT')).toBeInTheDocument()
-    expect(screen.getByText('Applications & Sideload')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Test Lab' }))
+
+    expect(screen.getByTestId('test-lab-page')).toHaveTextContent('udid-a')
+    expect(screen.getByRole('heading', { name: 'Test Lab' })).toBeInTheDocument()
+  })
+
+  it('ends the backend session and unmounts the active page when every device disappears', async () => {
+    const user = userEvent.setup()
+    backend.api.deviceList.mockResolvedValueOnce(devices).mockResolvedValueOnce([])
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Select device' })
+    await user.click(screen.getByRole('button', { name: 'WATCH' }))
+    await user.click(screen.getByRole('tab', { name: 'Location' }))
+    expect(screen.getByTestId('location-page')).toHaveTextContent('udid-a')
+
+    expect(monitor.deviceChanged).toBeDefined()
+    act(() => monitor.deviceChanged?.())
+
+    await waitFor(() => expect(backend.api.deviceDisconnect).toHaveBeenCalledOnce())
+    expect(screen.queryByTestId('location-page')).not.toBeInTheDocument()
+    expect(screen.getByText('No device connected')).toBeInTheDocument()
+  })
+
+  it('ends the backend session when the selected device remains visible but is unusable', async () => {
+    backend.api.deviceList
+      .mockResolvedValueOnce(devices)
+      .mockResolvedValueOnce([{ ...devices[0], connectable: false }])
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Select device' })
+    expect(monitor.deviceChanged).toBeDefined()
+    act(() => monitor.deviceChanged?.())
+
+    await waitFor(() => expect(backend.api.deviceDisconnect).toHaveBeenCalledOnce())
+    expect(screen.getByRole('heading', { name: 'Alpha iPhone found on the network' })).toBeInTheDocument()
+    expect(document.querySelector('.page-scroll')).toBeEmptyDOMElement()
+  })
+
+  it('discards a stale device snapshot when a newer device event arrives', async () => {
+    const firstList = deferred<typeof devices>()
+    backend.api.deviceList
+      .mockReturnValueOnce(firstList.promise)
+      .mockResolvedValueOnce([devices[1]])
+    render(<App />)
+
+    await waitFor(() => expect(backend.api.deviceList).toHaveBeenCalledOnce())
+    expect(monitor.deviceChanged).toBeDefined()
+    act(() => monitor.deviceChanged?.())
+    expect(backend.api.deviceList).toHaveBeenCalledOnce()
+
+    firstList.resolve(devices)
+
+    await waitFor(() => expect(backend.api.deviceList).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getAllByText('Beta iPhone')).toHaveLength(2))
+    expect(backend.api.deviceSelect).toHaveBeenCalledOnce()
+    expect(backend.api.deviceSelect).toHaveBeenCalledWith('device-b')
+    expect(screen.queryByText('Alpha iPhone')).not.toBeInTheDocument()
+  })
+
+  it('releases a device listener that finishes subscribing after unmount', async () => {
+    const subscription = deferred<() => void>()
+    const unlisten = vi.fn()
+    backend.events.deviceChanged.mockReturnValueOnce(subscription.promise)
+    const view = render(<App />)
+
+    view.unmount()
+    await act(async () => { subscription.resolve(unlisten) })
+
+    expect(unlisten).toHaveBeenCalledOnce()
   })
 })

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Activity, AppWindow, Bug } from 'lucide-react'
 import type { Device } from '../data'
 import { Overview } from './Overview'

@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { AppWindow, Code2 } from 'lucide-react'
+import { AppWindow, BadgeCheck, Beaker, Code2 } from 'lucide-react'
 import type { Device } from '../data'
 import { Apps } from './Apps'
 import { Developer } from './Developer'
+import { Profiles } from './Profiles'
+import { TestLab } from './TestLab'
 
-export type AppsSubView = 'manager' | 'jit'
+export type AppsSubView = 'manager' | 'jit' | 'profiles' | 'xctest'
 
 export function AppsWorkbench({
   desktop,
@@ -41,6 +42,26 @@ export function AppsWorkbench({
             <Code2 size={14} />
             <span>JIT & Debugger Tunnel</span>
           </button>
+          <button
+            role="tab"
+            aria-label="Provisioning Profiles"
+            aria-selected={subView === 'profiles'}
+            className={subView === 'profiles' ? 'active' : ''}
+            onClick={() => onSubViewChange('profiles')}
+          >
+            <BadgeCheck size={14} />
+            <span>Profiles</span>
+          </button>
+          <button
+            role="tab"
+            aria-label="Test Lab"
+            aria-selected={subView === 'xctest'}
+            className={subView === 'xctest' ? 'active' : ''}
+            onClick={() => onSubViewChange('xctest')}
+          >
+            <Beaker size={14} />
+            <span>Test Lab</span>
+          </button>
         </div>
       </div>
 
@@ -50,6 +71,12 @@ export function AppsWorkbench({
         )}
         {subView === 'jit' && (
           <Developer desktop={desktop} device={device} onToast={onToast} />
+        )}
+        {subView === 'profiles' && (
+          <Profiles desktop={desktop} udid={device.udid} onToast={onToast} />
+        )}
+        {subView === 'xctest' && (
+          <TestLab desktop={desktop} udid={device.udid} onToast={onToast} />
         )}
       </div>
     </div>

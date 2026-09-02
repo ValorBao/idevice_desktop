@@ -21,6 +21,7 @@ use crate::{
     error::{CommandError, CommandResult},
     provider::{RoutedProvider, routed_provider_for},
     state::AppState,
+    tasks::spawn_stream_task,
     tunnel::{RsdTunnel, open_remote_pairing_tunnel, remote_pairing_path},
     types::{PerformanceExportRow, PerformanceProcessSample, PerformanceSample, PerformanceStatus},
 };
@@ -627,27 +628,16 @@ pub async fn performance_start(
     state.replace_task("performance", token.clone()).await;
     emit_status(&app, "connecting", None, None, interval_ms);
 
-    tauri::async_runtime::spawn_blocking(move || {
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                emit_status(&app, "error", Some(error.to_string()), None, interval_ms);
-                return;
-            }
-        };
-        let completion_token = token.clone();
-        match runtime.block_on(run_stream(app.clone(), context, interval_ms, token)) {
-            Ok(PerformanceEnd::Stopped) => {}
-            Ok(PerformanceEnd::Unavailable) => {}
-            Err(error) if !completion_token.is_cancelled() => {
-                emit_status(&app, "error", Some(error.message), None, interval_ms)
-            }
-            Err(_) => {}
-        }
-    });
+    let error_app = app.clone();
+    spawn_stream_task(
+        token,
+        move |token| async move {
+            run_stream(app, context, interval_ms, token)
+                .await
+                .map(|_| ())
+        },
+        move |message| emit_status(&error_app, "error", Some(message), None, interval_ms),
+    );
     Ok(())
 }
 

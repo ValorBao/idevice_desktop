@@ -4,6 +4,7 @@ pub mod discovery;
 pub mod error;
 pub mod provider;
 mod state;
+mod tasks;
 pub mod tunnel;
 pub mod types;
 mod utils;

@@ -10,6 +10,7 @@ import {
   type PasteboardTextSnapshot,
   type PasteboardWriteResult,
 } from '../api'
+import { bytes } from '../lib/format'
 
 const MAX_TEXT_BYTES = 1024 * 1024
 const DEMO_IMAGE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
@@ -50,12 +51,6 @@ const demoImagePreparation = (): PasteboardImagePreparation => ({
   byteLength: 68,
   fileName: 'demo-pasteboard.png',
 })
-
-const bytes = (value: number) => {
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10 * 1024 ? 1 : 0)} KB`
-  return `${(value / 1024 / 1024).toFixed(2)} MB`
-}
 
 export function Pasteboard({
   desktop,

@@ -6,27 +6,15 @@ import {
   errorMessage,
   events,
   type PerformanceExportRow,
-  type PerformanceProcessSample,
   type PerformanceSample,
   type PerformanceStatus,
 } from '../api'
 import { demoProcesses } from '../data'
+import { bytes } from '../lib/format'
+import { useDesktopListeners, useMountedRef } from '../lib/hooks'
 
 const MAX_HISTORY = 180
 const DEFAULT_INTERVAL_MS = 1_000
-
-const bytes = (value: number | null) => {
-  if (value === null) return '—'
-  if (value < 1024) return `${value} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = value / 1024
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  return `${size < 10 ? size.toFixed(1) : size.toFixed(0)} ${units[unit]}`
-}
 
 const percent = (value: number | null) => value === null ? '—' : `${value.toFixed(1)}%`
 
@@ -105,16 +93,12 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
   const [intervalMs, setIntervalMs] = useState(DEFAULT_INTERVAL_MS)
   const [query, setQuery] = useState('')
   const [selectedIdentity, setSelectedIdentity] = useState('')
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
   const runningRequestedRef = useRef(true)
   const intervalRef = useRef(intervalMs)
   const demoSequenceRef = useRef(1)
 
   useEffect(() => { intervalRef.current = intervalMs }, [intervalMs])
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
 
   const appendSample = useCallback((sample: PerformanceSample) => {
     if (!mountedRef.current) return
@@ -122,47 +106,42 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
     setSelectedIdentity((current) => current || sample.processes[0]?.identity || '')
   }, [])
 
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
-    runningRequestedRef.current = true
-    let stopSample: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.performanceSample((sample) => { if (!disposed) appendSample(sample) }),
-      events.performanceStatus((next) => {
-        if (disposed) return
-        if (next.state === 'error' || next.state === 'unavailable') runningRequestedRef.current = false
-        setStatus(next.state === 'stopped' ? { ...next, state: 'paused' } : next)
-        if (next.state === 'error' && next.message) onToast(next.message)
-      }),
-    ]).then(([sampleListener, statusListener]) => {
-      if (disposed) {
-        sampleListener()
-        statusListener()
-        return
+  useDesktopListeners(
+    desktop,
+    async (alive) => {
+      runningRequestedRef.current = true
+      try {
+        const [stopSample, stopStatus] = await Promise.all([
+          events.performanceSample((sample) => { if (alive()) appendSample(sample) }),
+          events.performanceStatus((next) => {
+            if (!alive()) return
+            if (next.state === 'error' || next.state === 'unavailable') runningRequestedRef.current = false
+            setStatus(next.state === 'stopped' ? { ...next, state: 'paused' } : next)
+            if (next.state === 'error' && next.message) onToast(next.message)
+          }),
+        ])
+        if (!alive()) {
+          stopSample()
+          stopStatus()
+          return []
+        }
+        if (runningRequestedRef.current) await api.performanceStart(udid, intervalRef.current)
+        return [stopSample, stopStatus]
+      } catch (error) {
+        if (alive()) {
+          const message = errorMessage(error)
+          setStatus((current) => ({ ...current, state: 'error', message }))
+          onToast(message)
+        }
+        return []
       }
-      stopSample = sampleListener
-      stopStatus = statusListener
-      if (!runningRequestedRef.current) return
-      return api.performanceStart(udid, intervalRef.current)
-    }).catch((error) => {
-      if (!disposed) {
-        const message = errorMessage(error)
-        setStatus((current) => ({ ...current, state: 'error', message }))
-        onToast(message)
-      }
-    })
-
-    return () => {
-      disposed = true
+    },
+    () => {
       runningRequestedRef.current = false
-      stopSample?.()
-      stopStatus?.()
       void api.performanceStop()
-    }
-  }, [appendSample, desktop, onToast, udid])
+    },
+    [appendSample, onToast, udid],
+  )
 
   useEffect(() => {
     if (desktop || status.state !== 'running') return

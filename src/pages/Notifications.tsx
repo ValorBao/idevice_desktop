@@ -7,6 +7,7 @@ import {
   type NotificationObservationEvent,
   type NotificationObservationStatus,
 } from '../api'
+import { useDesktopListeners, useMountedRef } from '../lib/hooks'
 
 const MAX_HISTORY = 500
 const MAX_SUBSCRIPTIONS = 32
@@ -60,63 +61,54 @@ export function Notifications({
     transport: null,
     subscriptions: [],
   })
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
   const requestedRef = useRef(false)
   const activeSessionRef = useRef('')
   const demoSubscriptionsRef = useRef<string[]>([])
   const demoSequenceRef = useRef(0)
 
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
-
   const appendEvent = useCallback((event: NotificationObservationEvent) => {
     if (!mountedRef.current || event.sessionId !== activeSessionRef.current) return
     setHistory((current) => [event, ...current].slice(0, MAX_HISTORY))
-  }, [])
+  }, [mountedRef])
 
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
-    let stopEvent: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.notificationObservationEvent((event) => {
-        if (!disposed) appendEvent(event)
-      }),
-      events.notificationObservationStatus((next) => {
-        if (disposed || next.sessionId !== activeSessionRef.current) return
-        if (next.state === 'error') requestedRef.current = false
-        const state = next.state === 'stopped' && !requestedRef.current ? 'paused' : next.state
-        setStatus({ ...next, state })
-        if (next.state === 'error' && next.message) onToast(next.message)
-      }),
-    ]).then(([eventListener, statusListener]) => {
-      if (disposed) {
-        eventListener()
-        statusListener()
-        return
+  useDesktopListeners(
+    desktop,
+    async (alive) => {
+      try {
+        const [stopEvent, stopStatus] = await Promise.all([
+          events.notificationObservationEvent((event) => {
+            if (alive()) appendEvent(event)
+          }),
+          events.notificationObservationStatus((next) => {
+            if (!alive() || next.sessionId !== activeSessionRef.current) return
+            if (next.state === 'error') requestedRef.current = false
+            const state = next.state === 'stopped' && !requestedRef.current ? 'paused' : next.state
+            setStatus({ ...next, state })
+            if (next.state === 'error' && next.message) onToast(next.message)
+          }),
+        ])
+        if (!alive()) {
+          stopEvent()
+          stopStatus()
+          return []
+        }
+        setListenersReady(true)
+        return [stopEvent, stopStatus]
+      } catch (error) {
+        if (alive()) {
+          const message = errorMessage(error)
+          setStatus((current) => ({ ...current, state: 'error', message }))
+          onToast(message)
+        }
+        return []
       }
-      stopEvent = eventListener
-      stopStatus = statusListener
-      setListenersReady(true)
-    }).catch((error) => {
-      if (!disposed) {
-        const message = errorMessage(error)
-        setStatus((current) => ({ ...current, state: 'error', message }))
-        onToast(message)
-      }
-    })
-
-    return () => {
-      disposed = true
-      stopEvent?.()
-      stopStatus?.()
+    },
+    () => {
       if (requestedRef.current) void api.notificationObservationStop()
-    }
-  }, [appendEvent, desktop, onToast, udid])
+    },
+    [appendEvent, onToast, udid],
+  )
 
   useEffect(() => {
     if (desktop || status.state !== 'running') return

@@ -16,6 +16,8 @@ import {
   type NetworkCaptureProgress,
   type NetworkCaptureStatus,
 } from '../api'
+import { bytes, duration } from '../lib/format'
+import { useDesktopListeners, useMountedRef } from '../lib/hooks'
 
 const emptyProgress = (outputBytes = 0): NetworkCaptureProgress => ({
   packets: 0,
@@ -34,28 +36,6 @@ const idleStatus = (): NetworkCaptureStatus => ({
   filter: { pid: null, interfaceName: null },
 })
 
-const bytes = (value: number) => {
-  if (value < 1024) return `${value} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = value / 1024
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  return `${size < 10 ? size.toFixed(1) : size.toFixed(0)} ${units[unit]}`
-}
-
-const duration = (milliseconds: number) => {
-  const totalSeconds = Math.floor(milliseconds / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  return hours
-    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
-
 const captureFilename = () => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '-').replace('Z', '')
   return `idevice-capture-${timestamp}.pcap`
@@ -71,64 +51,55 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
   const [pid, setPid] = useState('')
   const [interfaceName, setInterfaceName] = useState('')
   const [listenersReady, setListenersReady] = useState(!desktop)
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
   const ownsCaptureRef = useRef(false)
   const demoStartedRef = useRef(0)
 
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
-
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
-    let stopProgress: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.networkCaptureProgress((next) => {
-        if (!disposed) setProgress(next)
-      }),
-      events.networkCaptureStatus((next) => {
-        if (disposed) return
-        setStatus((current) => ({ ...next, transport: next.transport ?? current.transport }))
-        if (next.state === 'completed') {
-          ownsCaptureRef.current = false
-          onToast(next.message ?? `${basename(next.destination)} saved`)
-        } else if (next.state === 'cancelled') {
-          ownsCaptureRef.current = false
-          onToast('Capture discarded')
-        } else if (next.state === 'error') {
-          ownsCaptureRef.current = false
-          if (next.message) onToast(next.message)
-        } else if (next.state === 'stopping' || next.state === 'cancelling') {
-          ownsCaptureRef.current = false
+  useDesktopListeners(
+    desktop,
+    async (alive) => {
+      try {
+        const [stopProgress, stopStatus] = await Promise.all([
+          events.networkCaptureProgress((next) => {
+            if (alive()) setProgress(next)
+          }),
+          events.networkCaptureStatus((next) => {
+            if (!alive()) return
+            setStatus((current) => ({ ...next, transport: next.transport ?? current.transport }))
+            if (next.state === 'completed') {
+              ownsCaptureRef.current = false
+              onToast(next.message ?? `${basename(next.destination)} saved`)
+            } else if (next.state === 'cancelled') {
+              ownsCaptureRef.current = false
+              onToast('Capture discarded')
+            } else if (next.state === 'error') {
+              ownsCaptureRef.current = false
+              if (next.message) onToast(next.message)
+            } else if (next.state === 'stopping' || next.state === 'cancelling') {
+              ownsCaptureRef.current = false
+            }
+          }),
+        ])
+        if (!alive()) {
+          stopProgress()
+          stopStatus()
+          return []
         }
-      }),
-    ]).then(([progressListener, statusListener]) => {
-      if (disposed) {
-        progressListener()
-        statusListener()
-        return
+        setListenersReady(true)
+        return [stopProgress, stopStatus]
+      } catch (error) {
+        if (alive()) onToast(errorMessage(error))
+        return []
       }
-      stopProgress = progressListener
-      stopStatus = statusListener
-      setListenersReady(true)
-    }).catch((error) => {
-      if (!disposed) onToast(errorMessage(error))
-    })
-
-    return () => {
-      disposed = true
-      stopProgress?.()
-      stopStatus?.()
+    },
+    () => {
       if (ownsCaptureRef.current) {
         ownsCaptureRef.current = false
         void api.networkCaptureCancel()
       }
-    }
-  }, [desktop, onToast])
+    },
+    [onToast],
+  )
 
   useEffect(() => {
     if (desktop || status.state !== 'running') return

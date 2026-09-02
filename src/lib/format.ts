@@ -1,10 +1,26 @@
 
 
 export const bytes = (value: number | null | undefined) => {
-  if (!value) return '—'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const power = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)))
-  return `${(value / 1024 ** power).toFixed(power > 2 ? 1 : 0)} ${units[power]}`
+  if (value == null || Number.isNaN(value)) return '—'
+  if (value < 1024) return `${Math.round(value)} B`
+  const units = ['KB', 'MB', 'GB', 'TB'] as const
+  let size = value / 1024
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${size < 10 ? size.toFixed(1) : size.toFixed(0)} ${units[unit]}`
+}
+
+export const duration = (milliseconds: number) => {
+  const totalSeconds = Math.floor(Math.max(0, milliseconds) / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 export const displaySizeToBytes = (value?: string) => {

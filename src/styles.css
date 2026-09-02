@@ -53,7 +53,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .connection-status.status-none i { background: var(--faint); }
 .window-body { flex: 1; display: flex; min-height: 0; }
 
-.sidebar { width: 252px; flex: none; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--border); }
 .device-select-wrap { position: relative; padding: 14px 12px 10px; }
 .device-card { width: 100%; display: flex; align-items: center; gap: 11px; padding: 10px; text-align: left; cursor: pointer; border: 1px solid var(--border); border-radius: var(--radius); background: var(--elev); }
 .device-card:hover { border-color: var(--border2); }
@@ -79,21 +78,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .device-menu hr { height: 1px; margin: 6px 4px; border: 0; background: var(--border); }
 .device-menu .accent-action { color: var(--accent); font-size: 12.5px; font-weight: 600; }
 .device-menu .danger-action { color: #ff5f57; font-size: 12.5px; font-weight: 600; }
-.sidebar nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; overflow-y: auto; transition: .2s; }
-.sidebar nav.nav-disabled { opacity: .4; pointer-events: none; filter: grayscale(1); }
-.nav-heading { padding: 10px 8px 6px; color: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-.developer-heading { padding-top: 14px; }
-.sidebar nav button { width: 100%; display: flex; align-items: center; gap: 11px; padding: 8px 10px; color: var(--dim); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); }
-.sidebar nav button:hover { background: var(--hover); }
-.sidebar nav button.active { color: var(--text); font-weight: 600; background: var(--active); box-shadow: inset 2px 0 0 var(--accent); }
-.sidebar nav button span { flex: 1; }
-.sidebar nav button small { color: var(--faint); font: 10px var(--mono); }
-.sidebar-footer { display: flex; align-items: center; gap: 9px; padding: 12px; border-top: 1px solid var(--border); }
-.sidebar-footer > i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #28c840; }
-.sidebar-footer span { flex: 1; min-width: 0; }
-.sidebar-footer b, .sidebar-footer small { display: block; }
-.sidebar-footer b { font-size: 11.5px; }
-.sidebar-footer small { margin-top: 2px; overflow: hidden; color: var(--faint); font: 10px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 
 .main-panel { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
 .page-header { height: 62px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 24px; border-bottom: 1px solid var(--border); }
@@ -103,7 +87,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 @keyframes page-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .page-padding { padding: 22px 28px; }
 .compact-padding { padding: 18px 24px; }
-.content-width { max-width: 980px; padding: 26px 28px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .section-label, .stat-label { color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
 
@@ -1001,7 +984,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .toast span { width: 18px; height: 18px; display: grid; place-items: center; color: #fff; background: #28c840; border-radius: 50%; }
 
 @media (max-width: 1050px) {
-  .sidebar { width: 220px; }
   .overview-grid { gap: 14px; }
   .device-visual { width: 175px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1030,17 +1012,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .desktop { padding: 0; }
   .window-shell { height: 100vh; max-height: none; border: 0; border-radius: 0; }
   .app-title small, .connection-status { display: none; }
-  .sidebar { width: 72px; }
   .device-select-wrap { padding: 12px 10px; }
   .device-card { justify-content: center; padding: 7px; }
   .device-card-copy, .device-card > svg { display: none; }
   .device-menu { position: fixed; top: 58px; right: auto; left: 74px; width: 230px; }
-  .sidebar nav { padding: 6px 8px; }
-  .sidebar nav button { justify-content: center; padding: 10px; }
-  .sidebar nav button span, .sidebar nav button small, .nav-heading, .sidebar-footer span { display: none; }
-  .sidebar-footer { justify-content: center; }
   .page-header { padding: 0 16px; }
-  .content-width, .page-padding { padding: 18px; }
+  .page-padding { padding: 18px; }
   .overview-grid { flex-direction: column; }
   .device-visual { width: 100%; flex-direction: row; padding: 18px; }
   .phone-frame { width: 58px; height: 110px; border-radius: 14px; }

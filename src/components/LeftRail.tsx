@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ChevronDown, CircleStop, FolderOpen, Layers, Plus, RefreshCw, Smartphone,
   Sliders, TerminalSquare, Zap,
 } from 'lucide-react'
 import type { Device } from '../data'
-import { api, errorMessage, type DeveloperStatus } from '../api'
-import { deviceScreenCache } from '../lib/device'
+import { api, type DeveloperStatus } from '../api'
+import { captureDeviceScreen, deviceScreenCache } from '../lib/device'
 import type { Connection, WorkbenchMode } from '../types'
 
 interface LeftRailProps {
@@ -18,7 +18,6 @@ interface LeftRailProps {
   onSelectDevice: (id: string) => void
   onPairOpen: () => void
   onDisconnect: () => void
-  onToast: (msg: string) => void
 }
 
 export function LeftRail({
@@ -31,7 +30,6 @@ export function LeftRail({
   onSelectDevice,
   onPairOpen,
   onDisconnect,
-  onToast,
 }: LeftRailProps) {
   const [deviceMenu, setDeviceMenu] = useState(false)
   const [screenImage, setScreenImage] = useState(() => deviceScreenCache.get(device.udid) ?? '')
@@ -43,20 +41,9 @@ export function LeftRail({
     if (!desktop || !connected) return
     setScreenLoading(true)
     try {
-      const img = await api.screenshot(device.udid)
-      deviceScreenCache.set(device.udid, img)
-      setScreenImage(img)
+      setScreenImage(await captureDeviceScreen(device.udid, autoMount))
     } catch {
-      if (autoMount) {
-        try {
-          await api.ddiMountAuto(device.udid)
-          const img = await api.screenshot(device.udid)
-          deviceScreenCache.set(device.udid, img)
-          setScreenImage(img)
-        } catch {
-          // ignore fallback error
-        }
-      }
+      // Mini preview failures stay silent; Overview reports the same error.
     } finally {
       setScreenLoading(false)
     }

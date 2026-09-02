@@ -1,5 +1,5 @@
 import type { AppInfo, Device } from '../data'
-import type { DeviceSummary, InstalledApp } from '../api'
+import { api, type DeviceSummary, type InstalledApp } from '../api'
 import { appColor, bytes } from './format'
 
 export const summaryToDevice = (summary: DeviceSummary): Device => ({
@@ -25,6 +25,21 @@ export const summaryToDevice = (summary: DeviceSummary): Device => ({
 })
 
 export const deviceScreenCache = new Map<string, string>()
+
+/** Screenshot the device, optionally mounting a DDI after the first failure. */
+export async function captureDeviceScreen(udid: string, mountIfNeeded = false) {
+  try {
+    const image = await api.screenshot(udid)
+    deviceScreenCache.set(udid, image)
+    return image
+  } catch (error) {
+    if (!mountIfNeeded) throw error
+    await api.ddiMountAuto(udid)
+    const image = await api.screenshot(udid)
+    deviceScreenCache.set(udid, image)
+    return image
+  }
+}
 
 export const installedToApp = (app: InstalledApp): AppInfo => ({
   id: app.bundleId,

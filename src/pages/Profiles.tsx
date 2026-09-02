@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clock3, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import { api, errorMessage, type ProvisioningProfileSnapshot, type ProvisioningProfileSummary } from '../api'
+import { bytes } from '../lib/format'
 
 const dateFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString()
 
@@ -50,10 +51,6 @@ const dateLabel = (value: string | null) => {
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
 }
-
-const bytes = (value: number) => value < 1024
-  ? `${value} B`
-  : `${(value / 1024).toFixed(value < 10 * 1024 ? 1 : 0)} KB`
 
 const expiryLabel = (profile: ProvisioningProfileSummary) => {
   if (profile.daysRemaining === null) return 'Expiry unavailable'

@@ -18,6 +18,7 @@ use crate::{
     error::{CommandError, CommandResult},
     provider::routed_provider_for,
     state::AppState,
+    tasks::spawn_stream_task,
     tunnel::{RsdTunnel, open_remote_pairing_tunnel, remote_pairing_path},
     types::{LiveScreenFrame, LiveScreenStatus},
 };
@@ -398,24 +399,12 @@ pub async fn live_screen_start(
     *screen_state.latest.lock().await = None;
     emit_status(&app, "connecting", None, None);
 
-    tauri::async_runtime::spawn_blocking(move || {
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                emit_status(&app, "error", Some(error.to_string()), None);
-                return;
-            }
-        };
-        let completion_token = token.clone();
-        if let Err(error) = runtime.block_on(run_stream(app.clone(), context, token))
-            && !completion_token.is_cancelled()
-        {
-            emit_status(&app, "error", Some(error.message), None);
-        }
-    });
+    let error_app = app.clone();
+    spawn_stream_task(
+        token,
+        move |token| run_stream(app, context, token),
+        move |message| emit_status(&error_app, "error", Some(message), None),
+    );
     Ok(())
 }
 

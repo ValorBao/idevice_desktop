@@ -8,37 +8,10 @@ import { TitleBar } from './components/TitleBar'
 import { LeftRail } from './components/LeftRail'
 import { Onboarding } from './components/Onboarding'
 import { PairModal } from './components/PairModal'
-import { InspectWorkbench, type InspectSubView } from './pages/InspectWorkbench'
-import { FilesWorkbench, type FilesSubView } from './pages/FilesWorkbench'
-import { AppsWorkbench, type AppsSubView } from './pages/AppsWorkbench'
-import { WatchWorkbench, type WatchInstrument } from './pages/WatchWorkbench'
-
-function stationCopy(
-  mode: WorkbenchMode,
-  inspectSubView: InspectSubView,
-  filesSubView: FilesSubView,
-  appsSubView: AppsSubView,
-  watchInstrument: WatchInstrument,
-): [string, string] {
-  if (mode === 'inspect') {
-    if (inspectSubView === 'diagnostics') return ['Diagnostics Relay', 'com.apple.mobile.diagnostics_relay']
-    if (inspectSubView === 'crashes') return ['Crash Reports', 'com.apple.crashreportcopymobile']
-    return ['Inspect Station', 'Vehicle Telemetry · Diagnostics Relay · Crash Analytics']
-  }
-  if (mode === 'files') {
-    if (filesSubView === 'pasteboard') return ['Pasteboard', 'Explicit bounded CoreDevice text and image transfer']
-    return ['Payload Files', 'Apple File Conduit (AFC) · Application Sandboxes']
-  }
-  if (mode === 'apps') {
-    if (appsSubView === 'jit') return ['JIT & Debugger Tunnel', 'com.apple.dt.* services']
-    if (appsSubView === 'profiles') return ['Provisioning Profiles', 'Read-only Misagent signing and expiry inspection']
-    if (appsSubView === 'xctest') return ['Test Lab', 'Read-only XCTest runner and developer-service preflight']
-    return ['Applications & JIT', 'Installation Proxy · Sideloading · Debugger Tunnel']
-  }
-  if (watchInstrument === 'location') return ['Location', 'com.apple.dt.simulatelocation']
-  if (watchInstrument === 'screen') return ['Live Screen', 'Live PNG device preview and still-frame capture']
-  return ['Live Blackbox', 'Processes, performance, network capture, and live device logs']
-}
+import { InspectWorkbench, inspectStationCopy, type InspectSubView } from './pages/InspectWorkbench'
+import { FilesWorkbench, filesStationCopy, type FilesSubView } from './pages/FilesWorkbench'
+import { AppsWorkbench, appsStationCopy, type AppsSubView } from './pages/AppsWorkbench'
+import { WatchWorkbench, watchStationCopy, type WatchInstrument } from './pages/WatchWorkbench'
 
 function App() {
   const desktop = useMemo(isDesktopRuntime, [])
@@ -59,7 +32,13 @@ function App() {
   const refreshPendingRef = useRef(false)
   const device = deviceCatalog.find((item) => item.id === deviceId) ?? deviceCatalog[0] ?? devices[0]
   const connected = connection === 'connected'
-  const [headerTitle, headerDetail] = stationCopy(mode, inspectSubView, filesSubView, appsSubView, watchInstrument)
+  const [headerTitle, headerDetail] = mode === 'inspect'
+    ? inspectStationCopy[inspectSubView]
+    : mode === 'files'
+      ? filesStationCopy[filesSubView]
+      : mode === 'apps'
+        ? appsStationCopy[appsSubView]
+        : watchStationCopy[watchInstrument]
   useEffect(() => { deviceIdRef.current = deviceId }, [deviceId])
   useEffect(() => {
     mountedRef.current = true
@@ -209,7 +188,6 @@ function App() {
             onSelectDevice={(id) => void selectDevice(id)}
             onPairOpen={() => setPairOpen(true)}
             onDisconnect={() => void disconnect()}
-            onToast={setToast}
           />
 
           <main className="main-panel">

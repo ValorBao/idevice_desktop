@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw, Zap } from 'lucide-react'
 import type { Device } from '../data'
 import { api, errorMessage, type DeviceOverview } from '../api'
-import { deviceScreenCache } from '../lib/device'
+import { captureDeviceScreen, deviceScreenCache } from '../lib/device'
 import { bytes } from '../lib/format'
 
 export function Overview({ device, desktop, onError }: { device: Device; desktop: boolean; onError: (message: string) => void }) {
@@ -18,22 +18,9 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
     setScreenLoading(true)
     setScreenError('')
     try {
-      const image = await api.screenshot(device.udid)
-      deviceScreenCache.set(device.udid, image)
-      setScreenImage(image)
+      setScreenImage(await captureDeviceScreen(device.udid, mountIfNeeded))
     } catch (error) {
-      if (!mountIfNeeded) {
-        setScreenError(errorMessage(error))
-      } else {
-        try {
-          await api.ddiMountAuto(device.udid)
-          const image = await api.screenshot(device.udid)
-          deviceScreenCache.set(device.udid, image)
-          setScreenImage(image)
-        } catch (setupError) {
-          setScreenError(errorMessage(setupError))
-        }
-      }
+      setScreenError(errorMessage(error))
     } finally {
       setScreenLoading(false)
     }

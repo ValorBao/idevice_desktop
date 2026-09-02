@@ -1,10 +1,17 @@
 import { Activity, AppWindow, Bug } from 'lucide-react'
 import type { Device } from '../data'
+import { WorkbenchTabs } from '../components/WorkbenchTabs'
 import { Overview } from './Overview'
 import { Diagnostics } from './Diagnostics'
 import { CrashReports } from './CrashReports'
 
 export type InspectSubView = 'overview' | 'diagnostics' | 'crashes'
+
+export const inspectStationCopy: Record<InspectSubView, [string, string]> = {
+  overview: ['Inspect Station', 'Vehicle Telemetry · Diagnostics Relay · Crash Analytics'],
+  diagnostics: ['Diagnostics Relay', 'com.apple.mobile.diagnostics_relay'],
+  crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
+}
 
 export function InspectWorkbench({
   device,
@@ -21,38 +28,16 @@ export function InspectWorkbench({
 }) {
   return (
     <div className="inspect-workbench">
-      <div className="workbench-subbar">
-        <div className="workbench-tabs" role="tablist" aria-label="Inspect views">
-          <button
-            role="tab"
-            aria-selected={subView === 'overview'}
-            className={subView === 'overview' ? 'active' : ''}
-            onClick={() => onSubViewChange('overview')}
-          >
-            <AppWindow size={14} />
-            <span>Overview & Hardware</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={subView === 'diagnostics'}
-            className={subView === 'diagnostics' ? 'active' : ''}
-            onClick={() => onSubViewChange('diagnostics')}
-          >
-            <Activity size={14} />
-            <span>Diagnostics Relay</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={subView === 'crashes'}
-            className={subView === 'crashes' ? 'active' : ''}
-            onClick={() => onSubViewChange('crashes')}
-          >
-            <Bug size={14} />
-            <span>Crash Reports</span>
-          </button>
-        </div>
-      </div>
-
+      <WorkbenchTabs
+        label="Inspect views"
+        value={subView}
+        onChange={onSubViewChange}
+        tabs={[
+          { id: 'overview', label: 'Overview & Hardware', icon: AppWindow },
+          { id: 'diagnostics', label: 'Diagnostics Relay', icon: Activity },
+          { id: 'crashes', label: 'Crash Reports', icon: Bug },
+        ]}
+      />
       <div className="workbench-content">
         {subView === 'overview' && <Overview device={device} desktop={desktop} onError={onError} />}
         {subView === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={onError} />}

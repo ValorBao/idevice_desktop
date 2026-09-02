@@ -1,6 +1,6 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { useDeviceTask } from './hooks'
+import { useDesktopListeners, useDeviceTask } from './hooks'
 
 describe('useDeviceTask', () => {
   it('blocks device work in browser mode and reports the supplied explanation', async () => {
@@ -42,5 +42,38 @@ describe('useDeviceTask', () => {
 
     expect(task).toHaveBeenCalledOnce()
     expect(onError).toHaveBeenCalledWith('Device disconnected')
+  })
+})
+
+describe('useDesktopListeners', () => {
+  it('does not subscribe in browser demo mode', () => {
+    const subscribe = vi.fn(async () => [])
+    renderHook(() => useDesktopListeners(false, subscribe, vi.fn()))
+    expect(subscribe).not.toHaveBeenCalled()
+  })
+
+  it('unlistens and stops the backend session when the view unmounts', async () => {
+    const stop = vi.fn()
+    const onStop = vi.fn()
+    const subscribe = vi.fn(async () => [stop])
+    const { unmount } = renderHook(() => useDesktopListeners(true, subscribe, onStop))
+
+    await waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
+    unmount()
+
+    expect(stop).toHaveBeenCalledOnce()
+    expect(onStop).toHaveBeenCalledOnce()
+  })
+
+  it('drops a late subscription if the view already unmounted', async () => {
+    let resolve!: (value: Array<() => void>) => void
+    const pending = new Promise<Array<() => void>>((done) => { resolve = done })
+    const stop = vi.fn()
+    const { unmount } = renderHook(() => useDesktopListeners(true, () => pending))
+
+    unmount()
+    await act(async () => { resolve([stop]) })
+
+    expect(stop).toHaveBeenCalledOnce()
   })
 })

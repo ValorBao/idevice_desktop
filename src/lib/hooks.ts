@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { errorMessage } from '../api'
 
 /**
@@ -32,4 +32,56 @@ export function useDeviceTask(desktop: boolean, onError: (message: string) => vo
     },
     [desktop, onError],
   )
+}
+
+/** True while the calling component is mounted. Start/stop handlers use this to skip setState after unmount. */
+export function useMountedRef() {
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+  return mountedRef
+}
+
+type Unlisten = () => void
+
+/**
+ * Subscribe to desktop event listeners for a long-running device session.
+ *
+ * Unlistens when the view unmounts or `deps` change, then runs `onStop` so the
+ * matching backend task does not outlive the page. `alive()` is false after
+ * cleanup; event handlers should ignore payloads once that happens.
+ */
+export function useDesktopListeners(
+  enabled: boolean,
+  subscribe: (alive: () => boolean) => Promise<Unlisten[]>,
+  onStop?: () => void,
+  deps: readonly unknown[] = [],
+) {
+  const subscribeRef = useRef(subscribe)
+  subscribeRef.current = subscribe
+  const onStopRef = useRef(onStop)
+  onStopRef.current = onStop
+
+  useEffect(() => {
+    if (!enabled) return
+    let disposed = false
+    const alive = () => !disposed
+    let stops: Unlisten[] = []
+    void subscribeRef.current(alive).then((listeners) => {
+      if (disposed) {
+        listeners.forEach((stop) => stop())
+        return
+      }
+      stops = listeners
+    })
+    return () => {
+      disposed = true
+      stops.forEach((stop) => stop())
+      onStopRef.current?.()
+    }
+    // Callers pass the values that should restart the session (udid, callbacks).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, ...deps])
 }

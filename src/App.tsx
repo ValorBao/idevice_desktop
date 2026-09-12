@@ -1,63 +1,57 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Activity, AppWindow, BadgeCheck, Beaker, Bug, Check, ChevronDown, CircleStop, ClipboardPaste, Code2, FolderOpen,
-  KeyRound, MapPin, Plus, ScreenShare, Smartphone, TerminalSquare,
-} from 'lucide-react'
+import { Check } from 'lucide-react'
 import { devices, type Device } from './data'
-import { api, errorMessage, events, isDesktopRuntime, type DeviceSummary } from './api'
-import type { Connection, Page } from './types'
+import { api, errorMessage, events, isDesktopRuntime } from './api'
+import type { Connection, WorkbenchMode } from './types'
 import { summaryToDevice } from './lib/device'
 import { TitleBar } from './components/TitleBar'
+import { LeftRail } from './components/LeftRail'
 import { Onboarding } from './components/Onboarding'
 import { PairModal } from './components/PairModal'
-import { Overview } from './pages/Overview'
-import { Diagnostics } from './pages/Diagnostics'
-import { Files } from './pages/Files'
-import { Apps } from './pages/Apps'
-import { CrashReports } from './pages/CrashReports'
-import { Monitor } from './pages/Monitor'
-import { Developer } from './pages/Developer'
-import { Location } from './pages/Location'
-import { LiveScreen } from './pages/LiveScreen'
-import { Profiles } from './pages/Profiles'
-import { PersonalSigning } from './pages/PersonalSigning'
-import { Pasteboard } from './pages/Pasteboard'
-import { TestLab } from './pages/TestLab'
+import { InspectWorkbench, type InspectSubView } from './pages/InspectWorkbench'
+import { FilesWorkbench, type FilesSubView } from './pages/FilesWorkbench'
+import { AppsWorkbench, type AppsSubView } from './pages/AppsWorkbench'
+import { WatchWorkbench, type WatchInstrument } from './pages/WatchWorkbench'
 
-const pageMeta: Record<Page, [string, string]> = {
-  overview: ['Overview', 'idevice · lockdown query'],
-  diagnostics: ['Diagnostics', 'com.apple.mobile.diagnostics_relay'],
-  files: ['Files', 'com.apple.afc'],
-  apps: ['Apps', 'com.apple.mobile.installation_proxy'],
-  crashes: ['Crash Reports', 'com.apple.crashreportcopymobile'],
-  logs: ['Monitor', 'Processes, performance, network capture, and live device logs'],
-  screen: ['Live Screen', 'Live PNG device preview and still-frame capture'],
-  developer: ['Debug Tools', 'com.apple.dt.* services'],
-  profiles: ['Provisioning Profiles', 'Read-only Misagent signing and expiry inspection'],
-  signing: ['Personal Signing Assistant', 'Apple Account or local Keychain identity · signed IPA export'],
-  pasteboard: ['Pasteboard', 'Explicit bounded CoreDevice text and image transfer'],
-  xctest: ['Test Lab', 'Read-only XCTest runner and developer-service preflight'],
-  location: ['Location', 'com.apple.dt.simulatelocation'],
+function stationCopy(
+  mode: WorkbenchMode,
+  inspectSubView: InspectSubView,
+  filesSubView: FilesSubView,
+  appsSubView: AppsSubView,
+  watchInstrument: WatchInstrument,
+): [string, string] {
+  if (mode === 'inspect') {
+    if (inspectSubView === 'diagnostics') return ['Diagnostics Relay', 'com.apple.mobile.diagnostics_relay']
+    if (inspectSubView === 'crashes') return ['Crash Reports', 'com.apple.crashreportcopymobile']
+    return ['Inspect Station', 'Vehicle Telemetry · Diagnostics Relay · Crash Analytics']
+  }
+  if (mode === 'files') {
+    if (filesSubView === 'pasteboard') return ['Pasteboard', 'Explicit bounded CoreDevice text and image transfer']
+    return ['Payload Files', 'Apple File Conduit (AFC) · Application Sandboxes']
+  }
+  if (mode === 'apps') {
+    if (appsSubView === 'jit') return ['JIT & Debugger Tunnel', 'com.apple.dt.* services']
+    if (appsSubView === 'signing') return ['Personal Signing Assistant', 'Apple Account or local Keychain identity · signed IPA export']
+    if (appsSubView === 'profiles') return ['Provisioning Profiles', 'Read-only Misagent signing and expiry inspection']
+    if (appsSubView === 'xctest') return ['Test Lab', 'Read-only XCTest runner and developer-service preflight']
+    return ['Applications & JIT', 'Installation Proxy · Sideloading · Debugger Tunnel']
+  }
+  if (watchInstrument === 'location') return ['Location', 'com.apple.dt.simulatelocation']
+  if (watchInstrument === 'screen') return ['Live Screen', 'Live PNG device preview and still-frame capture']
+  return ['Live Blackbox', 'Processes, performance, network capture, and live device logs']
 }
-
-const navItems = [
-  { id: 'overview', label: 'Overview', icon: AppWindow },
-  { id: 'diagnostics', label: 'Diagnostics', icon: Activity },
-  { id: 'files', label: 'Files', icon: FolderOpen, suffix: 'AFC' },
-  { id: 'apps', label: 'Apps', icon: AppWindow },
-  { id: 'crashes', label: 'Crash Reports', icon: Bug },
-  { id: 'logs', label: 'Monitor', icon: TerminalSquare },
-  { id: 'screen', label: 'Live Screen', icon: ScreenShare },
-] as const
 
 function App() {
   const desktop = useMemo(isDesktopRuntime, [])
-  const [page, setPage] = useState<Page>('overview')
+  const [mode, setMode] = useState<WorkbenchMode>('inspect')
+  const [inspectSubView, setInspectSubView] = useState<InspectSubView>('overview')
+  const [filesSubView, setFilesSubView] = useState<FilesSubView>('afc')
+  const [appsSubView, setAppsSubView] = useState<AppsSubView>('manager')
+  const [watchInstrument, setWatchInstrument] = useState<WatchInstrument>('monitor')
   const [deviceCatalog, setDeviceCatalog] = useState<Device[]>(desktop ? [] : devices)
   const [deviceId, setDeviceId] = useState(desktop ? '' : 'd1')
   const deviceIdRef = useRef(deviceId)
   const [connection, setConnection] = useState<Connection>(desktop ? 'none' : 'connected')
-  const [deviceMenu, setDeviceMenu] = useState(false)
   const [pairOpen, setPairOpen] = useState(false)
   const [toast, setToast] = useState('')
   const mountedRef = useRef(true)
@@ -66,6 +60,7 @@ function App() {
   const refreshPendingRef = useRef(false)
   const device = deviceCatalog.find((item) => item.id === deviceId) ?? deviceCatalog[0] ?? devices[0]
   const connected = connection === 'connected'
+  const [headerTitle, headerDetail] = stationCopy(mode, inspectSubView, filesSubView, appsSubView, watchInstrument)
   useEffect(() => { deviceIdRef.current = deviceId }, [deviceId])
   useEffect(() => {
     mountedRef.current = true
@@ -99,7 +94,7 @@ function App() {
           if (!found.length) {
             setDeviceId('')
             setConnection('none')
-            setPage('overview')
+            setMode('inspect')
             await api.deviceDisconnect().catch((error) => {
               if (lifecycleIsCurrent()) setToast(errorMessage(error))
             })
@@ -117,7 +112,7 @@ function App() {
           } else {
             setDeviceId(target.id)
             setConnection('detected')
-            setPage('overview')
+            setMode('inspect')
             await api.deviceDisconnect().catch((error) => {
               if (lifecycleIsCurrent()) setToast(errorMessage(error))
             })
@@ -179,7 +174,6 @@ function App() {
 
   const selectDevice = async (id: string) => {
     setDeviceId(id)
-    setDeviceMenu(false)
     if (!desktop) {
       setConnection('connected')
       return
@@ -196,8 +190,7 @@ function App() {
   const disconnect = async () => {
     if (desktop) await api.deviceDisconnect().catch((error) => setToast(errorMessage(error)))
     setConnection('none')
-    setDeviceMenu(false)
-    setPage('overview')
+    setMode('inspect')
   }
 
   const finishPairing = async () => {
@@ -220,83 +213,76 @@ function App() {
       <div className="window-shell">
         <TitleBar device={device} connection={connection} />
         <div className="window-body">
-          <aside className="sidebar">
-            <div className="device-select-wrap">
-              <button className="device-card" onClick={() => setDeviceMenu((value) => !value)} aria-expanded={deviceMenu} aria-label="Select device" title={connected ? device.name : 'Select device'}>
-                <span className={`device-icon status-${connection}`}><Smartphone size={19} /><i /></span>
-                <span className="device-card-copy">
-                  <b>{connected ? device.name : connection === 'detected' ? device.model : 'No device'}</b>
-                  <small>{connected ? device.model : connection === 'detected' ? device.connectable === false ? 'Network only · connect USB once' : 'Awaiting trust…' : 'Connect to begin'}</small>
-                </span>
-                <ChevronDown size={14} />
-              </button>
-              {deviceMenu && (
-                <div className="device-menu">
-                  {deviceCatalog.map((item) => (
-                    <button key={item.id} onClick={() => void selectDevice(item.id)}>
-                      <i className={item.id === deviceId ? 'selected-dot' : ''} />
-                      <span><b>{item.name}</b><small>{item.conn}{item.ios !== '—' ? ` · iOS ${item.ios}` : ''}</small></span>
-                    </button>
-                  ))}
-                  <hr />
-                  <button className="accent-action" onClick={() => { setPairOpen(true); setDeviceMenu(false) }}><Plus size={15} />Pair new device…</button>
-                  <button className="danger-action" onClick={() => void disconnect()}><CircleStop size={15} />Disconnect device</button>
-                </div>
-              )}
-            </div>
-
-            <nav className={connected ? '' : 'nav-disabled'}>
-              <span className="nav-heading">Device</span>
-              {navItems.map(({ id, label, icon: Icon, ...item }) => (
-                <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)} aria-label={label} title={label}>
-                  <Icon size={17} /><span>{label}</span>{'suffix' in item && <small>{item.suffix}</small>}
-                </button>
-              ))}
-              <span className="nav-heading developer-heading">Developer</span>
-              <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')} aria-label="Debug Tools" title="Debug Tools"><Code2 size={17} /><span>Debug Tools</span></button>
-              <button className={page === 'profiles' ? 'active' : ''} onClick={() => setPage('profiles')} aria-label="Provisioning Profiles" title="Provisioning Profiles"><BadgeCheck size={17} /><span>Profiles</span></button>
-              <button className={page === 'signing' ? 'active' : ''} onClick={() => setPage('signing')} aria-label="Personal Sign" title="Personal Sign"><KeyRound size={17} /><span>Personal Sign</span></button>
-              <button className={page === 'pasteboard' ? 'active' : ''} onClick={() => setPage('pasteboard')} aria-label="Pasteboard" title="Pasteboard"><ClipboardPaste size={17} /><span>Pasteboard</span></button>
-              <button className={page === 'xctest' ? 'active' : ''} onClick={() => setPage('xctest')} aria-label="Test Lab" title="Test Lab"><Beaker size={17} /><span>Test Lab</span></button>
-              <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')} aria-label="Location" title="Location"><MapPin size={17} /><span>Location</span></button>
-            </nav>
-
-            <div className="sidebar-footer">
-              <i />
-              <span><b>Trusted & Paired</b><small>{device.udid.slice(0, 8)}…{device.udid.slice(-6)}</small></span>
-            </div>
-          </aside>
+          <LeftRail
+            device={device}
+            deviceCatalog={deviceCatalog}
+            connection={connection}
+            desktop={desktop}
+            mode={mode}
+            onSelectMode={setMode}
+            onSelectDevice={(id) => void selectDevice(id)}
+            onPairOpen={() => setPairOpen(true)}
+            onDisconnect={() => void disconnect()}
+            onToast={setToast}
+          />
 
           <main className="main-panel">
-            {page !== 'overview' && (
-              <header className="page-header">
-                <div><h1>{pageMeta[page][0]}</h1><p>{pageMeta[page][1]}</p></div>
-                <div className="header-spacer" />
-                <div className="header-device-state">
-                  <span className="header-state-dot" />
-                  <span>{connected ? device.conn : 'Offline'}</span>
-                  <i />
-                  <span>{connected ? `iOS ${device.ios}` : 'No session'}</span>
-                </div>
-              </header>
-            )}
+            <header className="page-header">
+              <div>
+                <h1>{headerTitle}</h1>
+                <p>{headerDetail}</p>
+              </div>
+              <div className="header-spacer" />
+              <div className="header-device-state">
+                <span className="header-state-dot" />
+                <span>{connected ? device.conn : 'Offline'}</span>
+                <i />
+                <span>{connected ? `iOS ${device.ios}` : 'No session'}</span>
+              </div>
+            </header>
 
-            <div className="page-scroll" key={`${page}:${device.udid}`}>
-              {connected && <>
-                {page === 'overview' && <Overview device={device} desktop={desktop} onError={setToast} />}
-                {page === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={setToast} />}
-                {page === 'files' && <Files desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'apps' && <Apps desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'logs' && <Monitor connected={connected} desktop={desktop} udid={device.udid} onError={setToast} />}
-                {page === 'screen' && <LiveScreen desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
-                {page === 'profiles' && <Profiles desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'signing' && <PersonalSigning desktop={desktop} udid={device.udid} deviceName={device.name} onToast={setToast} />}
-                {page === 'pasteboard' && <Pasteboard desktop={desktop} udid={device.udid} deviceName={device.name} onToast={setToast} />}
-                {page === 'xctest' && <TestLab desktop={desktop} udid={device.udid} onToast={setToast} />}
-                {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}
-              </>}
+            <div className="page-scroll" key={`${mode}:${device.udid}`}>
+              {connected && (
+                <>
+                  {mode === 'inspect' && (
+                    <InspectWorkbench
+                      device={device}
+                      desktop={desktop}
+                      subView={inspectSubView}
+                      onSubViewChange={setInspectSubView}
+                      onError={setToast}
+                    />
+                  )}
+                  {mode === 'files' && (
+                    <FilesWorkbench
+                      desktop={desktop}
+                      device={device}
+                      subView={filesSubView}
+                      onSubViewChange={setFilesSubView}
+                      onToast={setToast}
+                    />
+                  )}
+                  {mode === 'apps' && (
+                    <AppsWorkbench
+                      desktop={desktop}
+                      device={device}
+                      subView={appsSubView}
+                      onSubViewChange={setAppsSubView}
+                      onToast={setToast}
+                    />
+                  )}
+                  {mode === 'watch' && (
+                    <WatchWorkbench
+                      connected={connected}
+                      desktop={desktop}
+                      device={device}
+                      activeInstrument={watchInstrument}
+                      onInstrumentChange={setWatchInstrument}
+                      onError={setToast}
+                    />
+                  )}
+                </>
+              )}
             </div>
 
             {!connected && (

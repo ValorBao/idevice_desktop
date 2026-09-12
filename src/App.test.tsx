@@ -9,6 +9,9 @@ const backend = vi.hoisted(() => ({
     deviceDisconnect: vi.fn(),
     deviceMonitorStart: vi.fn(),
     deviceMonitorStop: vi.fn(),
+    developerStatus: vi.fn(),
+    screenshot: vi.fn(),
+    ddiMountAuto: vi.fn(),
     ddiEnsure: vi.fn(),
   },
   events: {
@@ -32,8 +35,12 @@ vi.mock('./pages/Files', () => ({ Files: () => <div>Files</div> }))
 vi.mock('./pages/Apps', () => ({ Apps: () => <div>Apps</div> }))
 vi.mock('./pages/CrashReports', () => ({ CrashReports: () => <div>Crash Reports</div> }))
 vi.mock('./pages/Logs', () => ({ Logs: () => <div>Logs</div> }))
+vi.mock('./pages/Monitor', () => ({ Monitor: () => <div>Monitor</div> }))
 vi.mock('./pages/Developer', () => ({ Developer: () => <div>Developer</div> }))
-vi.mock('./pages/PersonalSigning', () => ({ PersonalSigning: () => <div>Personal Signing</div> }))
+vi.mock('./pages/PersonalSigning', () => ({ PersonalSigning: ({ udid }: { udid: string }) => <div data-testid="personal-signing-page">Personal Signing · {udid}</div> }))
+vi.mock('./pages/Profiles', () => ({ Profiles: () => <div>Profiles</div> }))
+vi.mock('./pages/Pasteboard', () => ({ Pasteboard: () => <div>Pasteboard</div> }))
+vi.mock('./pages/LiveScreen', () => ({ LiveScreen: () => <div>Live Screen</div> }))
 vi.mock('./pages/TestLab', () => ({
   TestLab: ({ udid }: { udid: string }) => <div data-testid="test-lab-page">{udid}</div>,
 }))
@@ -82,6 +89,8 @@ describe('device page lifecycle', () => {
     backend.api.deviceMonitorStart.mockResolvedValue(undefined)
     backend.api.deviceMonitorStop.mockResolvedValue(undefined)
     backend.api.ddiEnsure.mockResolvedValue(undefined)
+    backend.api.developerStatus.mockResolvedValue({ ddiMounted: false, developerMode: null, rsdAvailable: false })
+    backend.api.screenshot.mockRejectedValue(new Error('no screenshot'))
     backend.events.deviceChanged.mockImplementation((handler: () => void) => {
       monitor.deviceChanged = handler
       return Promise.resolve(vi.fn())
@@ -94,7 +103,8 @@ describe('device page lifecycle', () => {
     render(<App />)
 
     await screen.findByRole('button', { name: 'Select device' })
-    await user.click(screen.getByRole('button', { name: 'Location' }))
+    await user.click(screen.getByRole('button', { name: 'WATCH' }))
+    await user.click(screen.getByRole('tab', { name: 'Location' }))
     const firstPage = screen.getByTestId('location-page')
     expect(firstPage).toHaveTextContent('udid-a')
 
@@ -110,21 +120,11 @@ describe('device page lifecycle', () => {
     render(<App />)
 
     await screen.findByRole('button', { name: 'Select device' })
-    await user.click(screen.getByRole('button', { name: 'Test Lab' }))
+    await user.click(screen.getByRole('button', { name: 'APPS' }))
+    await user.click(screen.getByRole('tab', { name: 'Test Lab' }))
 
     expect(screen.getByTestId('test-lab-page')).toHaveTextContent('udid-a')
     expect(screen.getByRole('heading', { name: 'Test Lab' })).toBeInTheDocument()
-  })
-
-  it('opens Personal Sign for the currently selected device', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await screen.findByRole('button', { name: 'Select device' })
-    await user.click(screen.getByRole('button', { name: 'Personal Sign' }))
-
-    expect(screen.getByText('Personal Signing')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Personal Signing Assistant' })).toBeInTheDocument()
   })
 
   it('ends the backend session and unmounts the active page when every device disappears', async () => {
@@ -133,7 +133,8 @@ describe('device page lifecycle', () => {
     render(<App />)
 
     await screen.findByRole('button', { name: 'Select device' })
-    await user.click(screen.getByRole('button', { name: 'Location' }))
+    await user.click(screen.getByRole('button', { name: 'WATCH' }))
+    await user.click(screen.getByRole('tab', { name: 'Location' }))
     expect(screen.getByTestId('location-page')).toHaveTextContent('udid-a')
 
     expect(monitor.deviceChanged).toBeDefined()
@@ -220,4 +221,19 @@ describe('device page lifecycle', () => {
 
     expect(unlisten).toHaveBeenCalledOnce()
   })
+  it('opens Personal Sign in APPS and keeps it bound to the selected device', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('button', { name: 'Select device' })
+    await user.click(screen.getByRole('button', { name: 'APPS' }))
+    await user.click(screen.getByRole('tab', { name: 'Personal Sign' }))
+    expect(screen.getByTestId('personal-signing-page')).toHaveTextContent('udid-a')
+    expect(screen.getByRole('heading', { name: 'Personal Signing Assistant' })).toBeInTheDocument()
+    const firstPage = screen.getByTestId('personal-signing-page')
+    await user.click(screen.getByRole('button', { name: 'Select device' }))
+    await user.click(screen.getByRole('button', { name: /Beta iPhone/ }))
+    await waitFor(() => expect(screen.getByTestId('personal-signing-page')).toHaveTextContent('udid-b'))
+    expect(screen.getByTestId('personal-signing-page')).not.toBe(firstPage)
+  })
+
 })

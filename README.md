@@ -10,7 +10,7 @@ This is an independent project and is not an official `jkcoxson/idevice` applica
 
 The current release is [0.0.2 Developer Preview](https://github.com/ValorBao/idevice_desktop/releases/tag/v0.0.2); see the [release notes](docs/RELEASE_NOTES_0.0.2.md).
 
-Development on the `0.0.3` preview is tracked in [its draft release notes](docs/RELEASE_NOTES_0.0.3.md).
+The `0.0.3` release candidate is tracked in [its draft release notes](docs/RELEASE_NOTES_0.0.3.md). Development of the next `0.0.4` iteration is tracked in [its draft release notes](docs/RELEASE_NOTES_0.0.4.md).
 
 Developer Preview builds are unsigned and unnotarized Apple Silicon builds.
 
@@ -28,6 +28,7 @@ Developer Preview builds are unsigned and unnotarized Apple Silicon builds.
 - Diagnostics Relay queries for battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data
 - AFC file browsing, upload, download, directory creation, and recursive removal
 - Installation Proxy user-application listing with icons and filtering, IPA installation, uninstallation, and progress events
+- Personal Signing Assistant with an iLoader-compatible Apple Account + 2FA flow for automatic device registration, certificate/profile creation, signed IPA export, and optional installation; the existing local IPA/profile/Keychain workflow remains available
 - Crash report listing, filtering, text preview, and export
 - Live structured OS Trace logs with pause, filter, and clear controls
 - searchable iOS 17+ process monitoring with application launch, AppService-only confirmed stop, stale-PID protection, and explicit DVT-stop/Legacy support boundaries
@@ -84,6 +85,8 @@ npm run desktop:build -- --bundles dmg
 - Network Capture uses USB pcapd on every supported generation and RSD pcapd on modern network routes. The file lifecycle passes automated checks, but the capture-to-Wireshark round trip has not yet been accepted on hardware.
 - Live Screen refreshes the established Screenshotr or DVT screenshot service at a target of 2 PNG frames per second. Its lifecycle, frame validation, and export pass automated checks, but the preview has not yet been accepted on hardware and is not a smooth-video or remote-control path.
 - Provisioning Profiles reads Misagent over USB Lockdown or modern RSD and parses normalized metadata locally. The first slice is deliberately read-only; profile installation/removal and hardware acceptance remain pending.
+- Personal Signing Assistant 0.0.4 defaults to an Apple Account flow built on `isideload`: the password is held only for the current login attempt, cleared from the interface immediately, never persisted by idevice_desktop, and the active session lasts only until sign-out or app exit. Certificate material and Anisette state use macOS Keychain. This unofficial compatibility route contacts Apple private developer endpoints and `https://ani.sidestore.io`, so Apple or the community service can change or block it. The separate local-profile mode retains its stricter single-bundle limits and never asks for an Apple Account password. Neither route has completed real-account export/install acceptance.
+- The resolved `isideload` signing stack currently includes `nab138/apple-crates`' `apple-codesign` package, which declares no license. The 0.0.4 development code must not be packaged or distributed until that dependency is licensed or replaced; see `THIRD_PARTY_NOTICES.md`.
 - Notification Observation reads names relayed by Notification Proxy over USB Lockdown or modern RSD. It does not expose payloads or notification posting, and hardware acceptance remains pending.
 - Pasteboard transfer uses the iOS 17+ CoreDevice/RSD service. Text is limited to 1 MB; PNG/JPEG images are limited to 12 MB and a safe preview dimension budget. Reads resolve only a supported item with a known bounded size, image writes are validated and previewed locally, every write requires confirmation, and hardware acceptance remains pending.
 - Test Lab reads installed `.xctrunner` and optional target metadata, combines that with Developer Mode, DDI, and RSD readiness, and validates a non-executing plan containing mode, target, bounded include/skip filters, timeout, and WDA bridge intent. It never starts a test process. XCTest event output, runtime timeout enforcement, deterministic Stop/cleanup, WDA networking, the iOS 17.0–17.3 RemotePairing adapter, and hardware acceptance remain pending.
@@ -98,8 +101,8 @@ npm run desktop:build -- --bundles dmg
 
 ## Credits
 
-Core device communication is provided by [`jkcoxson/idevice`](https://github.com/jkcoxson/idevice), maintained by Jackson Coxson and its contributors. Their continued research and open-source work on modern iOS device protocols and developer services makes this project possible.
+Core device communication is provided by [`jkcoxson/idevice`](https://github.com/jkcoxson/idevice), maintained by Jackson Coxson and its contributors. Apple Account authentication and automatic personal signing use [`nab138/isideload`](https://github.com/nab138/isideload), following the user flow demonstrated by [`nab138/iloader`](https://github.com/nab138/iloader). Their open-source work makes these device and signing workflows possible.
 
 ## Licensing
 
-idevice_desktop is available under the [MIT License](LICENSE). `idevice` is also available under the MIT License; its separate copyright and license notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+idevice_desktop is available under the [MIT License](LICENSE). Separate copyright and license notices for `idevice`, `isideload`, iLoader-derived implementation references, and the resolved dependency inventory are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

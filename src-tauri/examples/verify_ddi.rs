@@ -129,6 +129,22 @@ async fn report_state(
                 .filter(|name| name.contains("debugproxy") || name.contains("debugserverproxy"))
                 .count();
             println!("  RSD services:              {total} ({debug} debug-proxy)");
+            let mut pasteboard_services: Vec<_> = handshake
+                .services
+                .keys()
+                .filter(|name| {
+                    let name = name.to_ascii_lowercase();
+                    name.contains("pasteboard") || name.contains("clipboard")
+                })
+                .collect();
+            pasteboard_services.sort();
+            if pasteboard_services.is_empty() {
+                println!("  pasteboard services:       none advertised");
+            } else {
+                for service in pasteboard_services {
+                    println!("  pasteboard service:        {service}");
+                }
+            }
         }
         Ok(Err(error)) => println!("  RSD services:              unavailable ({error:?})"),
         Err(_) => println!("  RSD services:              tunnel timed out"),

@@ -688,6 +688,150 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .profiles-detail-empty svg { margin-bottom: 6px; color: var(--accent); }
 .profiles-detail-empty b { color: var(--text); }
 .profiles-detail-empty p { margin: 0; font-size: 10px; }
+.personal-signing-page { max-width: 1120px; margin: 0 auto; }
+.signing-mode-tabs { width: fit-content; display: flex; gap: 3px; margin: 0 0 12px; padding: 3px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; }
+.signing-mode-tabs button { display: flex; align-items: center; gap: 6px; padding: 7px 11px; color: var(--faint); cursor: pointer; background: transparent; border: 0; border-radius: 6px; font-size: 9.5px; font-weight: 650; }
+.signing-mode-tabs button:hover { color: var(--text); }
+.signing-mode-tabs button.active { color: var(--text); background: var(--elev); box-shadow: 0 1px 5px rgba(0,0,0,.15); }
+.account-signing-notice { display: flex; align-items: center; gap: 13px; padding: 14px 16px; border-color: rgba(124,108,255,.32); background: linear-gradient(110deg, rgba(124,108,255,.11), var(--panel) 46%); }
+.account-signing-notice > span { width: 38px; height: 38px; flex: none; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); border-radius: 10px; }
+.account-signing-notice > div { min-width: 0; flex: 1; }
+.account-signing-notice h2 { margin: 0; font-size: 13px; }
+.account-signing-notice p { margin: 4px 0 0; color: var(--dim); font-size: 10.5px; line-height: 1.45; }
+.account-signing-notice > code { flex: none; padding: 5px 7px; color: #b8b0ff; background: var(--accent-soft); border: 1px solid rgba(124,108,255,.22); border-radius: 6px; font: 8.5px var(--mono); letter-spacing: .5px; }
+.account-signing-layout { display: grid; grid-template-columns: minmax(390px, .88fr) minmax(430px, 1.12fr); gap: 12px; margin-top: 12px; }
+.account-login-card, .account-sign-card { min-width: 0; padding: 16px; }
+.account-login-card > header, .account-sign-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.account-login-card header small, .account-sign-card header small { display: block; color: var(--faint); font-size: 8px; font-weight: 750; letter-spacing: .7px; }
+.account-login-card h3, .account-sign-card h3 { margin: 4px 0 0; font-size: 13px; }
+.account-login-card > header > svg, .account-sign-card > header > svg { color: var(--faint); }
+.account-login-card > header > svg.ready { color: #8ce7a0; }
+.account-loading { min-height: 140px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--faint); font-size: 9.5px; }
+.account-login-form { display: grid; gap: 7px; }
+.account-login-form label { color: var(--dim); font-size: 9px; font-weight: 650; }
+.account-login-form input, .account-2fa-dialog input { width: 100%; box-sizing: border-box; padding: 10px 11px; color: var(--text); background: var(--elev); border: 1px solid var(--border); border-radius: 8px; outline: none; font: 10px var(--mono); }
+.account-login-form input:focus, .account-2fa-dialog input:focus { border-color: rgba(124,108,255,.6); box-shadow: 0 0 0 3px rgba(124,108,255,.09); }
+.account-login-form > button { margin-top: 4px; }
+.account-login-form > button:disabled, .account-sign-action:disabled { cursor: default; opacity: .42; filter: none; }
+.account-login-form > p { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 0; color: var(--faint); font-size: 8.5px; line-height: 1.45; }
+.account-login-form > p svg { flex: none; margin-top: 1px; }
+.account-ready { min-height: 95px; display: flex; align-items: center; gap: 11px; padding: 12px; background: rgba(40,200,64,.05); border: 1px solid rgba(40,200,64,.18); border-radius: 9px; }
+.account-avatar { width: 38px; height: 38px; flex: none; display: grid; place-items: center; color: #8ce7a0; background: rgba(40,200,64,.1); border-radius: 50%; }
+.account-ready > div:nth-child(2) { min-width: 0; flex: 1; }
+.account-ready b { display: block; overflow: hidden; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.account-ready p { margin: 4px 0 0; color: var(--dim); font-size: 8.5px; }
+.account-ready code { color: #8ce7a0; font: 8px var(--mono); }
+.account-ready button { display: flex; align-items: center; gap: 5px; padding: 7px 8px; color: var(--dim); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 7px; font-size: 8.5px; }
+.account-ready button:hover { color: #ff8d87; border-color: rgba(255,95,87,.28); }
+.account-service-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 13px; padding: 9px; color: #d5b96d; background: rgba(213,185,109,.05); border: 1px solid rgba(213,185,109,.16); border-radius: 8px; }
+.account-service-note svg { flex: none; margin-top: 1px; }
+.account-service-note p { margin: 0; font-size: 8.3px; line-height: 1.5; }
+.account-service-note code { overflow-wrap: anywhere; color: #e6cf90; font: 8px var(--mono); }
+.account-ipa-picker { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px; color: var(--text); cursor: pointer; background: var(--elev); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
+.account-ipa-picker:hover:not(:disabled) { border-color: var(--border2); }
+.account-ipa-picker.selected { border-color: rgba(124,108,255,.34); }
+.account-ipa-picker:disabled { cursor: default; opacity: .55; }
+.account-ipa-picker > span { width: 34px; height: 34px; flex: none; display: grid; place-items: center; color: var(--faint); background: var(--panel); border-radius: 8px; }
+.account-ipa-picker.selected > span { color: var(--accent); background: var(--accent-soft); }
+.account-ipa-picker > div { min-width: 0; flex: 1; }
+.account-ipa-picker b, .account-ipa-picker small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-ipa-picker b { font-size: 10.5px; }
+.account-ipa-picker small { margin-top: 4px; color: var(--faint); font: 8.5px var(--mono); }
+.account-ipa-picker em { color: var(--accent); font: normal 9px var(--mono); }
+.account-sign-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 13px 0 0; padding: 0; list-style: none; }
+.account-sign-steps li { min-width: 0; display: flex; align-items: center; gap: 7px; padding: 8px; color: var(--faint); background: var(--elev); border-radius: 8px; }
+.account-sign-steps li > span { width: 21px; height: 21px; flex: none; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 50%; font: 8px var(--mono); }
+.account-sign-steps li.done > span { color: #8ce7a0; background: rgba(40,200,64,.08); border-color: rgba(40,200,64,.2); }
+.account-sign-steps b, .account-sign-steps small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-sign-steps b { color: var(--dim); font-size: 8.5px; }
+.account-sign-steps small { margin-top: 2px; font-size: 7.3px; }
+.account-sign-action { width: 100%; margin-top: 14px; }
+.account-signing-error { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; padding: 11px 13px; color: #ff8d87; background: rgba(255,95,87,.06); border-color: rgba(255,95,87,.2); }
+.account-signing-error svg { flex: none; }
+.account-signing-error b { font-size: 9.5px; }
+.account-signing-error p { margin: 3px 0 0; font-size: 8.5px; line-height: 1.45; }
+.account-2fa-backdrop { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 24px; background: rgba(7,8,12,.72); backdrop-filter: blur(8px); }
+.account-2fa-dialog { width: min(370px, 100%); padding: 22px; text-align: center; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+.account-2fa-dialog > span { width: 44px; height: 44px; display: grid; place-items: center; margin: 0 auto 11px; color: var(--accent); background: var(--accent-soft); border-radius: 12px; }
+.account-2fa-dialog h3 { margin: 0; font-size: 14px; }
+.account-2fa-dialog > p { margin: 7px auto 13px; color: var(--dim); font-size: 9.5px; line-height: 1.5; }
+.account-2fa-dialog input { text-align: center; font-size: 19px; letter-spacing: 7px; }
+.account-2fa-dialog form > div { display: flex; justify-content: flex-end; gap: 7px; margin-top: 12px; }
+.account-2fa-dialog form button { padding: 8px 13px; color: var(--dim); cursor: pointer; background: var(--elev); border: 1px solid var(--border); border-radius: 7px; font-size: 9px; }
+.account-2fa-dialog form button.primary-button { color: white; background: var(--accent); border-color: transparent; }
+.account-2fa-dialog form button:disabled { cursor: default; opacity: .45; }
+.account-2fa-error { margin: 0 0 10px; padding: 8px; color: #ff8d87; background: rgba(255,95,87,.07); border-radius: 7px; font-size: 8.5px; }
+.signing-intro { display: flex; align-items: center; gap: 13px; padding: 14px 16px; border-color: rgba(124,108,255,.32); background: linear-gradient(110deg, rgba(124,108,255,.11), var(--panel) 46%); }
+.signing-intro > span { width: 38px; height: 38px; flex: none; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); border-radius: 10px; }
+.signing-intro > div { min-width: 0; flex: 1; }
+.signing-intro h2 { margin: 0; font-size: 13px; }
+.signing-intro p { margin: 4px 0 0; color: var(--dim); font-size: 10.5px; line-height: 1.45; }
+.signing-intro > code { flex: none; padding: 5px 7px; color: #8ce7a0; background: rgba(40,200,64,.08); border: 1px solid rgba(40,200,64,.18); border-radius: 6px; font: 8.5px var(--mono); letter-spacing: .6px; }
+.signing-layout { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(360px, .9fr); gap: 12px; margin-top: 12px; }
+.signing-setup, .signing-preflight { min-width: 0; padding: 16px; }
+.signing-setup > header, .signing-preflight > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.signing-setup header small, .signing-preflight header small, .signing-result small, .signing-identity label small { display: block; color: var(--faint); font-size: 8px; font-weight: 750; letter-spacing: .7px; }
+.signing-setup h3, .signing-preflight h3 { margin: 4px 0 0; font-size: 13px; }
+.signing-setup > header > svg, .signing-preflight > header > svg { color: var(--faint); }
+.signing-preflight > header > svg.ready { color: #8ce7a0; }
+.signing-setup > button:not(.signing-export) { width: 100%; display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 11px; color: var(--text); cursor: pointer; background: var(--elev); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
+.signing-setup > button:not(.signing-export):hover { border-color: var(--border2); }
+.signing-setup > button.selected { border-color: rgba(124,108,255,.34); }
+.signing-setup > button > span { width: 32px; height: 32px; flex: none; display: grid; place-items: center; color: var(--faint); background: var(--panel); border-radius: 8px; }
+.signing-setup > button.selected > span { color: var(--accent); background: var(--accent-soft); }
+.signing-setup > button > div { min-width: 0; flex: 1; }
+.signing-setup > button b, .signing-setup > button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signing-setup > button b { font-size: 10.5px; }
+.signing-setup > button small { margin-top: 4px; color: var(--faint); font: 8.5px var(--mono); }
+.signing-setup > button em { color: var(--accent); font: normal 9px var(--mono); }
+.signing-identity { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.signing-identity label b { display: block; margin-top: 4px; font-size: 10.5px; }
+.signing-identity select { width: 100%; margin-top: 8px; padding: 9px 10px; overflow: hidden; color: var(--text); background: var(--elev); border: 1px solid var(--border); border-radius: 8px; font: 9px var(--mono); text-overflow: ellipsis; }
+.signing-identity select:disabled { color: var(--faint); opacity: .75; }
+.signing-identity p, .signing-limit { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; color: var(--faint); font-size: 8.5px; line-height: 1.45; }
+.signing-identity p svg, .signing-limit svg { flex: none; margin-top: 1px; }
+.signing-progress { margin-top: 14px; padding: 10px; background: var(--elev); border-radius: 8px; }
+.signing-progress > div { display: flex; justify-content: space-between; gap: 10px; }
+.signing-progress b { color: var(--dim); font-size: 9px; }
+.signing-progress code { color: var(--accent); font: 9px var(--mono); }
+.signing-progress > span { display: block; height: 3px; margin-top: 8px; overflow: hidden; background: var(--border); border-radius: 3px; }
+.signing-progress > span i { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
+.signing-export { width: 100%; margin-top: 14px; }
+.signing-export:disabled, .signing-result button:disabled { cursor: default; opacity: .42; filter: none; }
+.signing-empty { min-height: 286px; display: grid; place-content: center; justify-items: center; gap: 5px; padding: 24px; color: var(--faint); text-align: center; }
+.signing-empty svg { margin-bottom: 6px; color: var(--accent); }
+.signing-empty b { color: var(--text); font-size: 11px; }
+.signing-empty p { max-width: 300px; margin: 2px 0 0; font-size: 9px; line-height: 1.5; }
+.signing-failure { display: flex; align-items: flex-start; gap: 9px; padding: 11px; color: #ff8d87; background: rgba(255,95,87,.07); border: 1px solid rgba(255,95,87,.2); border-radius: 8px; }
+.signing-failure svg { flex: none; }
+.signing-failure b { font-size: 10px; }
+.signing-failure p { margin: 4px 0 0; font-size: 9px; line-height: 1.5; }
+.signing-verdict { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid; border-radius: 8px; }
+.signing-verdict > span { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 8px; }
+.signing-verdict.ready { color: #8ce7a0; background: rgba(40,200,64,.06); border-color: rgba(40,200,64,.2); }
+.signing-verdict.blocked { color: #ff8d87; background: rgba(255,95,87,.06); border-color: rgba(255,95,87,.2); }
+.signing-verdict > div { color: var(--text); }
+.signing-verdict b { font-size: 10px; }
+.signing-verdict p { margin: 3px 0 0; color: var(--dim); font-size: 8.5px; }
+.signing-preflight dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 12px 0 0; overflow: hidden; background: var(--border); border: 1px solid var(--border); border-radius: 8px; }
+.signing-preflight dl > div { min-width: 0; padding: 9px; background: var(--elev); }
+.signing-preflight dt { color: var(--faint); font-size: 7.5px; letter-spacing: .3px; text-transform: uppercase; }
+.signing-preflight dd { margin: 5px 0 0; overflow-wrap: anywhere; font-size: 9px; line-height: 1.35; }
+.signing-preflight dd small { color: var(--faint); font-weight: 500; }
+.signing-preflight dd code { color: var(--accent); font: 8px/1.35 var(--mono); }
+.signing-preflight dd.good { color: #8ce7a0; }
+.signing-preflight dd.bad { color: #ff8d87; }
+.signing-messages { margin-top: 10px; padding: 7px 9px; border: 1px solid; border-radius: 8px; }
+.signing-messages p { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; font-size: 8.5px; line-height: 1.45; }
+.signing-messages svg { flex: none; margin-top: 1px; }
+.signing-messages.blocked { color: #ff8d87; background: rgba(255,95,87,.05); border-color: rgba(255,95,87,.16); }
+.signing-messages.warning { color: #d5b96d; background: rgba(213,185,109,.05); border-color: rgba(213,185,109,.16); }
+.signing-result { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 13px 15px; border-color: rgba(40,200,64,.24); }
+.signing-result > span { width: 36px; height: 36px; flex: none; display: grid; place-items: center; color: #8ce7a0; background: rgba(40,200,64,.08); border-radius: 9px; }
+.signing-result > div { min-width: 0; flex: 1; }
+.signing-result b, .signing-result p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signing-result b { margin-top: 4px; font-size: 10.5px; }
+.signing-result p { margin: 3px 0 0; color: var(--faint); font: 8.5px var(--mono); }
 .pasteboard-page { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
 .pasteboard-tabs { flex: none; display: inline-flex; align-self: flex-start; gap: 3px; padding: 3px; background: var(--elev); border: 1px solid var(--border); border-radius: 9px; }
 .pasteboard-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; color: var(--faint); cursor: pointer; background: transparent; border: 0; border-radius: 6px; font-size: 10px; font-weight: 650; }
@@ -902,12 +1046,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ddi-card p { display: flex; justify-content: space-between; margin: 12px 0 0; }
 .ddi-card p span { color: var(--dim); font-size: 12px; }
 .ddi-card p b { font: 600 12px var(--mono); }
+.ddi-card .ddi-note { display: block; margin-top: 14px; color: var(--dim); font-size: 11px; line-height: 1.5; }
 .ddi-card .progress { margin-top: 14px; }
-.dev-actions, .developer-mode-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.dev-actions button, .developer-mode-actions button { padding: 8px 11px; color: var(--dim); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: 11.5px; font-weight: 600; }
-.dev-actions button:hover:not(:disabled), .developer-mode-actions button:hover { color: var(--text); border-color: var(--border2); }
-.dev-actions button.primary-button { color: var(--accent-contrast); background: var(--accent); border-color: var(--accent); }
-.dev-actions button:disabled { cursor: default; opacity: .4; }
+.ddi-card .ddi-blocked { display: block; margin-top: 14px; padding: 10px 12px; background: color-mix(in srgb, var(--warn, #febc2e) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warn, #febc2e) 35%, transparent); border-radius: 8px; }
+.ddi-card .ddi-blocked b { display: block; margin-bottom: 4px; color: var(--text); font-size: 12px; }
+.ddi-card .ddi-blocked span { display: block; color: var(--dim); font-size: 11px; line-height: 1.5; }
+.ddi-actions { display: flex; gap: 8px; margin-top: 12px; }
+.ddi-actions button { padding: 8px 12px; font-size: 11.5px; border-radius: 8px; }
+.ddi-actions button:disabled { cursor: default; opacity: .55; }
+.developer-mode-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.developer-mode-actions button { padding: 8px 11px; color: var(--dim); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: 11.5px; font-weight: 600; }
+.developer-mode-actions button:hover { color: var(--text); border-color: var(--border2); }
 .developer-mode-actions { margin: 0 0 14px; }
 .empty-card { display: grid; min-height: 120px; place-items: center; padding: 24px; color: var(--dim); font: 12px var(--mono); text-align: center; }
 .service-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
@@ -1016,6 +1165,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .profiles-layout { grid-template-columns: 1fr; }
   .profiles-list { min-height: 360px; }
   .profiles-detail { min-height: 420px; }
+  .signing-layout, .account-signing-layout { grid-template-columns: 1fr; }
   .pasteboard-page { overflow: auto; }
   .pasteboard-layout { grid-template-columns: 1fr; }
   .pasteboard-device, .pasteboard-editor { min-height: 390px; }
@@ -1117,6 +1267,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .profiles-toolbar > small { flex: 1; text-align: right; }
   .profiles-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .profiles-list > header, .profiles-list button { grid-template-columns: minmax(180px, 1fr) 80px 102px; gap: 8px; }
+  .signing-intro, .signing-result, .account-signing-notice { align-items: flex-start; flex-wrap: wrap; }
+  .signing-intro > code { margin-left: 51px; }
+  .signing-result > button { width: 100%; }
+  .account-signing-notice > code { margin-left: 51px; }
+  .account-sign-steps { grid-template-columns: 1fr; }
   .pasteboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .test-lab-toolbar { flex-wrap: wrap; }
   .test-lab-toolbar > label { flex-basis: 100%; }

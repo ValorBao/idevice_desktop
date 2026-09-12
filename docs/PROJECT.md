@@ -1,8 +1,8 @@
 # idevice_desktop Project Overview
 
-> Last updated: 2026-08-29
+> Last updated: 2026-08-30
 > Current release: 0.0.2 Developer Preview
-> Development version: 0.0.3
+> Development version: 0.0.4
 
 ## 1. Project Positioning
 
@@ -49,7 +49,23 @@ The exception is Developer Mode, which Apple introduced in iOS 16. On iOS 14 and
 
 macOS 11.0 is the floor because releases are built for `arm64`, and Apple Silicon starts there. It matches what the binary itself requires, so the bundle no longer advertises a lower version than it can run on.
 
-Automatic DDI mounting for iOS 17 and later shells out to `devicectl`, which needs Xcode 15 and therefore macOS 13.5. That is a requirement of one feature, not of the application: mounting through Choose files works without it.
+Automatic DDI mounting for iOS 17 and later shells out to `devicectl`, which needs Xcode 15 and therefore macOS 13.5. That is a requirement of one feature, not of the application.
+
+Mounting has no interface. `ddi_ensure` runs once per device selection, checks whether an image is already mounted, and mounts one if not. iOS 17 and later personalize the image on the device, so nothing has to be supplied — Xcode's `/Library/Developer/DeveloperDiskImages/iOS_DDI` is one image set covering every product type, which is why that generation needs no per-version handling.
+
+iOS 16 and earlier mount a prebuilt image instead, and `legacy_ddi.rs` uses **one** pinned image for all of them rather than matching the device's release. That is a deliberate trade. Apple signs an image per release, and mounting a mismatched one is not guaranteed to work — see the known risk below — but the alternative makes behaviour depend on which Xcode a given Mac happens to have installed, which is not reproducible across machines or in a bug report.
+
+The image is **not** redistributed with the application. Apple's disk images are proprietary and the community mirrors that host them carry no license, so shipping one inside the bundle would put a larger version of the existing `apple-codesign` licensing gate in the release itself. Instead `ddi_download` fetches it once, only when the user asks, from a commit-pinned URL, checks both files against a pinned SHA-256 and byte length, and installs them atomically into the user's own `~/Library/Developer/DeveloperDiskImages/<version>`. That directory and a matching Xcode `DeviceSupport` folder are both read on startup, so a Mac that already has the file never downloads it. `ddi_ensure` reports a missing image as the error kind `ddi-missing`, which is what makes the Developer page offer the download instead of a failure.
+
+`cargo run --example verify_legacy_ddi` reports the install state, and `-- --install` exercises the production download path with no device attached.
+
+| | iOS 16 and earlier | iOS 17 and later |
+| --- | --- | --- |
+| Image | one pinned `DeveloperDiskImage.dmg` (currently 14.2) | personalized on the device |
+| Source | downloaded on request, or an existing Xcode copy | Xcode's `iOS_DDI`, via `devicectl` |
+| Network | once per Mac, user-initiated | never |
+
+**Known risk.** The pinned image is built for iOS 14.2, and iOS 14.2 is verified: an iPhone10,1 mounted it automatically on selection. The signature is over the image rather than bound to the device's release, so the mount itself is expected to succeed on other Legacy releases, but the developer tools inside the image are compiled for 14.x. An iOS 15 or 16 device may mount it and still have a developer service behave incorrectly. Only iOS 14.2 is covered until each release is verified on hardware; the choice of a single image is recorded here so a failure on 15 or 16 is read as this trade-off rather than as a transport defect.
 
 The unverified iOS floor is a statement about which code paths exist, not a compatibility claim. Nothing below 14.2 has been run. Systems old enough to need pre-TLS 1.2 handshakes are expected to fail outright, because the project builds `idevice` against rustls, which does not implement them.
 
@@ -78,6 +94,7 @@ The frontend detects the Tauri runtime and selects the appropriate mode automati
 | Diagnostics | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data | Diagnostics Relay |
 | Files | Browse AFC and file-sharing app containers; upload, download, create directories, and remove recursively | AFC, House Arrest |
 | Apps | List user applications and icons; install and uninstall IPAs; show installation progress | Installation Proxy, SpringBoardServices |
+| Personal Sign | Sign in with an Apple Account and 2FA to register the selected device, acquire development assets, sign/export/install an IPA; or use a local profile and matching Keychain identity | `isideload`, Apple developer services, macOS Keychain, `codesign`, Installation Proxy |
 | Crash Reports | List, filter, preview, and export device reports | CrashReportCopyMobile, AFC |
 | Logs | Stream, filter, pause, and clear structured logs | OS Trace and syslog services |
 | Debug Tools | Manage Developer Mode and DDI; launch applications; maintain JIT sessions | AMFI, Image Mounter, CoreDevice, DVT, debug proxy |
@@ -92,6 +109,7 @@ flowchart LR
     CMD --> STATE["AppState\nDiscovery catalog, selected device,\nand task cancellation"]
     DISC["Discovery\nusbmuxd + Bonjour"] --> STATE
     CMD --> LIB["jkcoxson/idevice"]
+    CMD --> SIGN["isideload\nApple Account + personal signing"]
     LIB --> ROUTE["Provider routing\nusbmuxd or paired Bonjour TCP"]
     ROUTE --> MUX["USB / local network"]
     MUX --> IOS["iPhone / iPad"]
@@ -114,7 +132,7 @@ flowchart LR
 ### Desktop Backend
 
 - Tauri 2, Rust 2024 edition, and Tokio
-- `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, crash reports, logs, developer, location, and screenshot commands.
+- `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, personal signing, crash reports, logs, developer, location, and screenshot commands.
 - `AppState` stores the unified discovery catalog and selected device, and uses cancellation tokens for monitoring, logs, JIT, location, and other long-running tasks.
 - `discovery.rs` merges usbmuxd, `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing observations. USB is preferred; Wi-Fi MAC address, UDID, hostname, and address overlap are used to reconcile transports.
 - A known paired device remains selectable through direct Bonjour TCP Lockdown if its usbmuxd observation disappears. Unidentified mobdev2 and manual RemotePairing records remain visible for association, while unidentifiable RemotePairing-only records are hidden.

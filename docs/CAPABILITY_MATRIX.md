@@ -1,6 +1,6 @@
 # `idevice-tools` GUI Coverage Matrix
 
-> Last updated: 2026-08-29
+> Last updated: 2026-08-30
 > Upstream baseline: `jkcoxson/idevice@8eed181f39a16ea70380ec8c3cff6bed07a1ef69`
 > Goal: make upstream command-line capabilities safe and complete to operate through a macOS GUI.
 
@@ -26,6 +26,7 @@ Delivery order and the shared usability Definition of Done are in [`FEATURE_PLAN
 | App container files | House Arrest | Partial | File-sharing apps are supported; broader container access is pending |
 | CoreDevice apps and processes | `app_service` | Partial | Monitor exposes search and refresh through AppService or DVT, application launch on both protocol routes, and confirmed stop only when AppService is advertised. The complete iOS 17.0 Tauri AppService workflow is accepted; DVT stop is explicitly read-only after `killPid:` failed to terminate an identity-checked test process. The DVT and Legacy visible limitations remain pending. Standard I/O is outside the first slice |
 | Application management | `ideviceinstaller`, `instproxy`, `application_listing` | Partial | User-app list with icons and filtering, IPA installation, and uninstallation; broader installation coordination is pending |
+| Personal IPA signing | `isideload`, Apple private developer endpoints, macOS Keychain, `codesign` | Partial | A dedicated 0.0.4 page defaults to an iLoader-compatible Apple Account + 2FA flow that discovers the first developer team, registers the device, creates or reuses a development certificate, generates profiles, signs, exports, and optionally installs. The password is never persisted and no plaintext fallback exists; certificate and Anisette material use Keychain. The route depends on Apple private endpoints and `ani.sidestore.io`, and real-account acceptance, multiple-team choice, certificate-limit recovery, and failure cleanup remain pending. A separate local-profile mode retains exact embedded-certificate matching and strict single-bundle safeguards. `.p12` import is absent |
 | Provisioning profiles | `misagent` | Partial | A dedicated read-only page lists profiles through USB Lockdown or modern RSD, parses signing scope, team, application identifier, registered-device coverage, debug entitlement, and expiration state, and exposes search plus attention/development/distribution filters. The complete read-only Lockdown desktop path is accepted on iOS 17.0; cryptographic signer-chain verification, modern RSD acceptance, install, and confirmed removal remain pending |
 | Crash reports | `crash_logs` | Partial | List, filter, preview, and export use Lockdown over USB and the RSD shim over iOS 17 network routes; report removal is not exposed |
 | Installation coordination | `installcoordination_proxy` | Not covered | Installation sessions and diagnostics need a dedicated design |
@@ -37,7 +38,7 @@ Delivery order and the shared usability Definition of Done are in [`FEATURE_PLAN
 | Screenshot | `screenshot` | Covered | Device preview and refresh in Overview |
 | Screen streaming | `screenshot`, DVT screenshot | Partial | A dedicated Live Screen tool refreshes PNG frames at a 2 FPS target across Legacy Screenshotr and modern DVT/RSD routes, reports measured frame rate and resolution, supports fit/100% scaling and still export, and tears down on stop, page exit, hidden window, device switch, or disconnect. The iOS 17.0 DVT preview and hidden-window pause are accepted at 1.9 FPS; still export, explicit cleanup, Legacy, and high-frame-rate HEVC streaming remain pending |
 | Developer Mode | `amfi` | Covered | Reveal, enable, and accept Developer Mode |
-| DDI management | `mounter` | Covered | Manual and automatic mounting, unmounting, and progress |
+| DDI management | `mounter` | Covered | Mounting happens automatically when a device is selected and has no interface of its own. iOS 17 and later personalize the image through `devicectl`. iOS 16 and earlier all mount one pinned image, downloaded once on request into `~/Library/Developer/DeveloperDiskImages` with a pinned SHA-256, or read from an existing Xcode copy; the only remaining control is that first-time download. Explicit mount, unmount, and progress commands remain available to the backend |
 | Debug and JIT | `debug_proxy`, `process_control` | Partial | JIT covers both generations: iOS 17 and later launch the app and attach by pid, while iOS 16 and earlier attach by process name to an app the user opened. Monitor exposes application launch on modern routes and identity-checked stop through AppService; interface acceptance remains pending |
 | Location simulation | `location_simulation`, `location` | Covered | Presets, map selection, DVT/RSD, and Lockdown transports |
 | SpringBoard | `springboard`, `rotate` | Partial | App icons are used; wallpaper, orientation, and other controls are not exposed |

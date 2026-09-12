@@ -15,6 +15,13 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   const [ddiProgress, setDdiProgress] = useState<number | null>(null)
   const jitRef = useRef(jit)
   const runTask = useDeviceTask(desktop, onToast)
+  // Developer Mode gates every developer service from iOS 16 on, so it is the
+  // blocker to show first: downloading an image for a device that cannot mount
+  // it yet only wastes the download.
+  const blockedByDeveloperMode = desktop && status.developerMode === false
+  // The one-time image only exists for iOS 16 and earlier; iOS 17 and later
+  // build their own on the device, so there is nothing to offer them.
+  const needsDownload = attachesToRunningApp && desktop && !status.ddiMounted && !blockedByDeveloperMode
 
   const refresh = useCallback(async () => {
     if (!desktop) return
@@ -33,9 +40,27 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
   useEffect(() => {
     if (!desktop) return
     let unlisten: (() => void) | undefined
-    events.ddiProgress((progress) => setDdiProgress(progress.percent)).then((stop) => { unlisten = stop })
-    return () => unlisten?.()
+    let disposed = false
+    void events.ddiProgress((progress) => setDdiProgress(progress.percent))
+      .then((stop) => { if (disposed) stop(); else unlisten = stop })
+    return () => { disposed = true; unlisten?.() }
   }, [desktop])
+
+  // The image is downloaded once and reused, so this runs at most once per Mac.
+  // The progress bar is cleared before the error is handed on, so the shared
+  // handler still reports it.
+  const downloadDdi = () => runTask(async () => {
+    setDdiProgress(0)
+    try {
+      await api.ddiDownload(device.udid)
+    } catch (error) {
+      setDdiProgress(null)
+      throw error
+    }
+    setDdiProgress(null)
+    onToast('Developer Disk Image installed and mounted')
+    await refresh()
+  }, 'Downloading the Developer Disk Image is available in the desktop app')
 
   const toggleJit = () => runTask(async () => {
     if (jit) {
@@ -50,69 +75,62 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
     }
   }, () => setJit((value) => !value))
 
+  // Enabling restarts the device, which the request itself gives no warning
+  // about, so the restart is confirmed here before anything is sent. The
+  // confirmation goes through the dialog plugin: `window.confirm` resolves to
+  // false under Tauri and would silently cancel the action.
   const developerAction = (action: 'reveal' | 'enable' | 'accept') => runTask(async () => {
-    if (action === 'reveal') await api.developerReveal(device.udid)
-    if (action === 'enable') await api.developerEnable(device.udid)
-    if (action === 'accept') await api.developerAccept(device.udid)
-    onToast(action === 'reveal' ? 'Developer Mode is now visible in Settings' : 'Developer Mode request sent')
+    if (action === 'reveal') {
+      await api.developerReveal(device.udid)
+      onToast('Developer Mode is now visible in Settings')
+    }
+    if (action === 'enable') {
+      const confirmed = await dialogs.confirmDestructive(
+        `Enabling Developer Mode restarts ${device.name}. Save anything open on the device first. After it restarts, unlock it and choose Accept after reboot to finish.`,
+        'Restart and enable',
+      )
+      if (!confirmed) return
+      try {
+        await api.developerEnable(device.udid)
+      } catch (error) {
+        // A device with a passcode refuses to have Developer Mode turned on
+        // remotely, which is most devices. That is not a failure to report as
+        // one: the switch still exists, it just has to be flipped on the
+        // device. Verified on iPhone10,4 / iOS 16.7.16.
+        if (/passcode/i.test(errorMessage(error))) {
+          await api.developerReveal(device.udid).catch(() => {})
+          return onToast(`${device.name} has a passcode, so it must be enabled on the device: Settings › Privacy & Security › Developer Mode. It restarts when you turn it on`)
+        }
+        throw error
+      }
+      onToast(`${device.name} is restarting · unlock it, then choose Accept after reboot`)
+    }
+    if (action === 'accept') {
+      await api.developerAccept(device.udid)
+      onToast('Developer Mode confirmed')
+    }
     await refresh()
   }, 'Developer Mode controls are available in the desktop app')
 
-  // The mount tasks clear their own progress bar before handing the error on,
-  // so the shared handler still reports it.
-  const mountDdi = () => runTask(async () => {
-    const image = await dialogs.file('Developer Disk Image', ['dmg'])
-    if (!image || Array.isArray(image)) return
-    const major = Number.parseInt(device.ios.split('.')[0] ?? '0', 10)
-    setDdiProgress(0)
-    try {
-      if (major >= 17) {
-        const manifest = await dialogs.file('Build Manifest', ['plist'])
-        const trust = await dialogs.file('Trust cache', ['trustcache', 'img4'])
-        if (!manifest || Array.isArray(manifest) || !trust || Array.isArray(trust)) return setDdiProgress(null)
-        await api.ddiMount({ imagePath: image, manifestPath: manifest, trustCachePath: trust }, device.udid)
-      } else {
-        const signature = await dialogs.file('Disk Image Signature', ['signature'])
-        if (!signature || Array.isArray(signature)) return setDdiProgress(null)
-        await api.ddiMount({ imagePath: image, signaturePath: signature }, device.udid)
-      }
-    } catch (error) {
-      setDdiProgress(null)
-      throw error
-    }
-    setDdiProgress(100)
-    onToast('Developer Disk Image mounted')
-    await refresh()
-  }, 'DDI mounting is available in the desktop app')
-
-  const autoMountDdi = () => runTask(async () => {
-    setDdiProgress(0)
-    try {
-      await api.ddiMountAuto(device.udid)
-    } catch (error) {
-      setDdiProgress(null)
-      throw error
-    }
-    setDdiProgress(100)
-    onToast('Developer Disk Image mounted automatically')
-    await refresh()
-  }, 'DDI mounting is available in the desktop app')
-
-  const unmountDdi = () => runTask(async () => {
-    await api.ddiUnmount(device.udid)
-    onToast('Developer Disk Image unmounted')
-    await refresh()
-  }, 'DDI mounting is available in the desktop app')
   return (
     <section className="developer-page page-padding">
       <div className="dev-top-grid">
         <div className="card jit-card"><div><h2>Enable JIT</h2><p>{attachesToRunningApp ? 'Open the app on the device first, then attach debugserver to keep its JIT entitlement active.' : 'Launch a debuggable app, attach debugserver, and keep its JIT entitlement active.'}</p>{desktop && (apps.length
           ? <select value={bundleId} onChange={(event) => setBundleId(event.target.value)}>{apps.map((app) => <option key={app.bundleId} value={app.bundleId}>{app.name} · {app.bundleId}</option>)}</select>
           : <p className="jit-empty">No installed app allows debugging. Attaching requires the <code>get-task-allow</code> entitlement, which App Store and TestFlight builds never carry. Install a development-signed or sideloaded build to use JIT.</p>)}</div><button className={`toggle ${jit ? 'on' : ''}`} onClick={() => void toggleJit()} disabled={desktop && !jit && !apps.length} aria-label={jit ? 'Stop JIT session' : 'Start JIT session'}><span /></button><small><i className={jit ? 'good-dot' : ''} />{jit ? `debugserver attached${jitInfo ? ` · pid ${jitInfo.pid}` : ''}` : 'no process attached'}</small></div>
-        <div className="card ddi-card"><h2>Developer Disk Image</h2><p><span>Status</span><b className={status.ddiMounted ? 'good' : ''}>{status.ddiMounted ? 'Mounted' : 'Not mounted'}</b></p><p><span>Developer Mode</span><b>{status.developerMode === null ? 'Unknown' : status.developerMode ? 'Enabled' : 'Disabled'}</b></p><p><span>RSD</span><b>{status.rsdAvailable ? 'Available' : 'Unavailable'}</b></p>{ddiProgress !== null && <div className="progress"><span style={{ width: `${ddiProgress}%` }} /></div>}<div className="dev-actions"><button className="primary-button" onClick={() => void autoMountDdi()}>Auto Mount DDI</button><button onClick={() => void mountDdi()}>Choose files</button><button onClick={() => void unmountDdi()} disabled={!status.ddiMounted}>Unmount</button></div></div>
+        {/* Mounting itself has no control: it happens when the device is
+            selected. The one action left is the first-time download, which
+            reaches the network and so is never taken without being asked. */}
+        <div className="card ddi-card"><h2>Developer Services</h2><p><span>Developer Disk Image</span><b className={status.ddiMounted ? 'good' : ''}>{status.ddiMounted ? 'Mounted' : 'Not mounted'}</b></p><p><span>Developer Mode</span><b>{status.developerMode === null ? 'Unknown' : status.developerMode ? 'Enabled' : 'Disabled'}</b></p><p><span>RSD</span><b>{status.rsdAvailable ? 'Available' : 'Unavailable'}</b></p>{ddiProgress !== null && <div className="progress"><span style={{ width: `${ddiProgress}%` }} /></div>}
+          {blockedByDeveloperMode
+            ? <p className="ddi-blocked" role="status"><b>Turn on Developer Mode on {device.name}</b><span>Settings › Privacy &amp; Security › Developer Mode. The device restarts when you turn it on; unlock it afterwards and confirm the prompt. Developer services, including the disk image, cannot start until then.</span></p>
+            : needsDownload
+              ? <><small className="ddi-note">iOS 16 and earlier need a 19 MB Developer Disk Image. It is downloaded once, kept in your home directory, and reused by every device afterwards.</small><div className="ddi-actions"><button className="primary-button" onClick={() => void downloadDdi()} disabled={ddiProgress !== null}>{ddiProgress !== null ? `Downloading… ${ddiProgress}%` : 'Download and mount'}</button></div></>
+              : <small className="ddi-note">{status.ddiMounted ? 'Mounted automatically when this device was selected.' : 'Mounting is automatic on connection. Reconnect the device to retry.'}</small>}
+        </div>
       </div>
       <div className="developer-mode-actions"><button onClick={() => void developerAction('reveal')}>Show Developer Mode setting</button><button onClick={() => void developerAction('enable')}>Enable Developer Mode</button><button onClick={() => void developerAction('accept')}>Accept after reboot</button></div>
-      <div className="service-grid">{[['RSD Tunnel', status.rsdAvailable ? 'remoted handshake available' : 'requires iOS 17+ and developer services', status.rsdAvailable], ['Developer Image', status.ddiMounted ? 'developer services ready' : 'mount an image for legacy services', status.ddiMounted], ['Debug Proxy', jit ? `attached to ${jitInfo?.bundleId ?? 'process'}` : 'idle · ready to attach', jit]].map(([name, detail, good]) => <div className="card" key={String(name)}><b><i className={good ? 'good-dot' : 'warn-dot'} />{name}</b><small>{detail}</small></div>)}</div>
+      <div className="service-grid">{[['RSD Tunnel', status.rsdAvailable ? 'remoted handshake available' : 'requires iOS 17+ and developer services', status.rsdAvailable], ['Developer Image', status.ddiMounted ? 'developer services ready' : 'not mounted · reconnect to retry', status.ddiMounted], ['Debug Proxy', jit ? `attached to ${jitInfo?.bundleId ?? 'process'}` : 'idle · ready to attach', jit]].map(([name, detail, good]) => <div className="card" key={String(name)}><b><i className={good ? 'good-dot' : 'warn-dot'} />{name}</b><small>{detail}</small></div>)}</div>
       <div className="debug-console"><header><i />debugserver · com.apple.debugserver.DVTSecureSocketProxy</header><div>{jitInfo ? <><p><code>process </code>launch &quot;{jitInfo.bundleId}&quot;</p><p>Process {jitInfo.pid} launched and attached</p><p>memory limit disabled · JIT session active ✓</p></> : <p>No active debug session.</p>}<p className="terminal-cursor"><code>(lldb)</code><i /></p></div></div>
     </section>
   )

@@ -2,13 +2,15 @@ pub mod commands;
 pub mod device_version;
 pub mod discovery;
 pub mod error;
+pub mod legacy_ddi;
 pub mod provider;
 mod state;
+mod task;
 pub mod tunnel;
 pub mod types;
 mod utils;
 
-use commands::{LiveScreenState, NetworkCaptureState, PasteboardState};
+use commands::{AccountSigningState, LiveScreenState, NetworkCaptureState, PasteboardState};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -29,6 +31,7 @@ pub fn run() {
         .manage(NetworkCaptureState::default())
         .manage(LiveScreenState::default())
         .manage(PasteboardState::default())
+        .manage(AccountSigningState::default())
         .invoke_handler(tauri::generate_handler![
             commands::health,
             commands::device_list,
@@ -78,6 +81,15 @@ pub fn run() {
             commands::live_screen_stop,
             commands::live_screen_export_frame,
             commands::provisioning_profiles_list,
+            commands::personal_signing_preflight,
+            commands::personal_signing_export,
+            commands::personal_account_status,
+            commands::personal_account_login,
+            commands::personal_account_submit_two_factor,
+            commands::personal_account_cancel_two_factor,
+            commands::personal_account_sign_out,
+            commands::personal_account_sign_export,
+            commands::personal_account_sign_cancel,
             commands::pasteboard_text_read,
             commands::pasteboard_text_write,
             commands::pasteboard_image_read,
@@ -92,6 +104,8 @@ pub fn run() {
             commands::developer_mode_accept,
             commands::ddi_mount,
             commands::ddi_mount_auto,
+            commands::ddi_ensure,
+            commands::ddi_download,
             commands::ddi_unmount,
             commands::jit_start,
             commands::jit_stop,

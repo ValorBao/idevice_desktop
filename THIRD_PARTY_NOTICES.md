@@ -6,12 +6,19 @@ dependency graph for `aarch64-apple-darwin`, the only platform the project
 builds for, so it reflects what a release actually ships rather than every
 optional dependency in the lock file.
 
-- Rust crates linked into the binary: 371
+- Rust crates in the last packaged 0.0.3 inventory: 371
+- Rust packages in the target-filtered 0.0.4 development graph: 472
 - npm packages bundled into the frontend: 9
 - npm packages used only to build, and therefore not distributed: 70
 
-No dependency is licensed under the GPL, LGPL, or AGPL, so none of them
-places a copyleft obligation on this project.
+The complete inventory below is the last packaged 0.0.3 baseline. The 0.0.4
+Apple Account signing dependency stack is identified separately below. Do not
+publish a 0.0.4 binary until the complete inventory is regenerated and the
+`apple-codesign` licensing issue described below is resolved.
+
+No dependency in the packaged 0.0.3 inventory is licensed under the GPL, LGPL,
+or AGPL. The unlicensed 0.0.4 development dependency is a separate blocker,
+not evidence of a permissive license.
 
 
 ## Weak-copyleft dependencies
@@ -93,7 +100,86 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-## Complete inventory
+## Apple Account signing dependencies added for 0.0.4
+
+### isideload
+
+- Project: `nab138/isideload`
+- Source: https://github.com/nab138/isideload
+- Pinned revision: `0f4ffaf22212781810491156113f6160504880cc`
+- License: MIT
+
+Copyright (c) 2025 nab138
+
+### iLoader implementation reference
+
+- Project: `nab138/iloader`
+- Source: https://github.com/nab138/iloader
+- License: MIT for source code; its name and branding assets are separately restricted
+
+Copyright (c) 2025 nab138
+
+The MIT terms applying to the two projects above are:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the “Software”), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### Unresolved: apple-codesign
+
+`isideload` currently resolves `apple-codesign` 0.1.0 from
+`nab138/apple-crates` revision
+`5da0b8df9b202434b1eff2700059b1ee142592ac`. That package declares no license
+in its Cargo manifest and the resolved repository contains no project license
+file. It therefore appears as `UNKNOWN` in Cargo metadata. The development
+integration may be tested locally, but a 0.0.4 binary must not be distributed
+until the upstream author provides a usable license or this dependency is
+replaced with a clearly licensed implementation.
+
+## Developer Disk Image for iOS 16 and earlier
+
+`DeveloperDiskImage.dmg` and its signature are Apple's proprietary software,
+licensed to a developer through Xcode. They are **not** bundled with
+idevice_desktop and no copy of them exists in this repository.
+
+The application downloads one image on request, only when the user presses the
+download action for a device running iOS 16 or earlier, into that user's own
+`~/Library/Developer/DeveloperDiskImages`. The bytes are fetched from
+`doronz88/DeveloperDiskImage` at commit `5423e4e955fbb3a9eef3e1212acfbfc6e7a26236`
+and are checked against a SHA-256 and byte length pinned in
+`src-tauri/src/legacy_ddi.rs` before anything is written.
+
+That repository declares no license, which is why the file is fetched rather
+than redistributed: idevice_desktop never becomes a distributor of it. Anyone
+packaging a build must keep it that way. Bundling the image into the
+application would create a distribution blocker of the same class as
+`apple-codesign` below, and a more serious one, because the material is
+Apple's rather than a third party's.
+
+## Dependencies added for the Developer Disk Image download
+
+Both are already present in the resolved graph through existing dependencies
+and are now also declared directly.
+
+- `reqwest` 0.13.4 — MIT OR Apache-2.0. Built with `default-features = false`
+  and the `rustls` backend, so no `native-tls` path is enabled.
+- `sha2` 0.10.9 — MIT OR Apache-2.0.
+
+## Complete packaged 0.0.3 inventory
 
 Each dependency is listed with the license its own metadata declares. Full
 license texts ship with each package and are available from

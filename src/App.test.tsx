@@ -9,6 +9,7 @@ const backend = vi.hoisted(() => ({
     deviceDisconnect: vi.fn(),
     deviceMonitorStart: vi.fn(),
     deviceMonitorStop: vi.fn(),
+    ddiEnsure: vi.fn(),
   },
   events: {
     deviceChanged: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('./pages/Apps', () => ({ Apps: () => <div>Apps</div> }))
 vi.mock('./pages/CrashReports', () => ({ CrashReports: () => <div>Crash Reports</div> }))
 vi.mock('./pages/Logs', () => ({ Logs: () => <div>Logs</div> }))
 vi.mock('./pages/Developer', () => ({ Developer: () => <div>Developer</div> }))
+vi.mock('./pages/PersonalSigning', () => ({ PersonalSigning: () => <div>Personal Signing</div> }))
 vi.mock('./pages/TestLab', () => ({
   TestLab: ({ udid }: { udid: string }) => <div data-testid="test-lab-page">{udid}</div>,
 }))
@@ -79,6 +81,7 @@ describe('device page lifecycle', () => {
     backend.api.deviceDisconnect.mockResolvedValue(undefined)
     backend.api.deviceMonitorStart.mockResolvedValue(undefined)
     backend.api.deviceMonitorStop.mockResolvedValue(undefined)
+    backend.api.ddiEnsure.mockResolvedValue(undefined)
     backend.events.deviceChanged.mockImplementation((handler: () => void) => {
       monitor.deviceChanged = handler
       return Promise.resolve(vi.fn())
@@ -111,6 +114,17 @@ describe('device page lifecycle', () => {
 
     expect(screen.getByTestId('test-lab-page')).toHaveTextContent('udid-a')
     expect(screen.getByRole('heading', { name: 'Test Lab' })).toBeInTheDocument()
+  })
+
+  it('opens Personal Sign for the currently selected device', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Select device' })
+    await user.click(screen.getByRole('button', { name: 'Personal Sign' }))
+
+    expect(screen.getByText('Personal Signing')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Personal Signing Assistant' })).toBeInTheDocument()
   })
 
   it('ends the backend session and unmounts the active page when every device disappears', async () => {
@@ -164,6 +178,35 @@ describe('device page lifecycle', () => {
     expect(backend.api.deviceSelect).toHaveBeenCalledOnce()
     expect(backend.api.deviceSelect).toHaveBeenCalledWith('device-b')
     expect(screen.queryByText('Alpha iPhone')).not.toBeInTheDocument()
+  })
+
+  it('mounts the developer disk image for each device it connects to', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await waitFor(() => expect(backend.api.ddiEnsure).toHaveBeenCalledWith('udid-a'))
+    expect(backend.api.ddiEnsure).toHaveBeenCalledOnce()
+
+    await user.click(screen.getByRole('button', { name: 'Select device' }))
+    await user.click(screen.getByRole('button', { name: /Beta iPhone/ }))
+
+    await waitFor(() => expect(backend.api.ddiEnsure).toHaveBeenCalledWith('udid-b'))
+  })
+
+  it('does not mount for a device that is only detected', async () => {
+    backend.api.deviceList.mockResolvedValue([{ ...devices[0], connectable: false }])
+    render(<App />)
+
+    await screen.findByRole('heading', { name: 'Alpha iPhone found on the network' })
+    expect(backend.api.ddiEnsure).not.toHaveBeenCalled()
+  })
+
+  it('reports a mount failure without blocking the interface', async () => {
+    backend.api.ddiEnsure.mockRejectedValue(new Error('No Developer Disk Image matches iOS 14.2'))
+    render(<App />)
+
+    expect(await screen.findByText(/No Developer Disk Image matches iOS 14.2/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Select device' })).toBeEnabled()
   })
 
   it('releases a device listener that finishes subscribing after unmount', async () => {

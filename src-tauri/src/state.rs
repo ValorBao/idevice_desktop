@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -10,6 +10,7 @@ pub struct AppState {
     pub selected_udid: RwLock<Option<String>>,
     pub discovery: RwLock<DiscoveryCatalog>,
     pub tasks: Mutex<HashMap<String, CancellationToken>>,
+    stopped_sessions: Mutex<VecDeque<String>>,
 }
 
 impl AppState {
@@ -27,8 +28,35 @@ impl AppState {
         }
     }
 
+    /// Replace a stream without letting a late stop for its predecessor cancel it.
+    pub async fn replace_session_task(&self, prefix: &str, id: &str, token: CancellationToken) {
+        let mut tasks = self.tasks.lock().await;
+        let key = format!("{prefix}{id}");
+        if self.stopped_sessions.lock().await.contains(&key) {
+            token.cancel();
+            return;
+        }
+        tasks.retain(|key, previous| {
+            if key.starts_with(prefix) {
+                previous.cancel();
+                false
+            } else {
+                true
+            }
+        });
+        tasks.insert(format!("{prefix}{id}"), token);
+    }
+
     pub async fn cancel_task(&self, key: &str) {
-        if let Some(token) = self.tasks.lock().await.remove(key) {
+        let mut tasks = self.tasks.lock().await;
+        if key.starts_with("logs:") {
+            let mut stopped = self.stopped_sessions.lock().await;
+            if stopped.len() == 64 {
+                stopped.pop_front();
+            }
+            stopped.push_back(key.into());
+        }
+        if let Some(token) = tasks.remove(key) {
             token.cancel();
         }
     }
@@ -116,5 +144,38 @@ mod tests {
             state.selected(Some("override".into())).await.as_deref(),
             Some("override")
         );
+    }
+    #[tokio::test]
+    async fn late_stream_stop_does_not_cancel_its_replacement() {
+        let state = AppState::default();
+        let old = CancellationToken::new();
+        let current = CancellationToken::new();
+        state
+            .replace_session_task("logs:", "old", old.clone())
+            .await;
+        state
+            .replace_session_task("logs:", "current", current.clone())
+            .await;
+        assert!(old.is_cancelled());
+        state.cancel_task("logs:old").await;
+        assert!(!current.is_cancelled());
+        state.cancel_device_tasks().await;
+        assert!(current.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn stop_before_registration_prevents_a_late_start_replacing_current_logs() {
+        let state = AppState::default();
+        state.cancel_task("logs:old").await;
+        let current = CancellationToken::new();
+        state
+            .replace_session_task("logs:", "current", current.clone())
+            .await;
+        let old = CancellationToken::new();
+        state
+            .replace_session_task("logs:", "old", old.clone())
+            .await;
+        assert!(old.is_cancelled());
+        assert!(!current.is_cancelled());
     }
 }

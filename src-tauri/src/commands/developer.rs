@@ -19,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     device_version::{DeveloperGeneration, IosVersion, ios_version},
     error::{CommandError, CommandResult},
+    legacy_ddi,
     provider::selected_provider,
     state::AppState,
     tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
@@ -292,7 +293,6 @@ fn devicectl_output(output: &std::process::Output) -> String {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn emit_ddi_progress(app: &AppHandle, item: &str, percent: u64) {
     let _ = app.emit(
         "developer://ddi-progress",
@@ -514,6 +514,91 @@ async fn automatic_ddi_files(product_type: &str) -> CommandResult<(Vec<u8>, Vec<
     Ok((image, trust_cache, manifest))
 }
 
+/// Reports the mounted images and whether any of them counts as a usable DDI.
+///
+/// iOS 17 and later can report an empty mounter list while Apple's own
+/// CoreDevice stack already has the image mounted, so a negative answer is
+/// confirmed with `devicectl` before it is believed.
+async fn mounted_images(
+    provider: &impl IdeviceProvider,
+    udid: &str,
+    version: Option<IosVersion>,
+) -> (bool, Vec<plist::Value>) {
+    let images = match ImageMounter::connect(provider).await {
+        Ok(mut client) => client.copy_devices().await.unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    let mut mounted = !images.is_empty();
+    #[cfg(target_os = "macos")]
+    if !mounted
+        && version
+            .is_some_and(|version| version.developer_generation() != DeveloperGeneration::Legacy)
+    {
+        mounted = devicectl_ddi_is_usable(udid).await;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (udid, version);
+    (mounted, images)
+}
+
+/// Mounts the developer disk image unless the device already has one.
+///
+/// This runs when a device is selected, so every developer service is ready
+/// without an interface for it. It is intentionally quiet on success: the only
+/// visible result is that DDI-backed pages work.
+#[tauri::command]
+pub async fn ddi_ensure(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    udid: Option<String>,
+) -> CommandResult<()> {
+    let (selected_udid, provider) = selected_provider(&state, udid.clone()).await?;
+    let (version, _) = product_details(&provider).await?;
+    let (mounted, _) = mounted_images(&provider, &selected_udid, Some(version)).await;
+    if mounted {
+        return Ok(());
+    }
+    if let Some(blocked) = developer_mode_gate(&provider, version).await {
+        return Err(blocked);
+    }
+    ddi_mount_auto(app, state, udid).await
+}
+
+/// Refuses to mount when Developer Mode is off, and says how to turn it on.
+///
+/// Developer Mode arrived in iOS 16 and gates every developer service, mounting
+/// included. Attempting the mount anyway fails with something unrelated-looking
+/// — a locked-device or transport error — so the real cause never reaches the
+/// user. `AmfiClient::connect` fails on iOS 14 and 15, where the service does
+/// not exist; that is not a block and returns `None`.
+///
+/// The switch cannot be turned on remotely when the device has a passcode,
+/// which is nearly every real device (verified on iPhone10,4 / iOS 16.7.16,
+/// where `enable_developer_mode` returns `Device has a passcode set`). So this
+/// does not try to enable it. It reveals the option in Settings, which does
+/// work, and reports where to find it.
+async fn developer_mode_gate(
+    provider: &impl IdeviceProvider,
+    version: IosVersion,
+) -> Option<CommandError> {
+    if version.major < 16 {
+        return None;
+    }
+    // AMFI closes the connection after each request, so each call connects.
+    let mut client = AmfiClient::connect(provider).await.ok()?;
+    if client.get_developer_mode_status().await.ok()? {
+        return None;
+    }
+    if let Ok(mut client) = AmfiClient::connect(provider).await {
+        let _ = client.reveal_developer_mode_option_in_ui().await;
+    }
+    Some(CommandError::new(
+        "developer-mode",
+        "Developer Mode is off, so developer services cannot start. Turn it on in Settings › Privacy & Security › Developer Mode on the device; it restarts to apply. The switch has been made visible there.",
+        false,
+    ))
+}
+
 #[tauri::command]
 pub async fn developer_status(
     state: State<'_, AppState>,
@@ -524,24 +609,14 @@ pub async fn developer_status(
         Ok(mut client) => client.get_developer_mode_status().await.ok(),
         Err(_) => None,
     };
-    let images = match ImageMounter::connect(&provider).await {
-        Ok(mut client) => client.copy_devices().await.unwrap_or_default(),
-        Err(_) => Vec::new(),
-    };
-    let mut ddi_mounted = !images.is_empty();
-    #[cfg(target_os = "macos")]
-    if !ddi_mounted
-        && matches!(
-            product_details(&provider).await,
-            Ok((version, _)) if version.developer_generation() != DeveloperGeneration::Legacy
-        )
-    {
-        ddi_mounted = devicectl_ddi_is_usable(&selected_udid).await;
-    }
-    let ddi_images = plist_to_json(&plist::Value::Array(images));
-    let generation = product_details(&provider)
+    let version = product_details(&provider)
         .await
-        .map(|(version, _)| version.developer_generation())
+        .ok()
+        .map(|(version, _)| version);
+    let (ddi_mounted, images) = mounted_images(&provider, &selected_udid, version).await;
+    let ddi_images = plist_to_json(&plist::Value::Array(images));
+    let generation = version
+        .map(IosVersion::developer_generation)
         .unwrap_or(DeveloperGeneration::Legacy);
     let rsd_available = match generation {
         DeveloperGeneration::Legacy => false,
@@ -671,6 +746,87 @@ pub async fn ddi_mount(
     }
 }
 
+/// Mounts the pinned Legacy image on iOS 16 and earlier.
+///
+/// The image is not shipped with the application, so a Mac that has never
+/// downloaded it cannot mount anything. That is reported as `ddi-missing`
+/// rather than a plain failure, because the interface answers it with a
+/// download rather than an error.
+async fn mount_legacy_ddi(
+    app: &AppHandle,
+    provider: &impl IdeviceProvider,
+    installed: legacy_ddi::LegacyDdi,
+) -> CommandResult<()> {
+    let image = tokio::fs::read(&installed.image).await?;
+    let signature = tokio::fs::read(&installed.signature).await?;
+    emit_ddi_progress(
+        app,
+        &format!("Developer Disk Image {}", legacy_ddi::IMAGE_VERSION),
+        55,
+    );
+    let mut mounter = ImageMounter::connect(provider)
+        .await
+        .map_err(CommandError::from)?;
+    mounter
+        .mount_developer(&image, signature)
+        .await
+        .map_err(CommandError::from)?;
+    emit_ddi_progress(app, "Developer Disk Image services ready", 100);
+    Ok(())
+}
+
+async fn mount_legacy_ddi_automatically(
+    app: &AppHandle,
+    provider: &impl IdeviceProvider,
+) -> CommandResult<()> {
+    emit_ddi_progress(app, "Looking for a Developer Disk Image", 10);
+    let installed = legacy_ddi::installed().ok_or_else(|| {
+        CommandError::new("ddi-missing", legacy_ddi::missing_image_message(), false)
+    })?;
+    mount_legacy_ddi(app, provider, installed).await
+}
+
+/// Downloads the Legacy image and mounts it. This is the only path that reaches
+/// the network, and it runs only when the interface asks for it.
+#[tauri::command]
+pub async fn ddi_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    udid: Option<String>,
+) -> CommandResult<()> {
+    let (_, provider) = selected_provider(&state, udid).await?;
+    let (version, _) = product_details(&provider).await?;
+    if version.developer_generation() != DeveloperGeneration::Legacy {
+        return Err(CommandError::new(
+            "ddi",
+            "iOS 17 and later build their own image on the device; there is nothing to download",
+            false,
+        ));
+    }
+    // Checked before downloading: 19 MB is not worth fetching for a device that
+    // cannot mount it yet.
+    if let Some(blocked) = developer_mode_gate(&provider, version).await {
+        return Err(blocked);
+    }
+    let installed = match legacy_ddi::installed() {
+        Some(installed) => installed,
+        None => {
+            let progress_app = app.clone();
+            // The download dominates the operation, so it owns most of the
+            // reported range and mounting finishes the rest.
+            legacy_ddi::download(move |percent| {
+                emit_ddi_progress(
+                    &progress_app,
+                    "Downloading Developer Disk Image",
+                    percent.min(50),
+                );
+            })
+            .await?
+        }
+    };
+    mount_legacy_ddi(&app, &provider, installed).await
+}
+
 #[tauri::command]
 pub async fn ddi_mount_auto(
     app: AppHandle,
@@ -682,11 +838,7 @@ pub async fn ddi_mount_auto(
         let (udid, provider) = selected_provider(&state, udid).await?;
         let (version, _) = product_details(&provider).await?;
         if version.developer_generation() == DeveloperGeneration::Legacy {
-            return Err(CommandError::new(
-                "ddi",
-                "Automatic CoreDevice DDI mounting requires iOS 17 or later. Use Choose files with a matching DeveloperDiskImage.dmg and signature for this iOS version.",
-                false,
-            ));
+            return mount_legacy_ddi_automatically(&app, &provider).await;
         }
         return mount_ddi_with_devicectl(&app, &udid).await;
     }
@@ -696,11 +848,7 @@ pub async fn ddi_mount_auto(
         let (_, provider) = selected_provider(&state, udid).await?;
         let (version, chip_id) = product_details(&provider).await?;
         if version.developer_generation() == DeveloperGeneration::Legacy {
-            return Err(CommandError::new(
-                "ddi",
-                "Automatic DDI selection currently requires iOS 17 or later",
-                false,
-            ));
+            return mount_legacy_ddi_automatically(&app, &provider).await;
         }
         let product_type = product_type(&provider).await?;
         let (image, trust_cache, manifest) = automatic_ddi_files(&product_type).await?;

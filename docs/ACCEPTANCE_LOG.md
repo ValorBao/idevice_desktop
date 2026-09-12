@@ -175,3 +175,40 @@ the Foundation hardware backlog.
 This session used only read-only device operations. It deliberately did not start a
 packet capture, inspect or replace clipboard contents, subscribe to device
 notifications, run XCTest, mutate profiles, or launch and stop applications.
+
+## 2026-08-30 — Personal Signing Assistant automated boundary
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| Frontend regression | n/a | mocked desktop boundary | Select, preflight, export, and install handoff | Pass | The selected IPA/profile/UDID cross the Tauri boundary, only the matching identity is used, backend blockers disable export, and installation receives only the newly exported IPA |
+| Frontend regression | n/a | mocked desktop boundary | Apple Account login and 2FA | Pass | The password field clears immediately while login remains pending, a verification dialog appears only after the backend event, non-digits are removed, and exactly six digits cross the command boundary. Account-signing export includes the selected IPA, destination, UDID, and device name |
+| Browser demonstration | n/a | bounded local mock | Apple Account and Local Profile visual interaction | Pass (UI only) | Default and 820×650 layouts render without overflow or console errors; login-before/sign-in-after and disabled-action states are visually distinct. No Apple endpoint was contacted |
+| Rust regression | n/a | pure host boundary | Account, identity, bundle, entitlement, and data-contract checks | Pass | 130 tests cover account status/error mapping plus the existing Keychain identity, bundle, entitlement, and serialization boundaries; strict Clippy and formatting pass |
+| macOS host preflight | n/a | production command harness | Real IPA with bounded temporary profile and test UDID | Pass (safe blocker) | Parsed `DowngradeApp` 1.1-8 / `com.netskao.downgradeapp`, accepted wildcard bundle/device/expiry checks, found zero valid Keychain identities, and returned only the expected matching-identity blocker. No IPA was exported, installed, or executed; the temporary profile was removed |
+
+This is automated acceptance only. No real certificate was used, no IPA was signed,
+no device was changed, and no real Apple Account, verification code, Apple endpoint,
+or Keychain item was accessed during the test suite. Hardware acceptance now requires
+a dedicated Apple test account plus explicit login/2FA, certificate/profile creation,
+export, installation, launch, sign-out, and cleanup. The Local Profile mode retains
+its separate matching-profile/private-key acceptance gate.
+
+## 2026-08-30 — Automatic Developer Disk Image mounting
+
+| Device | iOS | Connection | Workflow | Result | Evidence / cleanup |
+| --- | --- | --- | --- | --- | --- |
+| iPhone10,1 | 14.2 | Tauri desktop · USB | Automatic mounting on device selection | Pass | Selecting the device mounted the Developer Disk Image with no interface action. This is the first hardware confirmation of `ddi_ensure` and of the Legacy `mount_developer` path reached through it |
+| iPhone10,1 | 14.2 | Tauri desktop · USB | The single pinned image on its own release | Pass | The 14.2 image from `doronz88/DeveloperDiskImage @ 5423e4e` mounted on a 14.2 device, confirming the downloaded bytes are a usable, correctly signed image and not only a checksum match |
+| macOS host | n/a | production download path | `verify_legacy_ddi --install` | Pass | Reported no install, downloaded 19,789,186 bytes, passed the pinned SHA-256 and length checks, installed both files atomically into `~/Library/Developer/DeveloperDiskImages/14.2`, and reported the image as installed on a second run without downloading again |
+
+The in-app download control was **not** exercised. The image had already been
+installed by the host harness before the device was connected, so `ddi_ensure`
+found it and the control never appeared; only the download path's own harness run
+is evidence for it. Exercising it requires removing
+`~/Library/Developer/DeveloperDiskImages/14.2` and reconnecting a Legacy device.
+
+The 14.2 result does not extend to iOS 15 or 16. Those releases mount the same
+14.2 image by design, and the risk recorded in `PROJECT.md` is that the developer
+tools inside it are built for 14.x; each remains unverified until tried on
+hardware. iOS 17 and later use a different path entirely and their automatic
+mount is also unverified.

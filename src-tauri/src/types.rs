@@ -132,6 +132,8 @@ pub struct OperationProgress {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceLog {
+    pub session_id: String,
+    pub udid: String,
     pub timestamp: String,
     pub level: String,
     pub process: String,
@@ -317,6 +319,56 @@ pub struct ProvisioningProfileSnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PersonalSigningIdentity {
+    pub hash: String,
+    pub name: String,
+    pub team_identifier: Option<String>,
+    pub matches_profile: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalSigningPreflight {
+    pub ipa_name: String,
+    pub app_name: String,
+    pub bundle_id: String,
+    pub version: String,
+    pub profile_name: String,
+    pub profile_uuid: Option<String>,
+    pub team_identifier: Option<String>,
+    pub application_identifier: Option<String>,
+    pub expires_at: Option<String>,
+    pub device_count: u64,
+    pub device_included: bool,
+    pub identities: Vec<PersonalSigningIdentity>,
+    pub selected_identity_hash: Option<String>,
+    pub ready: bool,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalSigningRequest {
+    pub ipa_path: String,
+    pub profile_path: String,
+    pub identity_hash: String,
+    pub output_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalSigningResult {
+    pub output_path: String,
+    pub app_name: String,
+    pub bundle_id: String,
+    pub profile_name: String,
+    pub identity_name: String,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PasteboardTextSnapshot {
     pub text: Option<String>,
     pub byte_length: u64,
@@ -433,6 +485,15 @@ pub struct XCTestRunPlan {
     pub timeout_seconds: u32,
     pub wda_bridge: bool,
     pub transport: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogStatus {
+    pub session_id: String,
+    pub udid: String,
+    pub state: String,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -756,8 +817,19 @@ mod contract {
     #[test]
     fn device_log_matches_typescript() {
         assert_matches(
+            "LogStatus",
+            &LogStatus {
+                session_id: String::new(),
+                udid: String::new(),
+                state: String::new(),
+                message: None,
+            },
+        );
+        assert_matches(
             "DeviceLog",
             &DeviceLog {
+                session_id: String::new(),
+                udid: String::new(),
                 timestamp: String::new(),
                 level: String::new(),
                 process: String::new(),
@@ -955,6 +1027,58 @@ mod contract {
                 transport: String::new(),
                 total_count: 1,
                 truncated: false,
+            },
+        );
+    }
+
+    #[test]
+    fn personal_signing_types_match_typescript() {
+        let identity = PersonalSigningIdentity {
+            hash: String::new(),
+            name: String::new(),
+            team_identifier: None,
+            matches_profile: false,
+        };
+        assert_matches("PersonalSigningIdentity", &identity);
+        assert_matches(
+            "PersonalSigningPreflight",
+            &PersonalSigningPreflight {
+                ipa_name: String::new(),
+                app_name: String::new(),
+                bundle_id: String::new(),
+                version: String::new(),
+                profile_name: String::new(),
+                profile_uuid: None,
+                team_identifier: None,
+                application_identifier: None,
+                expires_at: None,
+                device_count: 0,
+                device_included: false,
+                identities: vec![identity],
+                selected_identity_hash: None,
+                ready: false,
+                blockers: Vec::new(),
+                warnings: Vec::new(),
+            },
+        );
+        assert_matches(
+            "PersonalSigningRequest",
+            &PersonalSigningRequest {
+                ipa_path: String::new(),
+                profile_path: String::new(),
+                identity_hash: String::new(),
+                output_path: String::new(),
+            },
+        );
+        assert_matches(
+            "PersonalSigningResult",
+            &PersonalSigningResult {
+                output_path: String::new(),
+                app_name: String::new(),
+                bundle_id: String::new(),
+                profile_name: String::new(),
+                identity_name: String::new(),
+                size_bytes: 0,
             },
         );
     }

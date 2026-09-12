@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AppWindow, BadgeCheck, Beaker, Bug, Check, ChevronDown, CircleStop, ClipboardPaste, Code2, FolderOpen,
-  MapPin, Plus, ScreenShare, Smartphone, TerminalSquare,
+  KeyRound, MapPin, Plus, ScreenShare, Smartphone, TerminalSquare,
 } from 'lucide-react'
 import { devices, type Device } from './data'
 import { api, errorMessage, events, isDesktopRuntime, type DeviceSummary } from './api'
@@ -20,6 +20,7 @@ import { Developer } from './pages/Developer'
 import { Location } from './pages/Location'
 import { LiveScreen } from './pages/LiveScreen'
 import { Profiles } from './pages/Profiles'
+import { PersonalSigning } from './pages/PersonalSigning'
 import { Pasteboard } from './pages/Pasteboard'
 import { TestLab } from './pages/TestLab'
 
@@ -33,6 +34,7 @@ const pageMeta: Record<Page, [string, string]> = {
   screen: ['Live Screen', 'Live PNG device preview and still-frame capture'],
   developer: ['Debug Tools', 'com.apple.dt.* services'],
   profiles: ['Provisioning Profiles', 'Read-only Misagent signing and expiry inspection'],
+  signing: ['Personal Signing Assistant', 'Apple Account or local Keychain identity · signed IPA export'],
   pasteboard: ['Pasteboard', 'Explicit bounded CoreDevice text and image transfer'],
   xctest: ['Test Lab', 'Read-only XCTest runner and developer-service preflight'],
   location: ['Location', 'com.apple.dt.simulatelocation'],
@@ -156,6 +158,19 @@ function App() {
     }
   }, [desktop, refreshDevices])
 
+  // Mount the developer disk image as soon as a device is usable, so no page has
+  // to offer a mount control. This runs in the background: pages stay
+  // interactive while it works, and only a failure is reported. A stale
+  // selection drops its result rather than reporting against the new device.
+  useEffect(() => {
+    if (!desktop || !connected || !device?.udid) return
+    let disposed = false
+    void api.ddiEnsure(device.udid).catch((error) => {
+      if (!disposed) setToast(errorMessage(error))
+    })
+    return () => { disposed = true }
+  }, [desktop, connected, device?.udid])
+
   useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(''), 2500)
@@ -240,6 +255,7 @@ function App() {
               <span className="nav-heading developer-heading">Developer</span>
               <button className={page === 'developer' ? 'active' : ''} onClick={() => setPage('developer')} aria-label="Debug Tools" title="Debug Tools"><Code2 size={17} /><span>Debug Tools</span></button>
               <button className={page === 'profiles' ? 'active' : ''} onClick={() => setPage('profiles')} aria-label="Provisioning Profiles" title="Provisioning Profiles"><BadgeCheck size={17} /><span>Profiles</span></button>
+              <button className={page === 'signing' ? 'active' : ''} onClick={() => setPage('signing')} aria-label="Personal Sign" title="Personal Sign"><KeyRound size={17} /><span>Personal Sign</span></button>
               <button className={page === 'pasteboard' ? 'active' : ''} onClick={() => setPage('pasteboard')} aria-label="Pasteboard" title="Pasteboard"><ClipboardPaste size={17} /><span>Pasteboard</span></button>
               <button className={page === 'xctest' ? 'active' : ''} onClick={() => setPage('xctest')} aria-label="Test Lab" title="Test Lab"><Beaker size={17} /><span>Test Lab</span></button>
               <button className={page === 'location' ? 'active' : ''} onClick={() => setPage('location')} aria-label="Location" title="Location"><MapPin size={17} /><span>Location</span></button>
@@ -276,6 +292,7 @@ function App() {
                 {page === 'screen' && <LiveScreen desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'developer' && <Developer desktop={desktop} device={device} onToast={setToast} />}
                 {page === 'profiles' && <Profiles desktop={desktop} udid={device.udid} onToast={setToast} />}
+                {page === 'signing' && <PersonalSigning desktop={desktop} udid={device.udid} deviceName={device.name} onToast={setToast} />}
                 {page === 'pasteboard' && <Pasteboard desktop={desktop} udid={device.udid} deviceName={device.name} onToast={setToast} />}
                 {page === 'xctest' && <TestLab desktop={desktop} udid={device.udid} onToast={setToast} />}
                 {page === 'location' && <Location desktop={desktop} udid={device.udid} onToast={setToast} />}

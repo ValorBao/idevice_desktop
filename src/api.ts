@@ -92,7 +92,10 @@ export type CrashReportContent = {
 }
 
 export type OperationProgress = { operation: string; item: string; percent: number }
+export type LogStatus = { sessionId: string; udid: string; state: string; message: string | null }
 export type DeviceLog = {
+  sessionId: string
+  udid: string
   timestamp: string
   level: string
   process: string
@@ -219,6 +222,85 @@ export type ProvisioningProfileSnapshot = {
   transport: string
   totalCount: number
   truncated: boolean
+}
+export type PersonalSigningIdentity = {
+  hash: string
+  name: string
+  teamIdentifier: string | null
+  matchesProfile: boolean
+}
+export type PersonalSigningPreflight = {
+  ipaName: string
+  appName: string
+  bundleId: string
+  version: string
+  profileName: string
+  profileUuid: string | null
+  teamIdentifier: string | null
+  applicationIdentifier: string | null
+  expiresAt: string | null
+  deviceCount: number
+  deviceIncluded: boolean
+  identities: PersonalSigningIdentity[]
+  selectedIdentityHash: string | null
+  ready: boolean
+  blockers: string[]
+  warnings: string[]
+}
+export type PersonalSigningRequest = {
+  ipaPath: string
+  profilePath: string
+  identityHash: string
+  outputPath: string
+}
+export type PersonalSigningResult = {
+  outputPath: string
+  appName: string
+  bundleId: string
+  profileName: string
+  identityName: string
+  sizeBytes: number
+}
+
+export type PersonalAccountStatus = {
+  loggedIn: boolean
+  email: string | null
+  teamId: string | null
+  teamName: string | null
+  anisetteServer: string
+  credentialStorage: string
+  passwordStored: boolean
+}
+
+export type PersonalAccountTwoFactor = {
+  lastError: string | null
+  unknown: boolean
+  sms: boolean
+  numbers: Array<{
+    numberWithDialCode: string
+    lastTwoDigits: string
+    pushMode: string
+    id: number
+  }>
+  selectedNumberId: number | null
+}
+
+export type PersonalAccountSigningRequest = {
+  operationId: string
+  ipaPath: string
+  outputPath: string
+  udid: string
+  deviceName: string
+}
+
+export type PersonalAccountSigningResult = {
+  outputPath: string
+  appName: string
+  bundleId: string
+  version: string
+  teamId: string
+  teamName: string
+  sizeBytes: number
 }
 export type PasteboardTextSnapshot = {
   text: string | null
@@ -360,8 +442,8 @@ export const api = {
   crashReportsList: (udid?: string) => call<CrashReportSummary[]>('crash_reports_list', { udid }),
   crashReportRead: (path: string, udid?: string) => call<CrashReportContent>('crash_report_read', { udid, path }),
   crashReportExport: (path: string, localPath: string, udid?: string) => call<void>('crash_report_export', { udid, path, localPath }),
-  logsStart: (udid?: string, pid?: number) => call<void>('logs_start', { udid, pid }),
-  logsStop: () => call<void>('logs_stop'),
+  logsStart: (sessionId: string, udid: string, pid?: number) => call<void>('logs_start', { sessionId, udid, pid }),
+  logsStop: (sessionId: string) => call<void>('logs_stop', { sessionId }),
   processesList: (udid?: string) => call<ProcessSnapshot>('processes_list', { udid }),
   processLaunch: (bundleId: string, udid?: string) => call<ProcessLaunch>('process_launch', { udid, bundleId }),
   processStop: (pid: number, identity: string, udid?: string) => call<void>('process_stop', { udid, pid, identity }),
@@ -386,6 +468,15 @@ export const api = {
   liveScreenStop: () => call<void>('live_screen_stop'),
   liveScreenExportFrame: (localPath: string) => call<void>('live_screen_export_frame', { localPath }),
   provisioningProfiles: (udid?: string) => call<ProvisioningProfileSnapshot>('provisioning_profiles_list', { udid }),
+  personalSigningPreflight: (ipaPath: string, profilePath: string, udid: string) => call<PersonalSigningPreflight>('personal_signing_preflight', { ipaPath, profilePath, udid }),
+  personalSigningExport: (request: PersonalSigningRequest, udid: string) => call<PersonalSigningResult>('personal_signing_export', { request, udid }),
+  personalAccountStatus: () => call<PersonalAccountStatus>('personal_account_status'),
+  personalAccountLogin: (email: string, password: string) => call<PersonalAccountStatus>('personal_account_login', { email, password }),
+  personalAccountSubmitTwoFactor: (code: string) => call<void>('personal_account_submit_two_factor', { code }),
+  personalAccountCancelTwoFactor: () => call<void>('personal_account_cancel_two_factor'),
+  personalAccountSignCancel: (operationId: string) => call<void>('personal_account_sign_cancel', { operationId }),
+  personalAccountSignOut: () => call<void>('personal_account_sign_out'),
+  personalAccountSignExport: (request: PersonalAccountSigningRequest) => call<PersonalAccountSigningResult>('personal_account_sign_export', { request }),
   pasteboardTextRead: (udid?: string) => call<PasteboardTextSnapshot>('pasteboard_text_read', { udid }),
   pasteboardTextWrite: (text: string, udid?: string) => call<PasteboardWriteResult>('pasteboard_text_write', { udid, text }),
   pasteboardImageRead: (udid?: string) => call<PasteboardImageSnapshot>('pasteboard_image_read', { udid }),
@@ -400,6 +491,12 @@ export const api = {
   developerAccept: (udid?: string) => call<void>('developer_mode_accept', { udid }),
   ddiMount: (paths: { imagePath: string; signaturePath?: string; manifestPath?: string; trustCachePath?: string }, udid?: string) => call<void>('ddi_mount', { udid, ...paths }),
   ddiMountAuto: (udid?: string) => call<void>('ddi_mount_auto', { udid }),
+  // Mounts only when the device has no image yet. The app calls this once per
+  // device selection, so no page has to ask for a mount. It fails with kind
+  // `ddi-missing` when iOS 16 or earlier needs its one-time download.
+  ddiEnsure: (udid?: string) => call<void>('ddi_ensure', { udid }),
+  // The only path that reaches the network, and only when the user asks.
+  ddiDownload: (udid?: string) => call<void>('ddi_download', { udid }),
   ddiUnmount: (udid?: string) => call<void>('ddi_unmount', { udid }),
   jitStart: (bundleId: string, udid?: string) => call<JitSession>('jit_start', { udid, bundleId }),
   jitStop: () => call<void>('jit_stop'),
@@ -409,6 +506,7 @@ export const api = {
 
 export const events = {
   deviceChanged: (handler: (payload: DeviceChangeEvent) => void) => listen<DeviceChangeEvent>('device://changed', (event) => handler(event.payload)),
+  logStatus: (handler: (payload: LogStatus) => void) => listen<LogStatus>('logs://status', (event) => handler(event.payload)),
   logLine: (handler: (payload: DeviceLog) => void) => listen<DeviceLog>('logs://line', (event) => handler(event.payload)),
   performanceSample: (handler: (payload: PerformanceSample) => void) => listen<PerformanceSample>('performance://sample', (event) => handler(event.payload)),
   performanceStatus: (handler: (payload: PerformanceStatus) => void) => listen<PerformanceStatus>('performance://status', (event) => handler(event.payload)),
@@ -419,6 +517,9 @@ export const events = {
   liveScreenFrame: (handler: (payload: LiveScreenFrame) => void) => listen<LiveScreenFrame>('live-screen://frame', (event) => handler(event.payload)),
   liveScreenStatus: (handler: (payload: LiveScreenStatus) => void) => listen<LiveScreenStatus>('live-screen://status', (event) => handler(event.payload)),
   appProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('apps://install-progress', (event) => handler(event.payload)),
+  personalSigningProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('personal-signing://progress', (event) => handler(event.payload)),
+  personalAccountTwoFactor: (handler: (payload: PersonalAccountTwoFactor) => void) => listen<PersonalAccountTwoFactor>('personal-account://two-factor-required', (event) => handler(event.payload)),
+  personalAccountProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('personal-account://progress', (event) => handler(event.payload)),
   ddiProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('developer://ddi-progress', (event) => handler(event.payload)),
   transferProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('files://transfer-progress', (event) => handler(event.payload)),
   raw: <T>(name: string, handler: (event: Event<T>) => void) => listen<T>(name, handler),
@@ -426,11 +527,13 @@ export const events = {
 
 export const dialogs = {
   ipa: () => open({ multiple: false, filters: [{ name: 'iOS application', extensions: ['ipa'] }] }),
+  provisioningProfile: () => open({ multiple: false, filters: [{ name: 'Provisioning profile', extensions: ['mobileprovision', 'provisionprofile'] }] }),
   file: (name: string, extensions: string[]) => open({ multiple: false, filters: [{ name, extensions }] }),
   anyFile: () => open({ multiple: false }),
   saveFile: (defaultPath: string) => save({ defaultPath }),
   pcapDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'Packet capture', extensions: ['pcap'] }] }),
   pngDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'PNG image', extensions: ['png'] }] }),
+  signedIpaDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'Signed iOS application', extensions: ['ipa'] }] }),
   /**
    * Confirms a destructive action.
    *

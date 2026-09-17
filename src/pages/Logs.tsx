@@ -2,7 +2,9 @@ import { createSessionId } from '../lib/session'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, Search, X } from 'lucide-react'
 import { initialLogs, liveLogPool, type LogLine } from '../data'
-import { api, errorMessage, events } from '../api'
+import { api, events } from '../api'
+import { on, useDeviceEvents } from '../lib/useDeviceEvents'
+import { useInterval } from '../lib/useInterval'
 
 export function Logs({ connected, desktop, udid, onError }: { connected: boolean; desktop: boolean; udid: string; onError: (message: string) => void }) {
   const [logs, setLogs] = useState<LogLine[]>(desktop ? [] : initialLogs)
@@ -14,66 +16,42 @@ export function Logs({ connected, desktop, udid, onError }: { connected: boolean
   const pausedRef = useRef(paused)
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => { pausedRef.current = paused }, [paused])
-  useEffect(() => {
-    if (!desktop || !connected) return
-    let disposed = false
-    let startIssued = false
+  useDeviceEvents(desktop && connected, () => {
     const sessionId = createSessionId()
-    const stops: (() => void)[] = []
+    let startIssued = false
     setLogs([])
     setStreamState('starting')
-    const stopSession = () => api.logsStop(sessionId).catch((error) => {
-      if (!disposed) onError(errorMessage(error))
-    })
-    const subscribe = async (subscription: Promise<() => void>) => {
-      const stop = await subscription
-      if (disposed) stop()
-      else stops.push(stop)
-    }
-    void (async () => {
-      try {
-        await Promise.all([
-          subscribe(events.logLine((line) => {
-            if (disposed || pausedRef.current || line.sessionId !== sessionId || line.udid !== udid) return
-            const rawLevel = line.level.toUpperCase()
-            const level: LogLine['level'] = rawLevel === 'FAULT' ? 'ERROR' : ['INFO', 'DEBUG', 'NOTICE', 'WARN', 'ERROR'].includes(rawLevel) ? rawLevel as LogLine['level'] : 'INFO'
-            setLogs((items) => [...items, { time: line.timestamp, level, process: `${line.process}[${line.pid}]`, message: line.message }].slice(-1000))
-          })),
-          subscribe(events.logStatus((status) => {
-            if (disposed || status.sessionId !== sessionId || status.udid !== udid) return
-            setStreamState(status.state === 'running' ? 'live' : status.state)
-            if (status.state === 'error' && status.message) onError(status.message)
-          })),
-        ])
-        if (disposed) return
+    return {
+      listeners: [
+        on(events.logLine, (line) => {
+          if (pausedRef.current || line.sessionId !== sessionId || line.udid !== udid) return
+          const rawLevel = line.level.toUpperCase()
+          const level: LogLine['level'] = rawLevel === 'FAULT' ? 'ERROR' : ['INFO', 'DEBUG', 'NOTICE', 'WARN', 'ERROR'].includes(rawLevel) ? rawLevel as LogLine['level'] : 'INFO'
+          setLogs((items) => [...items, { time: line.timestamp, level, process: `${line.process}[${line.pid}]`, message: line.message }].slice(-1000))
+        }),
+        on(events.logStatus, (status) => {
+          if (status.sessionId !== sessionId || status.udid !== udid) return
+          setStreamState(status.state === 'running' ? 'live' : status.state)
+          if (status.state === 'error' && status.message) onError(status.message)
+        }),
+      ],
+      start: () => {
         startIssued = true
-        await api.logsStart(sessionId, udid)
-      } catch (error) {
-        if (!disposed) {
-          setStreamState('error')
-          onError(errorMessage(error))
-        }
-      } finally {
-        // A stop sent during setup may reach Rust before start has registered.
-        if (disposed && startIssued) await stopSession()
-      }
-    })()
-    return () => {
-      disposed = true
-      stops.forEach((stop) => stop())
-      if (startIssued) void stopSession()
+        return api.logsStart(sessionId, udid)
+      },
+      // Stop by session ID so a late stop never touches the replacement stream.
+      stop: () => { if (startIssued) void api.logsStop(sessionId).catch(() => undefined) },
     }
-  }, [desktop, connected, udid, onError])
-  useEffect(() => {
-    if (desktop || paused || !connected) return
-    const timer = window.setInterval(() => {
-      const [level, process, message] = liveLogPool[Math.floor(Math.random() * liveLogPool.length)]
-      const now = new Date()
-      const time = `${now.toLocaleTimeString('en-GB', { hour12: false })}.${String(now.getMilliseconds()).padStart(3, '0')}`
-      setLogs((items) => [...items, { time, level, process, message }].slice(-140))
-    }, 1250)
-    return () => window.clearInterval(timer)
-  }, [paused, connected, desktop])
+  }, (message) => {
+    setStreamState('error')
+    onError(message)
+  }, [udid])
+  useInterval(!desktop && !paused && connected, 1250, () => {
+    const [level, process, message] = liveLogPool[Math.floor(Math.random() * liveLogPool.length)]
+    const now = new Date()
+    const time = `${now.toLocaleTimeString('en-GB', { hour12: false })}.${String(now.getMilliseconds()).padStart(3, '0')}`
+    setLogs((items) => [...items, { time, level, process, message }].slice(-140))
+  })
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [logs])
   const regexResult = useMemo(() => {
     if (!useRegex || !query) return { expression: null, error: '' }

@@ -16,6 +16,8 @@ import {
   type NetworkCaptureProgress,
   type NetworkCaptureStatus,
 } from '../api'
+import { on, useDeviceEvents } from '../lib/useDeviceEvents'
+import { useInterval } from '../lib/useInterval'
 
 const emptyProgress = (outputBytes = 0): NetworkCaptureProgress => ({
   packets: 0,
@@ -70,7 +72,6 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
   const [progress, setProgress] = useState<NetworkCaptureProgress>(emptyProgress)
   const [pid, setPid] = useState('')
   const [interfaceName, setInterfaceName] = useState('')
-  const [listenersReady, setListenersReady] = useState(!desktop)
   const mountedRef = useRef(true)
   const ownsCaptureRef = useRef(false)
   const demoStartedRef = useRef(0)
@@ -80,18 +81,10 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
     return () => { mountedRef.current = false }
   }, [])
 
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
-    let stopProgress: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.networkCaptureProgress((next) => {
-        if (!disposed) setProgress(next)
-      }),
-      events.networkCaptureStatus((next) => {
-        if (disposed) return
+  const listenersReady = useDeviceEvents(desktop, () => ({
+    listeners: [
+      on(events.networkCaptureProgress, setProgress),
+      on(events.networkCaptureStatus, (next) => {
         setStatus((current) => ({ ...next, transport: next.transport ?? current.transport }))
         if (next.state === 'completed') {
           ownsCaptureRef.current = false
@@ -106,48 +99,29 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
           ownsCaptureRef.current = false
         }
       }),
-    ]).then(([progressListener, statusListener]) => {
-      if (disposed) {
-        progressListener()
-        statusListener()
-        return
-      }
-      stopProgress = progressListener
-      stopStatus = statusListener
-      setListenersReady(true)
-    }).catch((error) => {
-      if (!disposed) onToast(errorMessage(error))
-    })
-
-    return () => {
-      disposed = true
-      stopProgress?.()
-      stopStatus?.()
+    ],
+    stop: () => {
       if (ownsCaptureRef.current) {
         ownsCaptureRef.current = false
         void api.networkCaptureCancel()
       }
-    }
-  }, [desktop, onToast])
+    },
+  }), onToast, [])
 
-  useEffect(() => {
-    if (desktop || status.state !== 'running') return
-    const timer = window.setInterval(() => {
-      setProgress((current) => {
-        const packetIncrease = 4 + Math.floor(Math.random() * 8)
-        const byteIncrease = packetIncrease * (320 + Math.floor(Math.random() * 900))
-        return {
-          packets: current.packets + packetIncrease,
-          bytes: current.bytes + byteIncrease,
-          outputBytes: current.outputBytes + byteIncrease + packetIncrease * 16,
-          elapsedMs: Date.now() - demoStartedRef.current,
-          lastProcess: ['MobileSafari', 'AppStore', 'apsd'][current.packets % 3],
-          lastInterface: ['en0', 'pdp_ip0'][current.packets % 2],
-        }
-      })
-    }, 500)
-    return () => window.clearInterval(timer)
-  }, [desktop, status.state])
+  useInterval(!desktop && status.state === 'running', 500, () => {
+    setProgress((current) => {
+      const packetIncrease = 4 + Math.floor(Math.random() * 8)
+      const byteIncrease = packetIncrease * (320 + Math.floor(Math.random() * 900))
+      return {
+        packets: current.packets + packetIncrease,
+        bytes: current.bytes + byteIncrease,
+        outputBytes: current.outputBytes + byteIncrease + packetIncrease * 16,
+        elapsedMs: Date.now() - demoStartedRef.current,
+        lastProcess: ['MobileSafari', 'AppStore', 'apsd'][current.packets % 3],
+        lastInterface: ['en0', 'pdp_ip0'][current.packets % 2],
+      }
+    })
+  })
 
   const filter = useMemo<NetworkCaptureFilter>(() => ({
     pid: pid.trim() ? Number(pid) : null,

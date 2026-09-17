@@ -6,10 +6,11 @@ import {
   errorMessage,
   events,
   type PerformanceExportRow,
-  type PerformanceProcessSample,
   type PerformanceSample,
   type PerformanceStatus,
 } from '../api'
+import { on, useDeviceEvents } from '../lib/useDeviceEvents'
+import { useInterval } from '../lib/useInterval'
 import { demoProcesses } from '../data'
 
 const MAX_HISTORY = 180
@@ -122,56 +123,33 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
     setSelectedIdentity((current) => current || sample.processes[0]?.identity || '')
   }, [])
 
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
+  useDeviceEvents(desktop, () => {
     runningRequestedRef.current = true
-    let stopSample: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.performanceSample((sample) => { if (!disposed) appendSample(sample) }),
-      events.performanceStatus((next) => {
-        if (disposed) return
-        if (next.state === 'error' || next.state === 'unavailable') runningRequestedRef.current = false
-        setStatus(next.state === 'stopped' ? { ...next, state: 'paused' } : next)
-        if (next.state === 'error' && next.message) onToast(next.message)
-      }),
-    ]).then(([sampleListener, statusListener]) => {
-      if (disposed) {
-        sampleListener()
-        statusListener()
-        return
-      }
-      stopSample = sampleListener
-      stopStatus = statusListener
-      if (!runningRequestedRef.current) return
-      return api.performanceStart(udid, intervalRef.current)
-    }).catch((error) => {
-      if (!disposed) {
-        const message = errorMessage(error)
-        setStatus((current) => ({ ...current, state: 'error', message }))
-        onToast(message)
-      }
-    })
-
-    return () => {
-      disposed = true
-      runningRequestedRef.current = false
-      stopSample?.()
-      stopStatus?.()
-      void api.performanceStop()
+    return {
+      listeners: [
+        on(events.performanceSample, appendSample),
+        on(events.performanceStatus, (next) => {
+          if (next.state === 'error' || next.state === 'unavailable') runningRequestedRef.current = false
+          setStatus(next.state === 'stopped' ? { ...next, state: 'paused' } : next)
+          if (next.state === 'error' && next.message) onToast(next.message)
+        }),
+      ],
+      // Pausing during listener registration must not start a late stream.
+      start: () => (runningRequestedRef.current ? api.performanceStart(udid, intervalRef.current) : undefined),
+      stop: () => {
+        runningRequestedRef.current = false
+        void api.performanceStop()
+      },
     }
-  }, [appendSample, desktop, onToast, udid])
+  }, (message) => {
+    setStatus((current) => ({ ...current, state: 'error', message }))
+    onToast(message)
+  }, [appendSample, udid])
 
-  useEffect(() => {
-    if (desktop || status.state !== 'running') return
-    const timer = window.setInterval(() => {
-      demoSequenceRef.current += 1
-      appendSample(demoSample(demoSequenceRef.current, intervalRef.current))
-    }, intervalMs)
-    return () => window.clearInterval(timer)
-  }, [appendSample, desktop, intervalMs, status.state])
+  useInterval(!desktop && status.state === 'running', intervalMs, () => {
+    demoSequenceRef.current += 1
+    appendSample(demoSample(demoSequenceRef.current, intervalRef.current))
+  })
 
   const latest = history.length ? history[history.length - 1] : null
   const shown = useMemo(() => {

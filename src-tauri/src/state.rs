@@ -5,6 +5,18 @@ use tokio_util::sync::CancellationToken;
 
 use crate::discovery::DiscoveryCatalog;
 
+/// Task-key prefix for log streams.
+///
+/// These are the only tasks a user starts and stops by session ID, so they are
+/// the only ones whose recently stopped IDs the registry remembers: a stop can
+/// reach the backend before the start it cancels.
+pub const LOG_SESSION_PREFIX: &str = "logs:";
+
+/// The task key for one log session.
+pub fn log_session_key(session_id: &str) -> String {
+    format!("{LOG_SESSION_PREFIX}{session_id}")
+}
+
 #[derive(Default)]
 pub struct AppState {
     pub selected_udid: RwLock<Option<String>>,
@@ -49,7 +61,7 @@ impl AppState {
 
     pub async fn cancel_task(&self, key: &str) {
         let mut tasks = self.tasks.lock().await;
-        if key.starts_with("logs:") {
+        if key.starts_with(LOG_SESSION_PREFIX) {
             let mut stopped = self.stopped_sessions.lock().await;
             if stopped.len() == 64 {
                 stopped.pop_front();
@@ -151,10 +163,10 @@ mod tests {
         let old = CancellationToken::new();
         let current = CancellationToken::new();
         state
-            .replace_session_task("logs:", "old", old.clone())
+            .replace_session_task(LOG_SESSION_PREFIX, "old", old.clone())
             .await;
         state
-            .replace_session_task("logs:", "current", current.clone())
+            .replace_session_task(LOG_SESSION_PREFIX, "current", current.clone())
             .await;
         assert!(old.is_cancelled());
         state.cancel_task("logs:old").await;
@@ -169,11 +181,11 @@ mod tests {
         state.cancel_task("logs:old").await;
         let current = CancellationToken::new();
         state
-            .replace_session_task("logs:", "current", current.clone())
+            .replace_session_task(LOG_SESSION_PREFIX, "current", current.clone())
             .await;
         let old = CancellationToken::new();
         state
-            .replace_session_task("logs:", "old", old.clone())
+            .replace_session_task(LOG_SESSION_PREFIX, "old", old.clone())
             .await;
         assert!(old.is_cancelled());
         assert!(!current.is_cancelled());

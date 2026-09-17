@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     error::{CommandError, CommandResult},
     provider::selected_provider,
-    state::AppState,
+    state::{AppState, LOG_SESSION_PREFIX, log_session_key},
     task::stage,
     types::{DeviceLog, LogStatus},
 };
@@ -37,9 +37,9 @@ pub async fn logs_start(
         .map_err(|_| CommandError::new("logs", "Invalid log session ID", false))?;
     let token = CancellationToken::new();
     state
-        .replace_session_task("logs:", &session_id, token.clone())
+        .replace_session_task(LOG_SESSION_PREFIX, &session_id, token.clone())
         .await;
-    let key = format!("logs:{session_id}");
+    let key = log_session_key(&session_id);
     let receiver = stage(&token, "Starting logs", Duration::from_secs(30), async {
         let (_, provider) = selected_provider(&state, Some(udid.clone())).await?;
         let client = OsTraceRelayClient::connect(&provider)
@@ -118,6 +118,6 @@ pub async fn logs_start(
 
 #[tauri::command]
 pub async fn logs_stop(state: State<'_, AppState>, session_id: String) -> CommandResult<()> {
-    state.cancel_task(&format!("logs:{session_id}")).await;
+    state.cancel_task(&log_session_key(&session_id)).await;
     Ok(())
 }

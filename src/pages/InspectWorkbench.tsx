@@ -1,10 +1,35 @@
 import { Activity, AppWindow, Bug } from 'lucide-react'
 import type { Device } from '../data'
+import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
 import { Overview } from './Overview'
 import { Diagnostics } from './Diagnostics'
 import { CrashReports } from './CrashReports'
 
 export type InspectSubView = 'overview' | 'diagnostics' | 'crashes'
+
+export const inspectTabs: readonly TabItem<InspectSubView>[] = [
+  {
+    id: 'overview',
+    label: 'Overview & Hardware',
+    icon: <AppWindow size={14} />,
+    title: 'Inspect Station',
+    detail: 'Vehicle Telemetry · Diagnostics Relay · Crash Analytics',
+  },
+  {
+    id: 'diagnostics',
+    label: 'Diagnostics Relay',
+    icon: <Activity size={14} />,
+    title: 'Diagnostics Relay',
+    detail: 'com.apple.mobile.diagnostics_relay',
+  },
+  {
+    id: 'crashes',
+    label: 'Crash Reports',
+    icon: <Bug size={14} />,
+    title: 'Crash Reports',
+    detail: 'com.apple.crashreportcopymobile',
+  },
+]
 
 export function InspectWorkbench({
   device,
@@ -21,37 +46,12 @@ export function InspectWorkbench({
 }) {
   return (
     <div className="inspect-workbench">
-      <div className="workbench-subbar">
-        <div className="workbench-tabs" role="tablist" aria-label="Inspect views">
-          <button
-            role="tab"
-            aria-selected={subView === 'overview'}
-            className={subView === 'overview' ? 'active' : ''}
-            onClick={() => onSubViewChange('overview')}
-          >
-            <AppWindow size={14} />
-            <span>Overview & Hardware</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={subView === 'diagnostics'}
-            className={subView === 'diagnostics' ? 'active' : ''}
-            onClick={() => onSubViewChange('diagnostics')}
-          >
-            <Activity size={14} />
-            <span>Diagnostics Relay</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={subView === 'crashes'}
-            className={subView === 'crashes' ? 'active' : ''}
-            onClick={() => onSubViewChange('crashes')}
-          >
-            <Bug size={14} />
-            <span>Crash Reports</span>
-          </button>
-        </div>
-      </div>
+      <WorkbenchTabs
+        items={inspectTabs}
+        active={subView}
+        onSelect={onSubViewChange}
+        ariaLabel="Inspect views"
+      />
 
       <div className="workbench-content">
         {subView === 'overview' && <Overview device={device} desktop={desktop} onError={onError} />}

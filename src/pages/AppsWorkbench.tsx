@@ -1,5 +1,6 @@
 import { AppWindow, BadgeCheck, Beaker, Code2, KeyRound } from 'lucide-react'
 import type { Device } from '../data'
+import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
 import { Apps } from './Apps'
 import { Developer } from './Developer'
 import { Profiles } from './Profiles'
@@ -7,6 +8,47 @@ import { PersonalSigning } from './PersonalSigning'
 import { TestLab } from './TestLab'
 
 export type AppsSubView = 'manager' | 'jit' | 'profiles' | 'signing' | 'xctest'
+
+export const appsTabs: readonly TabItem<AppsSubView>[] = [
+  {
+    id: 'manager',
+    label: 'Applications & Sideload',
+    icon: <AppWindow size={14} />,
+    title: 'Applications & JIT',
+    detail: 'Installation Proxy · Sideloading · Debugger Tunnel',
+  },
+  {
+    id: 'jit',
+    label: 'JIT & Debugger Tunnel',
+    icon: <Code2 size={14} />,
+    title: 'JIT & Debugger Tunnel',
+    detail: 'com.apple.dt.* services',
+  },
+  {
+    id: 'profiles',
+    label: 'Profiles',
+    ariaLabel: 'Provisioning Profiles',
+    icon: <BadgeCheck size={14} />,
+    title: 'Provisioning Profiles',
+    detail: 'Read-only Misagent signing and expiry inspection',
+  },
+  {
+    id: 'signing',
+    label: 'Personal Sign',
+    ariaLabel: 'Personal Sign',
+    icon: <KeyRound size={14} />,
+    title: 'Personal Signing Assistant',
+    detail: 'Apple Account or local Keychain identity · signed IPA export',
+  },
+  {
+    id: 'xctest',
+    label: 'Test Lab',
+    ariaLabel: 'Test Lab',
+    icon: <Beaker size={14} />,
+    title: 'Test Lab',
+    detail: 'Read-only XCTest runner and developer-service preflight',
+  },
+]
 
 export function AppsWorkbench({
   desktop,
@@ -23,58 +65,12 @@ export function AppsWorkbench({
 }) {
   return (
     <div className="apps-workbench">
-      <div className="workbench-subbar">
-        <div className="workbench-tabs" role="tablist" aria-label="Apps views">
-          <button
-            role="tab"
-            aria-selected={subView === 'manager'}
-            className={subView === 'manager' ? 'active' : ''}
-            onClick={() => onSubViewChange('manager')}
-          >
-            <AppWindow size={14} />
-            <span>Applications & Sideload</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={subView === 'jit'}
-            className={subView === 'jit' ? 'active' : ''}
-            onClick={() => onSubViewChange('jit')}
-          >
-            <Code2 size={14} />
-            <span>JIT & Debugger Tunnel</span>
-          </button>
-          <button
-            role="tab"
-            aria-label="Provisioning Profiles"
-            aria-selected={subView === 'profiles'}
-            className={subView === 'profiles' ? 'active' : ''}
-            onClick={() => onSubViewChange('profiles')}
-          >
-            <BadgeCheck size={14} />
-            <span>Profiles</span>
-          </button>
-          <button
-            role="tab"
-            aria-label="Personal Sign"
-            aria-selected={subView === 'signing'}
-            className={subView === 'signing' ? 'active' : ''}
-            onClick={() => onSubViewChange('signing')}
-          >
-            <KeyRound size={14} />
-            <span>Personal Sign</span>
-          </button>
-          <button
-            role="tab"
-            aria-label="Test Lab"
-            aria-selected={subView === 'xctest'}
-            className={subView === 'xctest' ? 'active' : ''}
-            onClick={() => onSubViewChange('xctest')}
-          >
-            <Beaker size={14} />
-            <span>Test Lab</span>
-          </button>
-        </div>
-      </div>
+      <WorkbenchTabs
+        items={appsTabs}
+        active={subView}
+        onSelect={onSubViewChange}
+        ariaLabel="Apps views"
+      />
 
       <div className="workbench-content">
         {subView === 'manager' && (

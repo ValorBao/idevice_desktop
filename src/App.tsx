@@ -223,7 +223,6 @@ function App() {
             onSelectDevice={(id) => void selectDevice(id)}
             onPairOpen={() => setPairOpen(true)}
             onDisconnect={() => void disconnect()}
-            onToast={setToast}
           />
 
           <main className="main-panel">

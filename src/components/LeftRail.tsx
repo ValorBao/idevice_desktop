@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ChevronDown, CircleStop, FolderOpen, Layers, Plus, RefreshCw, Smartphone,
   Sliders, TerminalSquare, Zap,
 } from 'lucide-react'
 import type { Device } from '../data'
-import { api, errorMessage, type DeveloperStatus } from '../api'
+import { api, type DeveloperStatus } from '../api'
 import { deviceScreenCache } from '../lib/device'
 import type { Connection, WorkbenchMode } from '../types'
 
@@ -18,7 +18,6 @@ interface LeftRailProps {
   onSelectDevice: (id: string) => void
   onPairOpen: () => void
   onDisconnect: () => void
-  onToast: (msg: string) => void
 }
 
 export function LeftRail({
@@ -31,7 +30,6 @@ export function LeftRail({
   onSelectDevice,
   onPairOpen,
   onDisconnect,
-  onToast,
 }: LeftRailProps) {
   const [deviceMenu, setDeviceMenu] = useState(false)
   const [screenImage, setScreenImage] = useState(() => deviceScreenCache.get(device.udid) ?? '')

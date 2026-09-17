@@ -34,6 +34,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Lint the frontend
+        run: npm run lint
+
       - name: Run frontend regression tests
         run: npm test
 

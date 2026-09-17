@@ -5,7 +5,7 @@ import { api, errorMessage, type DeviceOverview } from '../api'
 import { deviceScreenCache } from '../lib/device'
 import { bytes } from '../lib/format'
 
-export function Overview({ device, desktop, onError }: { device: Device; desktop: boolean; onError: (message: string) => void }) {
+export function Overview({ device, desktop, onToast }: { device: Device; desktop: boolean; onToast: (message: string) => void }) {
   const [overview, setOverview] = useState<DeviceOverview | null>(null)
   const [screenImage, setScreenImage] = useState(() => deviceScreenCache.get(device.udid) ?? '')
   const [screenError, setScreenError] = useState('')
@@ -32,8 +32,8 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
   useEffect(() => {
     if (!desktop) return
     setOverview(null)
-    void api.overview(device.udid).then(setOverview).catch((error) => onError(errorMessage(error)))
-  }, [desktop, device.udid, onError])
+    void api.overview(device.udid).then(setOverview).catch((error) => onToast(errorMessage(error)))
+  }, [desktop, device.udid, onToast])
   useEffect(() => {
     const cached = deviceScreenCache.get(device.udid)
     if (cached) {

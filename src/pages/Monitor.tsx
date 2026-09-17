@@ -16,7 +16,7 @@ const monitorTabs: readonly TabItem<MonitorTool>[] = [
   { id: 'notifications', label: 'Notifications' },
 ]
 
-export function Monitor({ connected, desktop, udid, onError }: { connected: boolean; desktop: boolean; udid: string; onError: (message: string) => void }) {
+export function Monitor({ connected, desktop, udid, onToast }: { connected: boolean; desktop: boolean; udid: string; onToast: (message: string) => void }) {
   const [tab, setTab] = useState<MonitorTool>('logs')
 
   return (
@@ -30,11 +30,11 @@ export function Monitor({ connected, desktop, udid, onError }: { connected: bool
         bare
       />
       <div className="monitor-content">
-        {tab === 'logs' && <Logs connected={connected} desktop={desktop} udid={udid} onError={onError} />}
-        {tab === 'processes' && <Processes desktop={desktop} udid={udid} onToast={onError} />}
-        {tab === 'performance' && <Performance desktop={desktop} udid={udid} onToast={onError} />}
-        {tab === 'network' && <NetworkCapture desktop={desktop} udid={udid} onToast={onError} />}
-        {tab === 'notifications' && <Notifications connected={connected} desktop={desktop} udid={udid} onToast={onError} />}
+        {tab === 'logs' && <Logs connected={connected} desktop={desktop} udid={udid} onToast={onToast} />}
+        {tab === 'processes' && <Processes desktop={desktop} udid={udid} onToast={onToast} />}
+        {tab === 'performance' && <Performance desktop={desktop} udid={udid} onToast={onToast} />}
+        {tab === 'network' && <NetworkCapture desktop={desktop} udid={udid} onToast={onToast} />}
+        {tab === 'notifications' && <Notifications connected={connected} desktop={desktop} udid={udid} onToast={onToast} />}
       </div>
     </section>
   )

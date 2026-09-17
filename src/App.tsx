@@ -95,7 +95,7 @@ function App() {
                       desktop={desktop}
                       subView={inspectSubView}
                       onSubViewChange={setInspectSubView}
-                      onError={setToast}
+                      onToast={setToast}
                     />
                   )}
                   {mode === 'files' && (
@@ -123,7 +123,7 @@ function App() {
                       device={device}
                       activeInstrument={watchInstrument}
                       onInstrumentChange={setWatchInstrument}
-                      onError={setToast}
+                      onToast={setToast}
                     />
                   )}
                 </>

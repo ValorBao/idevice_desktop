@@ -7,6 +7,7 @@ import {
   api, dialogs, errorMessage, events, type OperationProgress, type PersonalSigningPreflight,
   type PersonalSigningResult,
 } from '../api'
+import { fileName, packageSize } from '../lib/format'
 import { PersonalAccountSigning } from './PersonalAccountSigning'
 
 const demoPreflight: PersonalSigningPreflight = {
@@ -33,10 +34,6 @@ const demoPreflight: PersonalSigningPreflight = {
   warnings: ['Wildcard entitlements will be specialized to this app bundle identifier.'],
 }
 
-const fileName = (path: string) => path.split(/[\\/]/).pop() || path
-const formatBytes = (bytes: number) => bytes < 1024 * 1024
-  ? `${Math.max(1, Math.round(bytes / 1024))} KB`
-  : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
 export function PersonalSigning({ desktop, udid, deviceName = 'iPhone', onToast }: { desktop: boolean; udid: string; deviceName?: string; onToast: (message: string) => void }) {
   const [mode, setMode] = useState<'account' | 'local'>('account')
@@ -225,7 +222,7 @@ export function PersonalSigning({ desktop, udid, deviceName = 'iPhone', onToast 
 
       {result && <div className="signing-result card">
         <span><PackageCheck size={22} /></span>
-        <div><small>SIGNED IPA</small><b>{fileName(result.outputPath)}</b><p>{result.appName} · {result.bundleId} · {formatBytes(result.sizeBytes)}</p></div>
+        <div><small>SIGNED IPA</small><b>{fileName(result.outputPath)}</b><p>{result.appName} · {result.bundleId} · {packageSize(result.sizeBytes)}</p></div>
         <button className="primary-button" onClick={() => void installSigned()} disabled={installing || signing}>{installing ? <LoaderCircle className="spinning" size={15} /> : <Smartphone size={15} />}{installing ? 'Installing…' : 'Install on device'}</button>
       </div>}
       </>}

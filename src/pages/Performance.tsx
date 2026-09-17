@@ -9,25 +9,13 @@ import {
   type PerformanceSample,
   type PerformanceStatus,
 } from '../api'
+import { byteSize } from '../lib/format'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
 import { demoProcesses } from '../data'
 
 const MAX_HISTORY = 180
 const DEFAULT_INTERVAL_MS = 1_000
-
-const bytes = (value: number | null) => {
-  if (value === null) return '—'
-  if (value < 1024) return `${value} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = value / 1024
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  return `${size < 10 ? size.toFixed(1) : size.toFixed(0)} ${units[unit]}`
-}
 
 const percent = (value: number | null) => value === null ? '—' : `${value.toFixed(1)}%`
 
@@ -283,7 +271,7 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
                 <span><b>{process.name}</b><small>{process.identity}</small></span>
                 <code>{process.pid}</code>
                 <strong>{percent(process.cpuPercent)}</strong>
-                <strong>{bytes(process.memoryBytes)}</strong>
+                <strong>{byteSize(process.memoryBytes)}</strong>
               </button>
             ))}
             {!shown.length && <div className="process-empty">{latest ? 'No process matches this filter.' : 'Waiting for the first performance sample…'}</div>}
@@ -296,7 +284,7 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
             <header><div><small>Selected process</small><h3>{selected.name}</h3><code>pid {selected.pid}</code></div><span className={selectedLatest ? 'active' : 'exited'}>{selectedLatest ? 'running' : 'exited'}</span></header>
             <div className="performance-metric-heading"><span><small>CPU</small><b>{percent(selectedLatest?.cpuPercent ?? null)}</b></span><em>{selectedHistory.length} samples</em></div>
             <Sparkline values={cpuValues} color="var(--accent)" ceiling={100} />
-            <div className="performance-metric-heading"><span><small>Memory footprint</small><b>{bytes(selectedLatest?.memoryBytes ?? null)}</b></span><em>MiB</em></div>
+            <div className="performance-metric-heading"><span><small>Memory footprint</small><b>{byteSize(selectedLatest?.memoryBytes ?? null)}</b></span><em>MiB</em></div>
             <Sparkline values={memoryValues} color="#b69cff" ceiling={64} />
             <p>History follows the process identity, not only its PID, so PID reuse starts a new series. Missing device fields remain unavailable instead of appearing as zero.</p>
           </> : <div className="performance-detail-empty"><b>Select a process</b><p>Choose a row to inspect its rolling CPU and memory history.</p></div>}

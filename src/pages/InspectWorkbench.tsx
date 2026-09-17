@@ -36,13 +36,13 @@ export function InspectWorkbench({
   desktop,
   subView,
   onSubViewChange,
-  onError,
+  onToast,
 }: {
   device: Device
   desktop: boolean
   subView: InspectSubView
   onSubViewChange: (sub: InspectSubView) => void
-  onError: (message: string) => void
+  onToast: (message: string) => void
 }) {
   return (
     <div className="inspect-workbench">
@@ -54,9 +54,9 @@ export function InspectWorkbench({
       />
 
       <div className="workbench-content">
-        {subView === 'overview' && <Overview device={device} desktop={desktop} onError={onError} />}
-        {subView === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onError={onError} />}
-        {subView === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={onError} />}
+        {subView === 'overview' && <Overview device={device} desktop={desktop} onToast={onToast} />}
+        {subView === 'diagnostics' && <Diagnostics device={device} desktop={desktop} onToast={onToast} />}
+        {subView === 'crashes' && <CrashReports desktop={desktop} udid={device.udid} onToast={onToast} />}
       </div>
     </div>
   )

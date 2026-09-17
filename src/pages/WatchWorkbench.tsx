@@ -41,14 +41,14 @@ export function WatchWorkbench({
   device,
   activeInstrument,
   onInstrumentChange,
-  onError,
+  onToast,
 }: {
   connected: boolean
   desktop: boolean
   device: Device
   activeInstrument: WatchInstrument
   onInstrumentChange: (inst: WatchInstrument) => void
-  onError: (message: string) => void
+  onToast: (message: string) => void
 }) {
   return (
     <div className="watch-workbench">
@@ -61,13 +61,13 @@ export function WatchWorkbench({
 
       <div className="workbench-content">
         {activeInstrument === 'monitor' && (
-          <Monitor connected={connected} desktop={desktop} udid={device.udid} onError={onError} />
+          <Monitor connected={connected} desktop={desktop} udid={device.udid} onToast={onToast} />
         )}
         {activeInstrument === 'location' && (
-          <Location desktop={desktop} udid={device.udid} onToast={onError} />
+          <Location desktop={desktop} udid={device.udid} onToast={onToast} />
         )}
         {activeInstrument === 'screen' && (
-          <LiveScreen desktop={desktop} udid={device.udid} onToast={onError} />
+          <LiveScreen desktop={desktop} udid={device.udid} onToast={onToast} />
         )}
       </div>
     </div>

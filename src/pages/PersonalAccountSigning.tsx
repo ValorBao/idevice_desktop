@@ -9,6 +9,7 @@ import {
   type PersonalAccountSigningResult, type PersonalAccountStatus,
   type PersonalAccountTwoFactor,
 } from '../api'
+import { fileName, packageSize } from '../lib/format'
 
 const demoStatus: PersonalAccountStatus = {
   loggedIn: false,
@@ -20,10 +21,6 @@ const demoStatus: PersonalAccountStatus = {
   passwordStored: false,
 }
 
-const fileName = (path: string) => path.split(/[\\/]/).pop() || path
-const formatBytes = (bytes: number) => bytes < 1024 * 1024
-  ? `${Math.max(1, Math.round(bytes / 1024))} KB`
-  : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
 export function PersonalAccountSigning({
   desktop,
@@ -331,7 +328,7 @@ export function PersonalAccountSigning({
 
       {result && <div className="signing-result card">
         <span><PackageCheck size={22} /></span>
-        <div><small>APPLE ACCOUNT SIGNED IPA</small><b>{fileName(result.outputPath)}</b><p>{result.appName} · {result.bundleId} · {formatBytes(result.sizeBytes)}</p></div>
+        <div><small>APPLE ACCOUNT SIGNED IPA</small><b>{fileName(result.outputPath)}</b><p>{result.appName} · {result.bundleId} · {packageSize(result.sizeBytes)}</p></div>
         <button className="primary-button" onClick={() => void installSigned()} disabled={installing || signing}>{installing ? <LoaderCircle className="spinning" size={15} /> : <Smartphone size={15} />}{installing ? 'Installing…' : 'Install on device'}</button>
       </div>}
 

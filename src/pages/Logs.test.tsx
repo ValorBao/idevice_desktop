@@ -37,7 +37,7 @@ describe('log session lifecycle', () => {
     const pending = deferred<() => void>()
     const stop = vi.fn()
     backend.events.logLine.mockReturnValue(pending.promise)
-    const view = render(<Logs connected desktop udid="one" onError={vi.fn()} />)
+    const view = render(<Logs connected desktop udid="one" onToast={vi.fn()} />)
     view.unmount()
     await act(async () => pending.resolve(stop))
     expect(stop).toHaveBeenCalledOnce()
@@ -48,7 +48,7 @@ describe('log session lifecycle', () => {
     const pending = deferred<() => void>()
     const stop = vi.fn()
     backend.events.logLine.mockReturnValueOnce(pending.promise)
-    render(<StrictMode><Logs connected desktop udid="one" onError={vi.fn()} /></StrictMode>)
+    render(<StrictMode><Logs connected desktop udid="one" onToast={vi.fn()} /></StrictMode>)
     await waitFor(() => expect(backend.api.logsStart).toHaveBeenCalledTimes(1))
     await act(async () => pending.resolve(stop))
     expect(stop).toHaveBeenCalledOnce()
@@ -58,11 +58,11 @@ describe('log session lifecycle', () => {
   it('stops a late start by its own ID without stopping the replacement', async () => {
     const pending = deferred<void>()
     backend.api.logsStart.mockReturnValueOnce(pending.promise)
-    const onError = vi.fn()
-    const view = render(<Logs connected desktop udid="one" onError={onError} />)
+    const onToast = vi.fn()
+    const view = render(<Logs connected desktop udid="one" onToast={onToast} />)
     await waitFor(() => expect(backend.api.logsStart).toHaveBeenCalledTimes(1))
     const oldId = backend.api.logsStart.mock.calls[0][0]
-    view.rerender(<Logs connected desktop udid="two" onError={onError} />)
+    view.rerender(<Logs connected desktop udid="two" onToast={onToast} />)
     await waitFor(() => expect(backend.api.logsStart).toHaveBeenCalledTimes(2))
     const newId = backend.api.logsStart.mock.calls[1][0]
     await act(async () => pending.resolve())
@@ -79,8 +79,8 @@ describe('log session lifecycle', () => {
   })
 
   it('shows backend errors and ignores an obsolete stopped event', async () => {
-    const onError = vi.fn()
-    render(<Logs connected desktop udid="one" onError={onError} />)
+    const onToast = vi.fn()
+    render(<Logs connected desktop udid="one" onToast={onToast} />)
     await waitFor(() => expect(backend.api.logsStart).toHaveBeenCalled())
     const sessionId = backend.api.logsStart.mock.calls[0][0]
     act(() => statuses[0]({ sessionId, udid: 'one', state: 'running', message: null }))
@@ -89,21 +89,21 @@ describe('log session lifecycle', () => {
     expect(screen.getByText('live')).toBeInTheDocument()
     act(() => statuses[0]({ sessionId, udid: 'one', state: 'error', message: 'Device disconnected' }))
     expect(screen.getByText('error', { selector: 'small' })).toBeInTheDocument()
-    expect(onError).toHaveBeenCalledWith('Device disconnected')
+    expect(onToast).toHaveBeenCalledWith('Device disconnected')
   })
 
   it('reports subscription failures without starting the backend', async () => {
-    const onError = vi.fn()
+    const onToast = vi.fn()
     backend.events.logStatus.mockRejectedValue(new Error('Cannot listen'))
-    render(<Logs connected desktop udid="one" onError={onError} />)
-    await waitFor(() => expect(onError).toHaveBeenCalledWith('Cannot listen'))
+    render(<Logs connected desktop udid="one" onToast={onToast} />)
+    await waitFor(() => expect(onToast).toHaveBeenCalledWith('Cannot listen'))
     expect(backend.api.logsStart).not.toHaveBeenCalled()
   })
   it('starts in WebViews without crypto.randomUUID', async () => {
     const getRandomValues = crypto.getRandomValues.bind(crypto)
     vi.stubGlobal('crypto', { getRandomValues })
     try {
-      render(<Logs connected desktop udid="one" onError={vi.fn()} />)
+      render(<Logs connected desktop udid="one" onToast={vi.fn()} />)
       await waitFor(() => expect(backend.api.logsStart).toHaveBeenCalled())
       expect(backend.api.logsStart.mock.calls[0][0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     } finally {

@@ -67,7 +67,7 @@ const batterySparks: Record<string, number[]> = {
   Voltage: [3.92, 3.98, 4.05, 4.10, 4.06, 4.12, 4.15, 4.10, 4.16, 4.18],
 }
 
-export function Diagnostics({ device, desktop, onError }: { device: Device; desktop: boolean; onError: (message: string) => void }) {
+export function Diagnostics({ device, desktop, onToast }: { device: Device; desktop: boolean; onToast: (message: string) => void }) {
   const [tab, setTab] = useState<'battery' | 'gestalt' | 'io' | 'nand' | 'wifi'>('battery')
   const [query, setQuery] = useState('')
   const [raw, setRaw] = useState<unknown>(null)
@@ -77,9 +77,9 @@ export function Diagnostics({ device, desktop, onError }: { device: Device; desk
     setLoading(true)
     void api.diagnostic(tab, device.udid)
       .then(setRaw)
-      .catch((error) => onError(errorMessage(error)))
+      .catch((error) => onToast(errorMessage(error)))
       .finally(() => setLoading(false))
-  }, [desktop, tab, device.udid, onError])
+  }, [desktop, tab, device.udid, onToast])
   const filteredGestalt = gestalt.filter(([key, value]) => `${key} ${value}`.toLowerCase().includes(query.toLowerCase()))
   const realRows = useMemo(() => flatten(raw).filter(([key, value]) => `${key} ${value}`.toLowerCase().includes(query.toLowerCase())), [raw, query])
   const batteryStats = [

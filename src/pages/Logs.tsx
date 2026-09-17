@@ -6,7 +6,7 @@ import { api, events } from '../api'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
 
-export function Logs({ connected, desktop, udid, onError }: { connected: boolean; desktop: boolean; udid: string; onError: (message: string) => void }) {
+export function Logs({ connected, desktop, udid, onToast }: { connected: boolean; desktop: boolean; udid: string; onToast: (message: string) => void }) {
   const [logs, setLogs] = useState<LogLine[]>(desktop ? [] : initialLogs)
   const [filter, setFilter] = useState<'all' | 'error' | 'warn' | 'info' | 'debug'>('all')
   const [query, setQuery] = useState('')
@@ -32,7 +32,7 @@ export function Logs({ connected, desktop, udid, onError }: { connected: boolean
         on(events.logStatus, (status) => {
           if (status.sessionId !== sessionId || status.udid !== udid) return
           setStreamState(status.state === 'running' ? 'live' : status.state)
-          if (status.state === 'error' && status.message) onError(status.message)
+          if (status.state === 'error' && status.message) onToast(status.message)
         }),
       ],
       start: () => {
@@ -44,7 +44,7 @@ export function Logs({ connected, desktop, udid, onError }: { connected: boolean
     }
   }, (message) => {
     setStreamState('error')
-    onError(message)
+    onToast(message)
   }, [udid])
   useInterval(!desktop && !paused && connected, 1250, () => {
     const [level, process, message] = liveLogPool[Math.floor(Math.random() * liveLogPool.length)]

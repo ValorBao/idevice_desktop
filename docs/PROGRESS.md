@@ -17,20 +17,21 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 | Item | Status |
 | --- | --- |
-| Frontend production build | Passed on 2026-08-30 with `npm run build` for development version 0.0.4 |
-| Frontend regression tests | Passed on 2026-08-30: 95 passed, 0 failed across seventeen Vitest files |
+| Frontend production build | Passed on 2026-09-17 with `npm run build` for development version 0.0.4 |
+| Frontend regression tests | Passed on 2026-09-17: 140 passed, 0 failed across twenty-three Vitest files |
 | GitHub Actions CI | Passed on PR #27: Frontend on Ubuntu in 26 seconds; Rust formatting, check, 63 tests, and strict Clippy on macOS 14 arm64 in 3 minutes 3 seconds |
-| Rust static check | Passed on 2026-08-30 with `cargo check --manifest-path src-tauri/Cargo.toml` |
-| Rust unit tests | Passed on 2026-08-30: 130 passed, 0 failed |
-| Rust formatting and linting | Passed on 2026-08-30 with `cargo fmt --check` and strict Clippy across all targets |
+| Frontend linting | Passed on 2026-09-17 with `npm run lint`; ESLint runs the React hook rules and is wired into CI ahead of the tests |
+| Rust static check | Passed on 2026-09-17 with `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | Passed on 2026-09-17: 148 passed, 0 failed |
+| Rust formatting and linting | Passed on 2026-09-17 with `cargo fmt --check` and strict Clippy across all targets |
 | Unsigned macOS package | Apple Silicon `idevice_0.0.2_aarch64.dmg` built on 2026-07-26; passes `hdiutil verify`, identifies itself as 0.0.2 with a macOS 11.0 minimum, carries the CSP in its arm64 release binary, and ships both licence files byte-identical to their sources |
 | 0.0.3 release candidate | Unsigned Apple Silicon `idevice_desktop_0.0.3_aarch64.dmg` built on 2026-08-29; the image passes `hdiutil verify`, contains an arm64 app identifying itself as 0.0.3 with a macOS 11.0 minimum, and ships the project license plus third-party notices byte-identical to their sources |
 | Test coverage | Frontend tests cover the desktop/demo task guard, Tauri-versus-browser destructive confirmation, in-app text prompts, native file-drop hit testing and cleanup, Files create/delete/drop/progress/cancel flows, Apps uninstall/IPA-drop flows, Processes list/launch/confirmed stop/unsupported states, Performance listener-first startup, missing metrics, pause/resume interval changes, late-start rejection, CSV export and page-exit cleanup, Network Capture listener-first startup, filters, progress, PID rejection, stop/save, cancel/delete and page-exit cleanup, Notification Observation explicit selection, listener-first startup, custom names, bounded retention, stale-session rejection, pause/clear behavior and page-exit cleanup, Pasteboard manual text/image reads, non-text/non-image states, local text editing, image preparation and preview, exact target/size/format confirmation, confirmation cancellation, explicit prepared-image clearing, page-exit cleanup, limit rejection, and demo isolation, Test Lab runner loading/search/selection, optional targets, malformed metadata, entitlement failures, no-launch boundary, Standard XCTest plan requests, WDA bridge-only plans, preview invalidation, readiness gating, desktop failure, demo isolation, and navigation, Live Screen listener-first startup, frame display, stop/still retention, PNG export, hidden-window pause, and page-exit cleanup, Provisioning Profiles loading, normalized search, attention filters, expiry/scope detail, malformed-row isolation, desktop failure, and demo behavior, browser-demo interaction, device-switch remounting, automatic session teardown when a device disappears or becomes unusable, stale device-catalog refresh rejection, and delayed listener cleanup. Rust tests cover IPA signature checks, file-path protection, crash-report handling and transport selection, iOS generation selection, discovery transport merging, device-selection routing, connection labelling, location coordinate validation, JIT attach-reply parsing, process identity and stop safety, Performance interval/schema/identity/missing-value/CPU/CSV handling, PCAP destination/filter/header/partial-file/save/delete handling, notification subscription validation/deduplication/limits and generation-aware transport selection, Pasteboard UTF-8 sizing, text/image candidate selection, PNG/JPEG header and dimension parsing, format matching, pixel/byte budgets, invalid/oversized data handling, and CoreDevice-only routing, XCTest runner classification, required metadata and debug-entitlement reporting, target filtering, supported route boundaries, plan filter normalization/conflict limits, fresh runner/target validation, WDA restrictions, Live Screen PNG dimensions/signature/size and export-path validation, provisioning profile transport selection, embedded-plist parsing, classification, expiry calculations, malformed-row preservation and payload limits, debuggable-application filtering, task cancellation, and the serialization contract with `src/api.ts`; there are no integration or automated real-device tests |
 | Known desktop-only defect class | Browser APIs that work in demo mode and fail silently under Tauri. `window.confirm` resolves to false, `window.prompt` to null, and `window.alert` never appears, because wry implements no WKWebView JavaScript panel delegate; HTML5 `ondrop` never fires for OS drags, because Tauri consumes them first. Four controls shipped dead — Files delete, Files new folder, Apps uninstall, Apps sideload drop. All fixed on 2026-07-26; the rule and the approved replacements are in `CLAUDE.md` |
 | Real-device verification | iPhone14,5 on iOS 26.5 passed the CoreDeviceProxy crash-report route, CoreDevice pairing, DDI mounting, JIT transport, and DVT process listing; iPhone11,8 on iOS 17.0 additionally passed the 0.0.3 Performance live CPU/memory workflow, Live Screen preview, Provisioning Profiles inspection, Test Lab empty-runner preflight, and safe initial states for Network Capture, Notifications, and Pasteboard; iPhone10,1 on iOS 14.2 passed USB discovery/routing, crash reports, screenshot, logs, diagnostics, AFC, app listing, legacy location, and a full unpair/re-pair |
 | Verification harnesses | `src-tauri/examples/verify_jit.rs`, `verify_pairing.rs`, `verify_processes.rs`, `verify_processes_command.rs`, `verify_performance.rs`, `verify_large_crash.rs`, `verify_personal_signing.rs`, and `verify_legacy_ddi.rs` drive real-device paths or acceptance contracts; the Personal Signing harness runs the production read-only IPA/profile/device/Keychain preflight without exporting or installing anything, and the legacy DDI harness reports the install state and, with `--install`, exercises the production download, checksum, and install path without a device |
-| Branches | 0.0.4 Personal Signing Assistant work continues on `codex/personal-signing-assistant`, branched from the pushed `codex/release-0.0.3`; `master` does not yet contain either line |
-| Worktree | In progress: 0.0.4 version baseline and Personal Signing Assistant implementation, automated checks, and documentation |
+| Branches | `codex/personal-signing-assistant` was fast-forwarded into `master` on 2026-09-17 after its own gates passed. Structural refactoring continues on `refactor/transport-and-hooks`, branched from that merge; neither line is pushed |
+| Worktree | In progress: structural refactoring of the shared transport layer and the frontend session and streaming lifecycles. No behaviour change is intended, and none of it is verified on hardware |
 | 0.0.4 distribution gate | Blocked pending replacement or explicit licensing of `nab138/apple-crates`' `apple-codesign` package; its resolved Cargo manifest and repository contain no project license declaration |
 
 ## 3. Feature Progress
@@ -62,6 +63,56 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 | Single Device Lab theme | Integrated | The interface is fixed to the dark Device Lab theme. Monitor/Processes passed visual inspection at the default viewport and 820×650 on 2026-08-08 | Long content and accessibility |
 
 ## 4. Completed Milestones
+
+### 2026-09-17: Shared Transport and Frontend Lifecycles
+
+A structural pass with no intended behaviour change, after the Personal Signing
+branch was fast-forwarded into `master`.
+
+**The backend had ten copies of one transport.** Every developer-service command
+repeated the same three steps — resolve the selected device, route a provider,
+open the RSD tunnel for its generation — and six modules carried a near-identical
+`*Context` struct to hold the same four fields. `transport.rs` now owns
+`DeviceContext`, the CoreDeviceProxy tunnel, and the RemotePairing retry loop,
+and the command modules only decide what to do once they hold a tunnel. The
+change removed about 880 lines. Tunnel-setup failures now report kind `tunnel`
+uniformly, where a few modules previously used their own.
+
+**The frontend had five copies of one streaming lifecycle.** Logs, Performance,
+Network Capture, Notifications and Live Screen each hand-wrote the subscribe,
+guard-every-handler, release-a-late-subscription, stop-on-cleanup sequence. A
+missed branch there leaks a device session, which is why it is now one hook,
+`useDeviceEvents`, with its own tests. `useInterval` replaced the hand-rolled
+demo timers, and Notifications stopped carrying its own copy of `createSessionId`.
+
+**The shell held the device session inline.** `App.tsx` mixed four refs
+coordinating a serialized catalog refresh with the layout. `useDeviceSession`
+owns discovery, selection, pairing and the background DDI mount, and the shell
+dropped from 307 to 152 lines. Eight new tests cover selection, an unusable
+device, total device loss, overlapping refreshes, a listing failure, dismissal,
+monitor teardown, and demo mode.
+
+Smaller items in the same pass: `WorkbenchTabs` replaced five copies of the tab
+bar, and a tab now carries its own page-header copy so the header cannot
+disagree with it; the unused `Page` type was deleted; the contract tests moved
+out of the 1,246-line `types.rs` into `types/contract.rs`; the log task key got
+a single owner in `state.rs` instead of a literal matched in two modules; pages
+settled on one `onToast` prop, with `onError` reserved for hooks, which only
+report failures; and ESLint with the React hook rules was added and wired into
+CI.
+
+Two planned items were dropped after inspection. Converting the remaining
+catch-and-toast blocks to `useDeviceTask` would have made them worse, because
+almost all of those catch clauses also reset page state. Folding the per-module
+Tauri `State` objects into `AppState` was rejected as working against Tauri's
+own injection model.
+
+Gates after the pass: 140 frontend tests, 148 Rust tests, ESLint, strict Clippy,
+`cargo fmt --check`, and the production build all pass. **None of this is
+verified on a device.** The transport extraction touches every developer-service
+route, so one device per generation has to be re-run before the work is treated
+as proven.
+
 
 ### 2026-07-18: Project Initialization
 

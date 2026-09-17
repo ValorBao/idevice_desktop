@@ -22,7 +22,7 @@ use crate::{
     legacy_ddi,
     provider::selected_provider,
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{DeveloperStatus, JitSession, OperationProgress, StreamStatus},
     utils::plist_to_json,
 };
@@ -915,13 +915,7 @@ pub async fn jit_start(
     udid: Option<String>,
     bundle_id: String,
 ) -> CommandResult<JitSession> {
-    let udid = state
-        .selected(udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let remote_target = state.discovery.read().await.remote_pairing_target(&udid);
-    let lockdown_target = state.discovery.read().await.lockdown_target(&udid);
-    let pairing_path = remote_pairing_path(&app, &udid)?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     state.replace_task("jit", token.clone()).await;
     let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -943,11 +937,7 @@ pub async fn jit_start(
             runtime.block_on(async move {
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
-                    let provider = jit_step(
-                        "connecting to the device",
-                        crate::provider::routed_provider_for(&udid, lockdown_target.as_ref()),
-                    )
-                    .await?;
+                    let provider = jit_step("connecting to the device", context.provider()).await?;
                     let generation = jit_step("reading the iOS version", ios_version(&provider))
                         .await?
                         .developer_generation();
@@ -959,35 +949,17 @@ pub async fn jit_start(
                             DeveloperGeneration::Legacy => JitTransport::Lockdown {
                                 provider: &provider,
                             },
-                            DeveloperGeneration::CoreDeviceRemote => {
-                                let tunnel = open_remote_pairing_tunnel(
-                                    &provider,
-                                    &pairing_path,
-                                    "idevice-desktop",
-                                    remote_target.as_ref(),
-                                )
-                                .await?;
+                            DeveloperGeneration::CoreDeviceRemote
+                            | DeveloperGeneration::CoreDeviceLockdown => {
+                                let Some((_, tunnel)) =
+                                    context.open_rsd_tunnel(&provider, generation, 1).await?
+                                else {
+                                    unreachable!("only Legacy devices have no RSD tunnel");
+                                };
                                 JitTransport::Rsd {
                                     adapter: tunnel.adapter,
                                     handshake: tunnel.handshake,
                                 }
-                            }
-                            DeveloperGeneration::CoreDeviceLockdown => {
-                                let proxy = CoreDeviceProxy::connect(&provider)
-                                    .await
-                                    .map_err(CommandError::from)?;
-                                let rsd_port = proxy.tunnel_info().server_rsd_port;
-                                let adapter = proxy.create_software_tunnel().map_err(|error| {
-                                    CommandError::new("tunnel", error.to_string(), true)
-                                })?;
-                                let mut adapter = adapter.to_async_handle();
-                                let stream = adapter.connect(rsd_port).await.map_err(|error| {
-                                    CommandError::new("tunnel", error.to_string(), true)
-                                })?;
-                                let handshake = RsdHandshake::new(stream)
-                                    .await
-                                    .map_err(CommandError::from)?;
-                                JitTransport::Rsd { adapter, handshake }
                             }
                         };
                         Ok(result)

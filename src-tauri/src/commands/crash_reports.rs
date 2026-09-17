@@ -5,19 +5,16 @@ use std::{
 
 use idevice::{
     IdeviceService, RsdService,
-    core_device_proxy::CoreDeviceProxy,
-    rsd::RsdHandshake,
     services::crashreportcopymobile::{CrashReportCopyMobileClient, flush_reports},
     tcp::handle::AdapterHandle,
 };
 use tauri::{AppHandle, State};
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
-    provider::selected_provider,
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{CrashReportContent, CrashReportSummary},
 };
 
@@ -146,8 +143,9 @@ async fn crash_client(
     udid: Option<String>,
     flush_pending: bool,
 ) -> CommandResult<CrashClient> {
-    let (udid, provider) = selected_provider(state, udid).await?;
-    let generation = ios_version(&provider).await?.developer_generation();
+    let context = DeviceContext::resolve(app, state, udid).await?;
+    let provider = context.provider().await?;
+    let generation = developer_generation(&provider).await?;
     match crash_transport(provider.is_bonjour(), generation) {
         CrashTransport::Lockdown => {
             if flush_pending && let Err(error) = flush_reports(&provider).await {
@@ -167,48 +165,12 @@ async fn crash_client(
             false,
         )),
         CrashTransport::RemoteRsd | CrashTransport::CoreDeviceRsd => {
-            let (mut adapter, mut handshake) = match generation {
-                DeveloperGeneration::CoreDeviceRemote => {
-                    let pairing_path = remote_pairing_path(app, &udid)?;
-                    let remote_target = state.discovery.read().await.remote_pairing_target(&udid);
-                    let tunnel = open_remote_pairing_tunnel(
-                        &provider,
-                        &pairing_path,
-                        "idevice-desktop",
-                        remote_target.as_ref(),
-                    )
-                    .await?;
-                    (tunnel.adapter, tunnel.handshake)
-                }
-                DeveloperGeneration::CoreDeviceLockdown => {
-                    let proxy = CoreDeviceProxy::connect(&provider)
-                        .await
-                        .map_err(CommandError::from)?;
-                    let rsd_port = proxy.tunnel_info().server_rsd_port;
-                    let adapter = proxy.create_software_tunnel().map_err(|error| {
-                        CommandError::new(
-                            "crash_reports",
-                            format!("Unable to create the CoreDevice tunnel: {error}"),
-                            true,
-                        )
-                    })?;
-                    let mut adapter = adapter.to_async_handle();
-                    let stream = adapter.connect(rsd_port).await.map_err(|error| {
-                        CommandError::new(
-                            "crash_reports",
-                            format!("Unable to connect to tunneled RSD: {error}"),
-                            true,
-                        )
-                    })?;
-                    let handshake = RsdHandshake::new(stream)
-                        .await
-                        .map_err(CommandError::from)?;
-                    (adapter, handshake)
-                }
-                DeveloperGeneration::Legacy => unreachable!(),
+            let Some((_, mut tunnel)) = context.open_rsd_tunnel(&provider, generation, 1).await?
+            else {
+                unreachable!("only Legacy devices have no RSD tunnel");
             };
             let inner =
-                CrashReportCopyMobileClient::connect_rsd(&mut adapter, &mut handshake)
+                CrashReportCopyMobileClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
                     .await
                     .map_err(|error| {
                         CommandError::new(
@@ -221,7 +183,7 @@ async fn crash_client(
                     })?;
             Ok(CrashClient {
                 inner,
-                _adapter: Some(adapter),
+                _adapter: Some(tunnel.adapter),
             })
         }
     }

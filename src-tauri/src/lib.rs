@@ -6,6 +6,7 @@ pub mod legacy_ddi;
 pub mod provider;
 mod state;
 mod task;
+pub mod transport;
 pub mod tunnel;
 pub mod types;
 mod utils;

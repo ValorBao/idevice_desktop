@@ -7,18 +7,18 @@ builds for, so it reflects what a release actually ships rather than every
 optional dependency in the lock file.
 
 - Rust crates in the last packaged 0.0.3 inventory: 371
-- Rust packages in the target-filtered 0.0.4 development graph: 472
+- Rust packages in the target-filtered 0.0.4 development graph: 484
 - npm packages bundled into the frontend: 9
 - npm packages used only to build, and therefore not distributed: 70
 
 The complete inventory below is the last packaged 0.0.3 baseline. The 0.0.4
 Apple Account signing dependency stack is identified separately below. Do not
-publish a 0.0.4 binary until the complete inventory is regenerated and the
-`apple-codesign` licensing issue described below is resolved.
+publish a 0.0.4 binary until the complete inventory is regenerated.
 
 No dependency in the packaged 0.0.3 inventory is licensed under the GPL, LGPL,
-or AGPL. The unlicensed 0.0.4 development dependency is a separate blocker,
-not evidence of a permissive license.
+or AGPL. The 0.0.4 signing stack adds one LGPL-2.1-or-later library,
+`apple-codesign-quick`, described below; its license text ships as
+`LICENSE-LGPL-2.1`.
 
 
 ## Weak-copyleft dependencies
@@ -106,7 +106,7 @@ SOFTWARE.
 
 - Project: `nab138/isideload`
 - Source: https://github.com/nab138/isideload
-- Pinned revision: `0f4ffaf22212781810491156113f6160504880cc`
+- Pinned revision: `0bee45d8cdb07ca24524a26f38fdda0dbb4e04b3` (0.4.4)
 - License: MIT
 
 Copyright (c) 2025 nab138
@@ -139,16 +139,29 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-### Unresolved: apple-codesign
+### apple-codesign-quick
 
-`isideload` currently resolves `apple-codesign` 0.1.0 from
-`nab138/apple-crates` revision
-`5da0b8df9b202434b1eff2700059b1ee142592ac`. That package declares no license
-in its Cargo manifest and the resolved repository contains no project license
-file. It therefore appears as `UNKNOWN` in Cargo metadata. The development
-integration may be tested locally, but a 0.0.4 binary must not be distributed
-until the upstream author provides a usable license or this dependency is
-replaced with a clearly licensed implementation.
+- Project: `Dadoum/apple-crates`
+- Source: https://github.com/Dadoum/apple-crates
+- Package: `apple-codesign-quick` 0.1.0 from crates.io, resolved through `isideload`
+- License: LGPL-2.1-or-later, as declared in the package manifest. The full
+  text of the GNU Lesser General Public License version 2.1 ships alongside
+  this file as `LICENSE-LGPL-2.1`.
+
+idevice_desktop uses this library unmodified. Rust links it statically into
+the application binary. The complete source of idevice_desktop is published
+under the MIT License, and the exact library version is pinned in
+`src-tauri/Cargo.lock`, so a recipient can rebuild the application against a
+modified copy of the library as section 6 of the LGPL requires. The library's
+own source is available from crates.io and the repository above.
+
+The package also carries Apple's public `AppleIncRootCertificate.cer` and
+`AppleWWDRCAG3.cer` certificates, which it uses to build signing chains.
+
+Earlier 0.0.4 development builds resolved an `apple-codesign` package from
+`nab138/apple-crates` revision `5da0b8df9b202434b1eff2700059b1ee142592ac`,
+which declared no license. No binary containing it was distributed, and it
+is no longer in the dependency graph.
 
 ## Developer Disk Image for iOS 16 and earlier
 
@@ -166,8 +179,7 @@ and are checked against a SHA-256 and byte length pinned in
 That repository declares no license, which is why the file is fetched rather
 than redistributed: idevice_desktop never becomes a distributor of it. Anyone
 packaging a build must keep it that way. Bundling the image into the
-application would create a distribution blocker of the same class as
-`apple-codesign` below, and a more serious one, because the material is
+application would ship unlicensed material, and worse, material that is
 Apple's rather than a third party's.
 
 ## Dependencies added for the Developer Disk Image download

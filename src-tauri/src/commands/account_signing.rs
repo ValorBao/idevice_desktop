@@ -10,7 +10,7 @@ use isideload::{
     auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse},
     dev::{developer_session::DeveloperSession, devices::DevicesApi},
     sideload::{SideloaderBuilder, builder::MaxCertsBehavior, sideloader::Sideloader},
-    util::keyring_storage::KeyringStorage,
+    util::{callbacks::MaxCertsCallbackBox, keyring_storage::KeyringStorage},
 };
 use plist::Value;
 use rootcause::{Report, prelude::*};
@@ -41,7 +41,7 @@ struct AccountSummary {
 
 #[derive(Clone)]
 struct ActiveAccount {
-    sideloader: Arc<Mutex<Sideloader>>,
+    sideloader: Arc<Mutex<Sideloader<MaxCertsCallbackBox>>>,
     summary: AccountSummary,
 }
 
@@ -218,12 +218,13 @@ pub async fn personal_account_login(
     let developer_session = DeveloperSession::from_account(&mut apple_account)
         .await
         .map_err(|report| map_report("Unable to open the Apple developer session", report))?;
-    let mut sideloader = SideloaderBuilder::new(developer_session, email.clone())
-        .machine_name("idevice_desktop".into())
-        .storage(Box::new(KeyringStorage::new(KEYCHAIN_SERVICE.into())))
-        .max_certs_behavior(MaxCertsBehavior::Error)
-        .delete_app_after_install(false)
-        .build();
+    let mut sideloader =
+        SideloaderBuilder::<MaxCertsCallbackBox>::new(developer_session, email.clone())
+            .machine_name("idevice_desktop".into())
+            .storage(Box::new(KeyringStorage::new(KEYCHAIN_SERVICE.into())))
+            .max_certs_behavior(MaxCertsBehavior::Error)
+            .delete_app_after_install(false)
+            .build();
     let team = sideloader
         .get_team()
         .await
@@ -458,7 +459,14 @@ async fn sign_export(
     };
     let (signed_app, _) = stage(token, "Signing IPA", Duration::from_secs(600), async {
         sideloader
-            .sign_app(temporary.ipa.clone(), Some(team), false, Some(progress))
+            .sign_app(
+                temporary.ipa.clone(),
+                Some(team),
+                false,
+                Some(progress),
+                None,
+                None,
+            )
             .await
             .map_err(|report| map_report("Apple account signing failed", report))
     })

@@ -409,7 +409,6 @@ first developer team, registers the selected device, creates or reuses developme
 assets, signs, exports, and hands the output to the existing installer. The route is
 explicitly marked unofficial because it uses Apple private endpoints and the
 community `ani.sidestore.io` service. Automated checks and browser visual acceptance
-pass; real-account login and signing remain a release gate. Distribution is also
-blocked because the resolved `nab138/apple-crates` `apple-codesign` package declares
-no license; it must be licensed or replaced before packaging. `.p12` import remains
-out of scope.
+pass; real-account login and signing remain a release gate. The signing library is
+`apple-codesign-quick`, licensed LGPL-2.1-or-later and linked unmodified; its notice
+and license text ship with the application. `.p12` import remains out of scope.

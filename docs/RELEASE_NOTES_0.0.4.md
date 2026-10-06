@@ -1,7 +1,7 @@
 # idevice_desktop 0.0.4 — Draft Release Notes
 
 > Development build. Not yet published or accepted as a release.
-> Distribution is blocked: the resolved `apple-codesign` dependency declares no license and must be licensed or replaced before packaging.
+> The signing stack now resolves the LGPL-2.1-or-later `apple-codesign-quick` library; packaging still requires the complete dependency inventory to be regenerated and real-account signing acceptance.
 
 ## Personal Signing Assistant
 

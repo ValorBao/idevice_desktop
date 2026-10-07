@@ -529,5 +529,44 @@ pub struct LocationSession {
     pub transport: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrollStoreRemovableApp {
+    pub bundle_id: String,
+    pub name: String,
+    pub bundle_name: String,
+}
+
+/// Read-only view of whether this device can take a TrollStore helper and
+/// whether TrollStore is already installed. Nothing in this response starts
+/// a restore or an install.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrollStoreStatus {
+    pub product_version: String,
+    pub build_version: String,
+    pub helper_supported: bool,
+    pub helper_detail: String,
+    pub helper_caution: Option<String>,
+    pub trollstore_installed: bool,
+    pub removable_apps: Vec<TrollStoreRemovableApp>,
+    pub ipa_install_available: bool,
+    pub ipa_install_detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrollStoreHelperResult {
+    pub app_name: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrollStoreIpaResult {
+    pub file_name: String,
+    pub message: String,
+}
+
 #[cfg(test)]
 mod contract;

@@ -7,6 +7,7 @@ pub mod provider;
 mod state;
 mod task;
 pub mod transport;
+pub mod trollstore;
 pub mod tunnel;
 pub mod types;
 mod utils;
@@ -99,6 +100,9 @@ pub fn run() {
             commands::pasteboard_image_discard,
             commands::xctest_preflight,
             commands::xctest_plan_prepare,
+            commands::trollstore_status,
+            commands::trollstore_helper_install,
+            commands::trollstore_ipa_install,
             commands::developer_status,
             commands::developer_mode_reveal,
             commands::developer_mode_enable,

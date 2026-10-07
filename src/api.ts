@@ -401,6 +401,34 @@ export type DeveloperStatus = {
 export type JitSession = { bundleId: string; pid: number; response: string | null }
 export type LocationSession = { latitude: number; longitude: number; transport: string }
 
+export type TrollStoreRemovableApp = {
+  bundleId: string
+  name: string
+  bundleName: string
+}
+
+export type TrollStoreStatus = {
+  productVersion: string
+  buildVersion: string
+  helperSupported: boolean
+  helperDetail: string
+  helperCaution: string | null
+  trollstoreInstalled: boolean
+  removableApps: TrollStoreRemovableApp[]
+  ipaInstallAvailable: boolean
+  ipaInstallDetail: string
+}
+
+export type TrollStoreHelperResult = {
+  appName: string
+  message: string
+}
+
+export type TrollStoreIpaResult = {
+  fileName: string
+  message: string
+}
+
 declare global {
   interface Window { __TAURI_INTERNALS__?: unknown }
 }
@@ -485,6 +513,9 @@ export const api = {
   pasteboardImageDiscard: (preparationId: string) => call<boolean>('pasteboard_image_discard', { preparationId }),
   xctestPreflight: (udid?: string) => call<XCTestPreflightSnapshot>('xctest_preflight', { udid }),
   xctestPlanPrepare: (request: XCTestPlanRequest, udid?: string) => call<XCTestRunPlan>('xctest_plan_prepare', { udid, request }),
+  trollstoreStatus: (udid?: string) => call<TrollStoreStatus>('trollstore_status', { udid }),
+  trollstoreHelperInstall: (bundleId: string, udid?: string) => call<TrollStoreHelperResult>('trollstore_helper_install', { udid, bundleId }),
+  trollstoreIpaInstall: (localPath: string, udid?: string) => call<TrollStoreIpaResult>('trollstore_ipa_install', { udid, localPath }),
   developerStatus: (udid?: string) => call<DeveloperStatus>('developer_status', { udid }),
   developerReveal: (udid?: string) => call<void>('developer_mode_reveal', { udid }),
   developerEnable: (udid?: string) => call<void>('developer_mode_enable', { udid }),
@@ -521,6 +552,7 @@ export const events = {
   personalAccountTwoFactor: (handler: (payload: PersonalAccountTwoFactor) => void) => listen<PersonalAccountTwoFactor>('personal-account://two-factor-required', (event) => handler(event.payload)),
   personalAccountProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('personal-account://progress', (event) => handler(event.payload)),
   ddiProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('developer://ddi-progress', (event) => handler(event.payload)),
+  trollstoreProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('trollstore://progress', (event) => handler(event.payload)),
   transferProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('files://transfer-progress', (event) => handler(event.payload)),
   raw: <T>(name: string, handler: (event: Event<T>) => void) => listen<T>(name, handler),
 }

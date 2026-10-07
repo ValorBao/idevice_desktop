@@ -1,4 +1,4 @@
-import { AppWindow, BadgeCheck, Beaker, Code2, KeyRound } from 'lucide-react'
+import { AppWindow, BadgeCheck, Beaker, Code2, KeyRound, Package } from 'lucide-react'
 import type { Device } from '../data'
 import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
 import { Apps } from './Apps'
@@ -6,8 +6,9 @@ import { Developer } from './Developer'
 import { Profiles } from './Profiles'
 import { PersonalSigning } from './PersonalSigning'
 import { TestLab } from './TestLab'
+import { TrollStore } from './TrollStore'
 
-export type AppsSubView = 'manager' | 'jit' | 'profiles' | 'signing' | 'xctest'
+export type AppsSubView = 'manager' | 'jit' | 'profiles' | 'signing' | 'xctest' | 'trollstore'
 
 export const appsTabs: readonly TabItem<AppsSubView>[] = [
   {
@@ -48,6 +49,14 @@ export const appsTabs: readonly TabItem<AppsSubView>[] = [
     title: 'Test Lab',
     detail: 'Read-only XCTest runner and developer-service preflight',
   },
+  {
+    id: 'trollstore',
+    label: 'TrollStore',
+    ariaLabel: 'TrollStore',
+    icon: <Package size={14} />,
+    title: 'TrollStore',
+    detail: 'USB helper restore · local IPA handoff',
+  },
 ]
 
 export function AppsWorkbench({
@@ -87,6 +96,9 @@ export function AppsWorkbench({
         )}
         {subView === 'xctest' && (
           <TestLab desktop={desktop} udid={device.udid} onToast={onToast} />
+        )}
+        {subView === 'trollstore' && (
+          <TrollStore desktop={desktop} udid={device.udid} onToast={onToast} />
         )}
       </div>
     </div>

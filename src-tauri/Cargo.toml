@@ -76,6 +76,7 @@ features = [
   "pcapd",
   "misagent",
   "notification_proxy",
+  "mobilebackup2",
   "debug_proxy",
   "tss",
   "remote_pairing"

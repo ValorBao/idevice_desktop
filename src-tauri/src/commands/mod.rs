@@ -17,6 +17,7 @@ mod processes;
 mod profiles;
 mod screenshot;
 mod signing;
+mod trollstore;
 mod xctest;
 
 pub use account_signing::*;
@@ -38,6 +39,7 @@ pub use processes::*;
 pub use profiles::*;
 pub use screenshot::*;
 pub use signing::*;
+pub use trollstore::*;
 pub use xctest::*;
 
 #[tauri::command]

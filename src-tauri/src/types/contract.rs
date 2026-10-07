@@ -701,6 +701,58 @@ fn jit_session_matches_typescript() {
 }
 
 #[test]
+fn trollstore_helper_result_matches_typescript() {
+    assert_matches(
+        "TrollStoreHelperResult",
+        &TrollStoreHelperResult {
+            app_name: String::new(),
+            message: String::new(),
+        },
+    );
+}
+
+#[test]
+fn trollstore_ipa_result_matches_typescript() {
+    assert_matches(
+        "TrollStoreIpaResult",
+        &TrollStoreIpaResult {
+            file_name: String::new(),
+            message: String::new(),
+        },
+    );
+}
+
+#[test]
+fn trollstore_status_matches_typescript() {
+    assert_matches(
+        "TrollStoreStatus",
+        &TrollStoreStatus {
+            product_version: String::new(),
+            build_version: String::new(),
+            helper_supported: false,
+            helper_detail: String::new(),
+            helper_caution: None,
+            trollstore_installed: false,
+            removable_apps: vec![TrollStoreRemovableApp {
+                bundle_id: String::new(),
+                name: String::new(),
+                bundle_name: String::new(),
+            }],
+            ipa_install_available: false,
+            ipa_install_detail: String::new(),
+        },
+    );
+    assert_matches(
+        "TrollStoreRemovableApp",
+        &TrollStoreRemovableApp {
+            bundle_id: String::new(),
+            name: String::new(),
+            bundle_name: String::new(),
+        },
+    );
+}
+
+#[test]
 fn location_session_matches_typescript() {
     assert_matches(
         "LocationSession",

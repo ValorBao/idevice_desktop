@@ -3,6 +3,7 @@
 //! Usage:
 //!   cargo run --example verify_trollstore -- <udid>
 //!   cargo run --example verify_trollstore -- <udid> --probe-url
+//!   cargo run --example verify_trollstore -- <udid> --ipa <path>
 //!
 //! The default run is read-only: version gate, whether TrollStore is installed,
 //! and which removable system apps the helper restore could use.
@@ -10,9 +11,11 @@
 //! `--probe-url` needs TrollStore installed. It serves only a 404 on this Mac's
 //! LAN address and opens TrollStore with an install URL pointing at it. No IPA
 //! exists at that URL, so nothing is installed; the phone shows a download
-//! error. The point is to see whether the request reaches the Mac at all,
-//! which answers both "does --payload-url reach TrollStore" and "does the
-//! phone allow cleartext http to the LAN".
+//! error. The point is to see whether the request reaches the Mac at all.
+//!
+//! `--ipa <path>` serves that real IPA once and opens TrollStore with the
+//! install URL, exactly as the production command does. TrollStore downloads it
+//! and shows its own install confirmation on the phone.
 
 use std::{
     net::{IpAddr, SocketAddr},
@@ -46,6 +49,11 @@ async fn main() {
         std::process::exit(2);
     };
     let probe = args.iter().any(|arg| arg == "--probe-url");
+    let ipa = args
+        .iter()
+        .position(|arg| arg == "--ipa")
+        .and_then(|index| args.get(index + 1))
+        .cloned();
 
     let provider = routed_provider_for(&udid, None).await.expect("USB route");
     let mut lockdown = LockdownClient::connect(&provider).await.expect("lockdown");
@@ -95,6 +103,15 @@ async fn main() {
     println!("removable system apps: {}", removable.len());
     for app in removable.iter().take(40) {
         println!("  {app}");
+    }
+
+    if let Some(path) = ipa {
+        if !installed {
+            println!("ipa: skipped, TrollStore is not installed");
+            return;
+        }
+        serve_real_ipa(&udid, &path).await;
+        return;
     }
 
     if !probe {
@@ -166,6 +183,95 @@ async fn main() {
         Some(line) => println!("probe: REQUEST RECEIVED {line}"),
         None => println!("probe: no request within {}s", PROBE_WAIT.as_secs()),
     }
+}
+
+async fn serve_real_ipa(udid: &str, path: &str) {
+    let metadata = std::fs::metadata(path).expect("read IPA metadata");
+    let file_name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("app.ipa")
+        .to_owned();
+    println!("ipa: {file_name} ({} bytes)", metadata.len());
+
+    let address = lan_ipv4();
+    let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(address), 0))
+        .await
+        .expect("bind listener");
+    let port = listener.local_addr().unwrap().port();
+    let token = uuid::Uuid::new_v4().simple().to_string();
+    let route = format!("/{token}/app.ipa");
+    let ipa_url = format!("http://{address}:{port}{route}");
+    let payload = format!("apple-magnifier://install?url={}", encode(&ipa_url));
+    println!("ipa: serving at {ipa_url}");
+
+    let serve_path = path.to_owned();
+    let server = tokio::spawn(async move {
+        let accepted = tokio::time::timeout(Duration::from_secs(120), listener.accept()).await;
+        let Ok(Ok((mut stream, peer))) = accepted else {
+            return "no request".to_owned();
+        };
+        let mut header = Vec::new();
+        let mut byte = [0u8; 1];
+        while header.len() < 8192 {
+            match stream.read(&mut byte).await {
+                Ok(0) => break,
+                Ok(_) => {
+                    header.push(byte[0]);
+                    if header.ends_with(b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let request_line = String::from_utf8_lossy(&header)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_owned();
+        let bytes = tokio::fs::read(&serve_path).await.unwrap_or_default();
+        let head = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            bytes.len()
+        );
+        if stream.write_all(head.as_bytes()).await.is_err() {
+            return format!("{peer} header write failed");
+        }
+        if request_line.starts_with("HEAD") {
+            return format!("{peer} -> {request_line} (HEAD only)");
+        }
+        match stream.write_all(&bytes).await {
+            Ok(()) => {
+                let _ = stream.shutdown().await;
+                format!("{peer} -> {request_line} ({} bytes sent)", bytes.len())
+            }
+            Err(error) => format!("{peer} -> {request_line} (send failed: {error})"),
+        }
+    });
+
+    let output = tokio::process::Command::new("/usr/bin/xcrun")
+        .args([
+            "devicectl",
+            "device",
+            "process",
+            "launch",
+            "--device",
+            udid,
+            "--terminate-existing",
+            "--payload-url",
+            &payload,
+            TROLLSTORE_BUNDLE_ID,
+        ])
+        .output()
+        .await
+        .expect("run devicectl");
+    println!("ipa: devicectl exit {}", output.status);
+    match server.await {
+        Ok(line) => println!("ipa: {line}"),
+        Err(error) => println!("ipa: server task failed: {error}"),
+    }
+    println!("ipa: confirm the install on the phone if TrollStore shows its dialog");
 }
 
 fn lan_ipv4() -> std::net::Ipv4Addr {

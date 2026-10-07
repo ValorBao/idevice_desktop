@@ -2,12 +2,12 @@
 
 > Status: the Apps workbench can restore the helper over USB after confirmation,
 > and can offer one IPA to an installed TrollStore. On 2026-10-07, iPhone11,8 /
-> iOS 17.0 (21A329) with TrollStore installed passed the transport spike:
+> iOS 17.0 (21A329) with TrollStore installed passed the full IPA handoff:
 > `devicectl --terminate-existing --payload-url` delivered
-> `apple-magnifier://install?url=…` to TrollStore, and TrollStore fetched a
-> cleartext `http://` LAN URL from this Mac (a 404, so nothing installed). ATS
-> did not block it. A full IPA install and the helper restore have not been
-> run on hardware.
+> `apple-magnifier://install?url=…` to TrollStore, TrollStore downloaded the
+> whole IPA from this Mac's cleartext `http://` LAN address (ATS did not block
+> it), and showed its own install confirmation for the app. The helper restore
+> has not been run on hardware.
 > Decision: the IPA reaches the phone by a local server that TrollStore downloads
 > from. The user does not copy the file into the Files app by hand.
 

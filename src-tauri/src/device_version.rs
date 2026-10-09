@@ -49,6 +49,13 @@ impl IosVersion {
     }
 }
 
+/// Reads the iOS version and maps it to its developer-service generation.
+pub async fn developer_generation(
+    provider: &impl IdeviceProvider,
+) -> CommandResult<DeveloperGeneration> {
+    Ok(ios_version(provider).await?.developer_generation())
+}
+
 pub async fn ios_version(provider: &impl IdeviceProvider) -> CommandResult<IosVersion> {
     let mut lockdown = LockdownClient::connect(provider)
         .await

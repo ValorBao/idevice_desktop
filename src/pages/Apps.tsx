@@ -54,8 +54,9 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
     setInstall({ name: safeName, progress: 0, phase: 'Verifying signature' })
   }
 
+  const installName = install?.name
   useEffect(() => {
-    if (!install || desktop) return
+    if (!installName || desktop) return
     const timer = window.setInterval(() => {
       setInstall((current) => {
         if (!current) return null
@@ -73,7 +74,7 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
       })
     }, 180)
     return () => window.clearInterval(timer)
-  }, [install?.name, onToast, desktop])
+  }, [installName, onToast, desktop])
 
   /**
    * Browser demo only. On the desktop Tauri consumes OS drags before the

@@ -96,7 +96,7 @@ export function Profiles({ desktop, udid, onToast }: { desktop: boolean; udid: s
 
   useEffect(() => { void refresh() }, [refresh])
 
-  const profiles = snapshot?.profiles ?? []
+  const profiles = useMemo(() => snapshot?.profiles ?? [], [snapshot])
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return profiles.filter((profile) => {

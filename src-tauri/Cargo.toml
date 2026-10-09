@@ -1,6 +1,6 @@
 [package]
 name = "idevice-desktop"
-version = "0.0.3"
+version = "0.0.4"
 description = "Desktop UI for jkcoxson/idevice"
 authors = ["idevice_desktop contributors"]
 edition = "2024"
@@ -32,6 +32,19 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 mdns-sd = "0.19"
 zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 libc = "0.2"
+# reqwest 0.13 names its rustls backend `rustls`, not `rustls-tls`. The project
+# builds every TLS path on rustls, so no native-tls backend is enabled.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "http2"] }
+sha1 = "0.10"
+sha2 = "0.10"
+rootcause = "0.12"
+zeroize = "1"
+
+[dependencies.isideload]
+git = "https://github.com/nab138/isideload.git"
+rev = "0bee45d8cdb07ca24524a26f38fdda0dbb4e04b3"
+default-features = false
+features = ["install", "keyring-storage", "tokio-mt"]
 
 [dependencies.idevice]
 git = "https://github.com/jkcoxson/idevice.git"
@@ -63,6 +76,7 @@ features = [
   "pcapd",
   "misagent",
   "notification_proxy",
+  "mobilebackup2",
   "debug_proxy",
   "tss",
   "remote_pairing"

@@ -11,6 +11,7 @@
 use idevice_desktop_lib::commands::{
     process_launch_for_device, process_stop_for_device, processes_snapshot_for_device,
 };
+use idevice_desktop_lib::transport::DeviceContext;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -26,18 +27,18 @@ async fn main() {
     let pairing_path = std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
         .join("Library/Application Support/dev.idevice.desktop")
         .join(format!("remote-pairing-{udid}.plist"));
+    let context = DeviceContext::standalone(udid, pairing_path);
 
-    let snapshot =
-        match processes_snapshot_for_device(udid.clone(), pairing_path.clone(), None, None).await {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                println!("RESULT: BLOCKED — {error:?}");
-                println!(
-                    "Wake or reconnect the selected device, then run the same read-only check again"
-                );
-                return;
-            }
-        };
+    let snapshot = match processes_snapshot_for_device(context.clone()).await {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            println!("RESULT: BLOCKED — {error:?}");
+            println!(
+                "Wake or reconnect the selected device, then run the same read-only check again"
+            );
+            return;
+        }
+    };
     println!("transport: {}", snapshot.transport);
     println!("available: {}", snapshot.available);
     println!(
@@ -83,15 +84,9 @@ async fn main() {
     };
 
     println!("launching dedicated test app: {bundle_id}");
-    let mut launch = process_launch_for_device(
-        udid.clone(),
-        pairing_path.clone(),
-        None,
-        None,
-        bundle_id.clone(),
-    )
-    .await
-    .unwrap_or_else(|error| panic!("production launch failed: {error:?}"));
+    let mut launch = process_launch_for_device(context.clone(), bundle_id.clone())
+        .await
+        .unwrap_or_else(|error| panic!("production launch failed: {error:?}"));
     assert_eq!(launch.bundle_id, bundle_id);
     if let Some(existing) = snapshot
         .processes
@@ -110,17 +105,10 @@ async fn main() {
             "dedicated test app was already running as pid {}; cleaning the verified baseline",
             launch.pid
         );
-        process_stop_for_device(
-            udid.clone(),
-            pairing_path.clone(),
-            None,
-            None,
-            launch.pid,
-            existing.identity.clone(),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("production baseline cleanup failed: {error:?}"));
-        let cleaned = processes_snapshot_for_device(udid.clone(), pairing_path.clone(), None, None)
+        process_stop_for_device(context.clone(), launch.pid, existing.identity.clone())
+            .await
+            .unwrap_or_else(|error| panic!("production baseline cleanup failed: {error:?}"));
+        let cleaned = processes_snapshot_for_device(context.clone())
             .await
             .unwrap_or_else(|error| panic!("baseline cleanup list failed: {error:?}"));
         assert!(
@@ -131,15 +119,9 @@ async fn main() {
             "pre-existing test pid {} remained after cleanup",
             launch.pid
         );
-        launch = process_launch_for_device(
-            udid.clone(),
-            pairing_path.clone(),
-            None,
-            None,
-            bundle_id.clone(),
-        )
-        .await
-        .unwrap_or_else(|error| panic!("production relaunch failed: {error:?}"));
+        launch = process_launch_for_device(context.clone(), bundle_id.clone())
+            .await
+            .unwrap_or_else(|error| panic!("production relaunch failed: {error:?}"));
         assert!(
             cleaned
                 .processes
@@ -150,10 +132,9 @@ async fn main() {
     }
     println!("launched pid {} via {}", launch.pid, launch.transport);
 
-    let launched_snapshot =
-        processes_snapshot_for_device(udid.clone(), pairing_path.clone(), None, None)
-            .await
-            .unwrap_or_else(|error| panic!("post-launch production list failed: {error:?}"));
+    let launched_snapshot = processes_snapshot_for_device(context.clone())
+        .await
+        .unwrap_or_else(|error| panic!("post-launch production list failed: {error:?}"));
     let launched = launched_snapshot
         .processes
         .iter()
@@ -165,18 +146,11 @@ async fn main() {
     );
     println!("confirmed pid {} with safe identity", launch.pid);
 
-    process_stop_for_device(
-        udid.clone(),
-        pairing_path.clone(),
-        None,
-        None,
-        launch.pid,
-        launched.identity.clone(),
-    )
-    .await
-    .unwrap_or_else(|error| panic!("production stop failed: {error:?}"));
+    process_stop_for_device(context.clone(), launch.pid, launched.identity.clone())
+        .await
+        .unwrap_or_else(|error| panic!("production stop failed: {error:?}"));
 
-    let final_snapshot = processes_snapshot_for_device(udid, pairing_path, None, None)
+    let final_snapshot = processes_snapshot_for_device(context.clone())
         .await
         .unwrap_or_else(|error| panic!("post-stop production list failed: {error:?}"));
     assert!(

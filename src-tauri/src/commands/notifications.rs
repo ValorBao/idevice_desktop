@@ -1,19 +1,17 @@
 use std::{collections::HashSet, time::Duration};
 
 use idevice::{
-    IdeviceService, RsdService, core_device_proxy::CoreDeviceProxy,
-    notification_proxy::NotificationProxyClient, rsd::RsdHandshake, tcp::handle::AdapterHandle,
+    IdeviceService, RsdService, notification_proxy::NotificationProxyClient,
+    tcp::handle::AdapterHandle,
 };
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
-    discovery::{LockdownTarget, RemotePairingTarget},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
-    provider::{RoutedProvider, routed_provider_for},
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{NotificationObservationEvent, NotificationObservationStatus},
 };
 
@@ -29,14 +27,6 @@ enum NotificationTransport {
     RemoteRsd,
     CoreDeviceRsd,
     UsbRequired,
-}
-
-#[derive(Clone)]
-struct NotificationContext {
-    udid: String,
-    pairing_path: std::path::PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
 }
 
 struct NotificationConnection {
@@ -106,48 +96,9 @@ fn validate_subscriptions(values: Vec<String>) -> CommandResult<Vec<String>> {
     Ok(subscriptions)
 }
 
-async fn context(
-    app: &AppHandle,
-    state: &AppState,
-    override_udid: Option<String>,
-) -> CommandResult<NotificationContext> {
-    let udid = state
-        .selected(override_udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let catalog = state.discovery.read().await;
-    Ok(NotificationContext {
-        pairing_path: remote_pairing_path(app, &udid)?,
-        lockdown_target: catalog.lockdown_target(&udid),
-        remote_target: catalog.remote_pairing_target(&udid),
-        udid,
-    })
-}
-
-async fn open_core_device_proxy(
-    provider: &RoutedProvider,
-) -> CommandResult<(AdapterHandle, RsdHandshake)> {
-    let proxy = CoreDeviceProxy::connect(provider)
-        .await
-        .map_err(CommandError::from)?;
-    let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let mut adapter = proxy
-        .create_software_tunnel()
-        .map_err(|error| CommandError::new("notifications", error.to_string(), true))?
-        .to_async_handle();
-    let stream = adapter
-        .connect(rsd_port)
-        .await
-        .map_err(|error| CommandError::new("notifications", error.to_string(), true))?;
-    let handshake = RsdHandshake::new(stream)
-        .await
-        .map_err(CommandError::from)?;
-    Ok((adapter, handshake))
-}
-
-async fn connect(context: &NotificationContext) -> CommandResult<NotificationConnection> {
-    let provider = routed_provider_for(&context.udid, context.lockdown_target.as_ref()).await?;
-    let generation = ios_version(&provider).await?.developer_generation();
+async fn connect(context: &DeviceContext) -> CommandResult<NotificationConnection> {
+    let provider = context.provider().await?;
+    let generation = developer_generation(&provider).await?;
     match notification_transport(provider.is_bonjour(), generation) {
         NotificationTransport::Lockdown => Ok(NotificationConnection {
             client: NotificationProxyClient::connect(&provider)
@@ -162,36 +113,25 @@ async fn connect(context: &NotificationContext) -> CommandResult<NotificationCon
             false,
         )),
         NotificationTransport::RemoteRsd | NotificationTransport::CoreDeviceRsd => {
-            let (route, mut adapter, mut handshake) = match generation {
-                DeveloperGeneration::CoreDeviceRemote => {
-                    let tunnel = open_remote_pairing_tunnel(
-                        &provider,
-                        &context.pairing_path,
-                        "idevice-desktop",
-                        context.remote_target.as_ref(),
-                    )
-                    .await?;
-                    ("RemotePairing/RSD", tunnel.adapter, tunnel.handshake)
-                }
-                DeveloperGeneration::CoreDeviceLockdown => {
-                    let (adapter, handshake) = open_core_device_proxy(&provider).await?;
-                    ("CoreDeviceProxy/RSD", adapter, handshake)
-                }
-                DeveloperGeneration::Legacy => unreachable!(),
+            let Some((route, mut tunnel)) =
+                context.open_rsd_tunnel(&provider, generation, 1).await?
+            else {
+                unreachable!("only Legacy devices have no RSD tunnel");
             };
-            let client = NotificationProxyClient::connect_rsd(&mut adapter, &mut handshake)
-                .await
-                .map_err(|error| {
-                    CommandError::new(
-                        "notifications",
-                        format!("The network notification proxy is unavailable: {error}"),
-                        true,
-                    )
-                })?;
+            let client =
+                NotificationProxyClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
+                    .await
+                    .map_err(|error| {
+                        CommandError::new(
+                            "notifications",
+                            format!("The network notification proxy is unavailable: {error}"),
+                            true,
+                        )
+                    })?;
             Ok(NotificationConnection {
                 client,
                 transport: format!("Notification Proxy shim · {route}"),
-                _adapter: Some(adapter),
+                _adapter: Some(tunnel.adapter),
             })
         }
     }
@@ -219,7 +159,7 @@ fn emit_status(
 
 async fn run_observation(
     app: AppHandle,
-    context: NotificationContext,
+    context: DeviceContext,
     session_id: String,
     subscriptions: Vec<String>,
     token: CancellationToken,
@@ -296,7 +236,7 @@ pub async fn notification_observation_start(
 ) -> CommandResult<()> {
     let session_id = validate_session_id(session_id)?;
     let subscriptions = validate_subscriptions(subscriptions)?;
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     state.replace_task(TASK_KEY, token.clone()).await;
     emit_status(&app, &session_id, "connecting", None, None, &subscriptions);

@@ -1,9 +1,29 @@
 import { ClipboardPaste, FolderOpen } from 'lucide-react'
 import type { Device } from '../data'
+import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
 import { Files } from './Files'
 import { Pasteboard } from './Pasteboard'
 
 export type FilesSubView = 'afc' | 'pasteboard'
+
+export const filesTabs: readonly TabItem<FilesSubView>[] = [
+  {
+    id: 'afc',
+    label: 'AFC & Sandboxes',
+    ariaLabel: 'Files',
+    icon: <FolderOpen size={14} />,
+    title: 'Payload Files',
+    detail: 'Apple File Conduit (AFC) · Application Sandboxes',
+  },
+  {
+    id: 'pasteboard',
+    label: 'Pasteboard',
+    ariaLabel: 'Pasteboard',
+    icon: <ClipboardPaste size={14} />,
+    title: 'Pasteboard',
+    detail: 'Explicit bounded CoreDevice text and image transfer',
+  },
+]
 
 export function FilesWorkbench({
   desktop,
@@ -20,30 +40,12 @@ export function FilesWorkbench({
 }) {
   return (
     <div className="files-workbench">
-      <div className="workbench-subbar">
-        <div className="workbench-tabs" role="tablist" aria-label="Files views">
-          <button
-            role="tab"
-            aria-label="Files"
-            aria-selected={subView === 'afc'}
-            className={subView === 'afc' ? 'active' : ''}
-            onClick={() => onSubViewChange('afc')}
-          >
-            <FolderOpen size={14} />
-            <span>AFC & Sandboxes</span>
-          </button>
-          <button
-            role="tab"
-            aria-label="Pasteboard"
-            aria-selected={subView === 'pasteboard'}
-            className={subView === 'pasteboard' ? 'active' : ''}
-            onClick={() => onSubViewChange('pasteboard')}
-          >
-            <ClipboardPaste size={14} />
-            <span>Pasteboard</span>
-          </button>
-        </div>
-      </div>
+      <WorkbenchTabs
+        items={filesTabs}
+        active={subView}
+        onSelect={onSubViewChange}
+        ariaLabel="Files views"
+      />
 
       <div className="workbench-content">
         {subView === 'afc' && (

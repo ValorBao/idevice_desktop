@@ -16,6 +16,9 @@ import {
   type NetworkCaptureProgress,
   type NetworkCaptureStatus,
 } from '../api'
+import { byteSize, fileName } from '../lib/format'
+import { on, useDeviceEvents } from '../lib/useDeviceEvents'
+import { useInterval } from '../lib/useInterval'
 
 const emptyProgress = (outputBytes = 0): NetworkCaptureProgress => ({
   packets: 0,
@@ -34,18 +37,6 @@ const idleStatus = (): NetworkCaptureStatus => ({
   filter: { pid: null, interfaceName: null },
 })
 
-const bytes = (value: number) => {
-  if (value < 1024) return `${value} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let size = value / 1024
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  return `${size < 10 ? size.toFixed(1) : size.toFixed(0)} ${units[unit]}`
-}
-
 const duration = (milliseconds: number) => {
   const totalSeconds = Math.floor(milliseconds / 1000)
   const hours = Math.floor(totalSeconds / 3600)
@@ -61,8 +52,6 @@ const captureFilename = () => {
   return `idevice-capture-${timestamp}.pcap`
 }
 
-const basename = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
-
 const activeState = (state: string) => ['connecting', 'running', 'stopping', 'cancelling'].includes(state)
 
 export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; udid: string; onToast: (message: string) => void }) {
@@ -70,7 +59,6 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
   const [progress, setProgress] = useState<NetworkCaptureProgress>(emptyProgress)
   const [pid, setPid] = useState('')
   const [interfaceName, setInterfaceName] = useState('')
-  const [listenersReady, setListenersReady] = useState(!desktop)
   const mountedRef = useRef(true)
   const ownsCaptureRef = useRef(false)
   const demoStartedRef = useRef(0)
@@ -80,22 +68,14 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
     return () => { mountedRef.current = false }
   }, [])
 
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
-    let stopProgress: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.networkCaptureProgress((next) => {
-        if (!disposed) setProgress(next)
-      }),
-      events.networkCaptureStatus((next) => {
-        if (disposed) return
+  const listenersReady = useDeviceEvents(desktop, () => ({
+    listeners: [
+      on(events.networkCaptureProgress, setProgress),
+      on(events.networkCaptureStatus, (next) => {
         setStatus((current) => ({ ...next, transport: next.transport ?? current.transport }))
         if (next.state === 'completed') {
           ownsCaptureRef.current = false
-          onToast(next.message ?? `${basename(next.destination)} saved`)
+          onToast(next.message ?? `${fileName(next.destination)} saved`)
         } else if (next.state === 'cancelled') {
           ownsCaptureRef.current = false
           onToast('Capture discarded')
@@ -106,48 +86,29 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
           ownsCaptureRef.current = false
         }
       }),
-    ]).then(([progressListener, statusListener]) => {
-      if (disposed) {
-        progressListener()
-        statusListener()
-        return
-      }
-      stopProgress = progressListener
-      stopStatus = statusListener
-      setListenersReady(true)
-    }).catch((error) => {
-      if (!disposed) onToast(errorMessage(error))
-    })
-
-    return () => {
-      disposed = true
-      stopProgress?.()
-      stopStatus?.()
+    ],
+    stop: () => {
       if (ownsCaptureRef.current) {
         ownsCaptureRef.current = false
         void api.networkCaptureCancel()
       }
-    }
-  }, [desktop, onToast])
+    },
+  }), onToast, [])
 
-  useEffect(() => {
-    if (desktop || status.state !== 'running') return
-    const timer = window.setInterval(() => {
-      setProgress((current) => {
-        const packetIncrease = 4 + Math.floor(Math.random() * 8)
-        const byteIncrease = packetIncrease * (320 + Math.floor(Math.random() * 900))
-        return {
-          packets: current.packets + packetIncrease,
-          bytes: current.bytes + byteIncrease,
-          outputBytes: current.outputBytes + byteIncrease + packetIncrease * 16,
-          elapsedMs: Date.now() - demoStartedRef.current,
-          lastProcess: ['MobileSafari', 'AppStore', 'apsd'][current.packets % 3],
-          lastInterface: ['en0', 'pdp_ip0'][current.packets % 2],
-        }
-      })
-    }, 500)
-    return () => window.clearInterval(timer)
-  }, [desktop, status.state])
+  useInterval(!desktop && status.state === 'running', 500, () => {
+    setProgress((current) => {
+      const packetIncrease = 4 + Math.floor(Math.random() * 8)
+      const byteIncrease = packetIncrease * (320 + Math.floor(Math.random() * 900))
+      return {
+        packets: current.packets + packetIncrease,
+        bytes: current.bytes + byteIncrease,
+        outputBytes: current.outputBytes + byteIncrease + packetIncrease * 16,
+        elapsedMs: Date.now() - demoStartedRef.current,
+        lastProcess: ['MobileSafari', 'AppStore', 'apsd'][current.packets % 3],
+        lastInterface: ['en0', 'pdp_ip0'][current.packets % 2],
+      }
+    })
+  })
 
   const filter = useMemo<NetworkCaptureFilter>(() => ({
     pid: pid.trim() ? Number(pid) : null,
@@ -204,7 +165,7 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
       } else {
         ownsCaptureRef.current = false
         setStatus((current) => ({ ...current, state: 'completed' }))
-        onToast(`${basename(status.destination)} saved in demonstration mode`)
+        onToast(`${fileName(status.destination)} saved in demonstration mode`)
       }
     } catch (error) {
       const message = errorMessage(error)
@@ -245,7 +206,7 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
         )}
         {(status.state === 'running' || status.state === 'connecting') && <button className="danger-button" onClick={() => void cancel()}><Trash2 size={14} />Cancel &amp; Delete</button>}
         <span className="network-capture-destination" title={status.destination}>
-          <FolderOutput size={14} />{status.destination ? basename(status.destination) : 'Choose a destination when capture starts'}
+          <FolderOutput size={14} />{status.destination ? fileName(status.destination) : 'Choose a destination when capture starts'}
         </span>
         <small className={status.state}><i />{captureLabel}</small>
       </div>
@@ -256,8 +217,8 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
 
       <div className="network-capture-summary">
         <div className="card"><small>Packets saved</small><b>{progress.packets.toLocaleString()}</b><span>after active filters</span></div>
-        <div className="card"><small>Packet data</small><b>{bytes(progress.bytes)}</b><span>captured frame bytes</span></div>
-        <div className="card"><small>PCAP size</small><b>{bytes(progress.outputBytes)}</b><span>2 GB safety limit</span></div>
+        <div className="card"><small>Packet data</small><b>{byteSize(progress.bytes)}</b><span>captured frame bytes</span></div>
+        <div className="card"><small>PCAP size</small><b>{byteSize(progress.outputBytes)}</b><span>2 GB safety limit</span></div>
         <div className="card"><small>Elapsed</small><b>{duration(progress.elapsedMs)}</b><span>{status.transport ?? 'not connected'}</span></div>
       </div>
 

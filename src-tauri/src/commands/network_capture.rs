@@ -13,9 +13,7 @@ use std::{
 
 use idevice::{
     IdeviceService, RsdService,
-    core_device_proxy::CoreDeviceProxy,
     pcapd::{DevicePacket, PcapdClient},
-    rsd::RsdHandshake,
     tcp::handle::AdapterHandle,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -29,12 +27,10 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
-    discovery::{LockdownTarget, RemotePairingTarget},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
-    provider::{RoutedProvider, routed_provider_for},
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{NetworkCaptureFilter, NetworkCaptureProgress, NetworkCaptureStatus},
 };
 
@@ -68,13 +64,6 @@ struct CaptureControl {
 #[derive(Default)]
 pub struct NetworkCaptureState {
     current: Mutex<Option<CaptureControl>>,
-}
-
-#[derive(Clone)]
-struct CaptureContext {
-    udid: String,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
 }
 
 struct CaptureClient {
@@ -242,45 +231,8 @@ fn emit_progress(app: &AppHandle, progress: &NetworkCaptureProgress) {
     let _ = app.emit("network-capture://progress", progress.clone());
 }
 
-async fn context(state: &AppState, override_udid: Option<String>) -> CommandResult<CaptureContext> {
-    let udid = state
-        .selected(override_udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let catalog = state.discovery.read().await;
-    Ok(CaptureContext {
-        lockdown_target: catalog.lockdown_target(&udid),
-        remote_target: catalog.remote_pairing_target(&udid),
-        udid,
-    })
-}
-
-async fn open_core_device_proxy(
-    provider: &RoutedProvider,
-) -> CommandResult<(AdapterHandle, RsdHandshake)> {
-    let proxy = CoreDeviceProxy::connect(provider)
-        .await
-        .map_err(CommandError::from)?;
-    let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let mut adapter = proxy
-        .create_software_tunnel()
-        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?
-        .to_async_handle();
-    let stream = adapter
-        .connect(rsd_port)
-        .await
-        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?;
-    let handshake = RsdHandshake::new(stream)
-        .await
-        .map_err(CommandError::from)?;
-    Ok((adapter, handshake))
-}
-
-async fn connect_capture(
-    app: &AppHandle,
-    context: &CaptureContext,
-) -> CommandResult<CaptureClient> {
-    let provider = routed_provider_for(&context.udid, context.lockdown_target.as_ref()).await?;
+async fn connect_capture(context: &DeviceContext) -> CommandResult<CaptureClient> {
+    let provider = context.provider().await?;
     if !provider.is_bonjour() {
         return Ok(CaptureClient {
             client: PcapdClient::connect(&provider)
@@ -291,32 +243,18 @@ async fn connect_capture(
         });
     }
 
-    let generation = ios_version(&provider).await?.developer_generation();
-    let (mut adapter, mut handshake, route) = match generation {
-        DeveloperGeneration::Legacy => {
-            return Err(CommandError::new(
-                "network_capture",
-                "Network capture on iOS 16 and earlier requires a USB connection",
-                false,
-            ));
-        }
-        DeveloperGeneration::CoreDeviceRemote => {
-            let pairing_path = remote_pairing_path(app, &context.udid)?;
-            let tunnel = open_remote_pairing_tunnel(
-                &provider,
-                &pairing_path,
-                "idevice-desktop",
-                context.remote_target.as_ref(),
-            )
-            .await?;
-            (tunnel.adapter, tunnel.handshake, "RemotePairing/RSD")
-        }
-        DeveloperGeneration::CoreDeviceLockdown => {
-            let (adapter, handshake) = open_core_device_proxy(&provider).await?;
-            (adapter, handshake, "CoreDeviceProxy/RSD")
-        }
+    let generation = developer_generation(&provider).await?;
+    if generation == DeveloperGeneration::Legacy {
+        return Err(CommandError::new(
+            "network_capture",
+            "Network capture on iOS 16 and earlier requires a USB connection",
+            false,
+        ));
+    }
+    let Some((route, mut tunnel)) = context.open_rsd_tunnel(&provider, generation, 1).await? else {
+        unreachable!("only Legacy devices have no RSD tunnel");
     };
-    let client = PcapdClient::connect_rsd(&mut adapter, &mut handshake)
+    let client = PcapdClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
         .await
         .map_err(|error| {
             CommandError::new(
@@ -328,7 +266,7 @@ async fn connect_capture(
     Ok(CaptureClient {
         client,
         transport: format!("Pcapd · {route}"),
-        _adapter: Some(adapter),
+        _adapter: Some(tunnel.adapter),
     })
 }
 
@@ -368,7 +306,7 @@ async fn remove_partial(path: &Path) {
 
 async fn run_capture(
     app: &AppHandle,
-    context: CaptureContext,
+    context: DeviceContext,
     destination: &Path,
     temporary: &Path,
     filter: &NetworkCaptureFilter,
@@ -429,7 +367,7 @@ async fn run_capture(
 
     let connection = tokio::select! {
         _ = token.cancelled() => None,
-        result = tokio::time::timeout(CONNECT_TIMEOUT, connect_capture(app, &context)) => {
+        result = tokio::time::timeout(CONNECT_TIMEOUT, connect_capture(&context)) => {
             Some(result.map_err(|_| CommandError::new(
                 "network_capture",
                 "Timed out opening the pcapd service. Keep the device unlocked and retry.",
@@ -523,7 +461,7 @@ pub async fn network_capture_start(
 ) -> CommandResult<()> {
     let destination = validate_destination(&local_path)?;
     let filter = capture_filter(pid, interface_name)?;
-    let context = context(&app_state, udid).await?;
+    let context = DeviceContext::resolve(&app, &app_state, udid).await?;
     let id = Uuid::new_v4();
     let temporary = temporary_path(&destination, id)?;
     let token = CancellationToken::new();

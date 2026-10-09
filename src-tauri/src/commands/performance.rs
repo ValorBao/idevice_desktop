@@ -1,27 +1,24 @@
 use std::{cmp::Ordering, future::Future, time::Duration};
 
 use idevice::{
-    IdeviceError, IdeviceService, ReadWrite, RsdService,
-    core_device_proxy::CoreDeviceProxy,
+    IdeviceError, ReadWrite, RsdService,
     dvt::{
         device_info::DeviceInfoClient,
         message::AuxValue,
         remote_server::{Channel, RemoteServerClient},
         sysmontap::SysmontapSample,
     },
-    rsd::RsdHandshake,
 };
 use plist::{Dictionary, Value};
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
-    discovery::{LockdownTarget, RemotePairingTarget},
+    device_version::developer_generation,
     error::{CommandError, CommandResult},
-    provider::{RoutedProvider, routed_provider_for},
     state::AppState,
-    tunnel::{RsdTunnel, open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
+    tunnel::RsdTunnel,
     types::{PerformanceExportRow, PerformanceProcessSample, PerformanceSample, PerformanceStatus},
 };
 
@@ -33,14 +30,6 @@ const SYSMONTAP_OUTPUT_FREQUENCY_MS: i64 = 1;
 const MAX_PROCESSES_PER_SAMPLE: usize = 80;
 const MAX_EXPORT_ROWS: usize = 10_000;
 const LEGACY_LIMITATION: &str = "Performance sampling is unavailable on iOS 16 and earlier because the verified Legacy instruments service does not provide a reliable sysmontap stream.";
-
-#[derive(Clone)]
-struct PerformanceContext {
-    udid: String,
-    pairing_path: std::path::PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
-}
 
 enum PerformanceEnd {
     Stopped,
@@ -213,78 +202,12 @@ fn validated_interval(interval_ms: Option<u32>) -> CommandResult<u32> {
     }
 }
 
-async fn context(
-    app: &AppHandle,
-    state: &AppState,
-    override_udid: Option<String>,
-) -> CommandResult<PerformanceContext> {
-    let udid = state
-        .selected(override_udid)
+async fn connect(context: &DeviceContext) -> CommandResult<Option<(&'static str, RsdTunnel)>> {
+    let provider = context.provider().await?;
+    let generation = developer_generation(&provider).await?;
+    context
+        .open_rsd_tunnel(&provider, generation, REMOTE_PAIRING_ATTEMPTS)
         .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let catalog = state.discovery.read().await;
-    Ok(PerformanceContext {
-        pairing_path: remote_pairing_path(app, &udid)?,
-        lockdown_target: catalog.lockdown_target(&udid),
-        remote_target: catalog.remote_pairing_target(&udid),
-        udid,
-    })
-}
-
-async fn open_core_device_proxy(provider: &RoutedProvider) -> CommandResult<RsdTunnel> {
-    let proxy = CoreDeviceProxy::connect(provider)
-        .await
-        .map_err(CommandError::from)?;
-    let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let mut adapter = proxy
-        .create_software_tunnel()
-        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?
-        .to_async_handle();
-    let stream = adapter
-        .connect(rsd_port)
-        .await
-        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?;
-    let handshake = RsdHandshake::new(stream)
-        .await
-        .map_err(CommandError::from)?;
-    Ok(RsdTunnel { adapter, handshake })
-}
-
-async fn connect(context: &PerformanceContext) -> CommandResult<Option<(&'static str, RsdTunnel)>> {
-    let provider = routed_provider_for(&context.udid, context.lockdown_target.as_ref()).await?;
-    match ios_version(&provider).await?.developer_generation() {
-        DeveloperGeneration::Legacy => Ok(None),
-        DeveloperGeneration::CoreDeviceRemote => {
-            let mut attempt = 1;
-            let tunnel = loop {
-                match open_remote_pairing_tunnel(
-                    &provider,
-                    &context.pairing_path,
-                    "idevice-desktop",
-                    context.remote_target.as_ref(),
-                )
-                .await
-                {
-                    Ok(tunnel) => break tunnel,
-                    Err(error) if error.retryable && attempt < REMOTE_PAIRING_ATTEMPTS => {
-                        tracing::warn!(
-                            attempt,
-                            error = %error.message,
-                            "retrying the Performance RemotePairing tunnel"
-                        );
-                        tokio::time::sleep(Duration::from_millis(250 * attempt as u64)).await;
-                        attempt += 1;
-                    }
-                    Err(error) => return Err(error),
-                }
-            };
-            Ok(Some(("RemotePairing/RSD", tunnel)))
-        }
-        DeveloperGeneration::CoreDeviceLockdown => Ok(Some((
-            "CoreDeviceProxy/RSD",
-            open_core_device_proxy(&provider).await?,
-        ))),
-    }
 }
 
 fn emit_status(
@@ -481,7 +404,7 @@ fn normalize_sample(
 
 async fn run_stream(
     app: AppHandle,
-    context: PerformanceContext,
+    context: DeviceContext,
     interval_ms: u32,
     token: CancellationToken,
 ) -> CommandResult<PerformanceEnd> {
@@ -622,7 +545,7 @@ pub async fn performance_start(
     interval_ms: Option<u32>,
 ) -> CommandResult<()> {
     let interval_ms = validated_interval(interval_ms)?;
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     state.replace_task("performance", token.clone()).await;
     emit_status(&app, "connecting", None, None, interval_ms);

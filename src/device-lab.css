@@ -70,9 +70,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(78, 227, 255, 0.12);
+  overflow: hidden;
+  background: linear-gradient(180deg, #10283a, #040d15);
   border: 1px solid rgba(78, 227, 255, 0.4);
-  border-radius: 4px;
+  border-radius: 5px;
   box-shadow: 0 0 10px rgba(78, 227, 255, 0.3);
 }
 .device-lab .brand-mark i {
@@ -133,9 +134,11 @@
   background: rgba(12, 16, 22, 0.6);
   transition: transform 160ms var(--ease-out), border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
 }
-.device-card:hover {
-  border-color: rgba(78, 227, 255, 0.35);
-  box-shadow: 0 0 16px rgba(78, 227, 255, 0.12);
+@media (hover: hover) and (pointer: fine) {
+  .device-card:hover {
+    border-color: rgba(78, 227, 255, 0.35);
+    box-shadow: 0 0 16px rgba(78, 227, 255, 0.12);
+  }
 }
 .device-card:active { transform: scale(0.97); }
 .device-icon {
@@ -237,9 +240,11 @@
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 28px rgba(78, 227, 255, 0.12);
   transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
-.mini-phone-frame:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 36px rgba(78, 227, 255, 0.22);
+@media (hover: hover) and (pointer: fine) {
+  .mini-phone-frame:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 36px rgba(78, 227, 255, 0.22);
+  }
 }
 .mini-phone-frame.has-screen { background: #000; }
 .mini-phone-frame > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -320,9 +325,9 @@
 .probe-heading {
   display: block;
   margin-bottom: 8px;
-  color: rgba(244, 247, 250, 0.35);
-  font: 700 8.5px var(--mono);
-  letter-spacing: 0.2em;
+  color: rgba(244, 247, 250, 0.48);
+  font: 700 9px var(--mono);
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 .probe-list {
@@ -354,7 +359,7 @@
 }
 .probe-led.led-dim { background: #323f4b; }
 .probe-state {
-  color: #576774;
+  color: #7b8c99;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -408,10 +413,12 @@
   cursor: pointer;
   transition: transform 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out);
 }
-.bench-nav-button:hover {
-  color: #fff;
-  background: rgba(78, 227, 255, 0.04);
-  border-color: rgba(78, 227, 255, 0.25);
+@media (hover: hover) and (pointer: fine) {
+  .bench-nav-button:hover {
+    color: #fff;
+    background: rgba(78, 227, 255, 0.04);
+    border-color: rgba(78, 227, 255, 0.25);
+  }
 }
 .bench-nav-button:active { transform: scale(0.97); }
 .bench-nav-button.active {
@@ -495,8 +502,8 @@
 }
 .page-header p {
   margin: 2px 0 0;
-  color: rgba(244, 247, 250, 0.38);
-  font: 9.5px var(--mono);
+  color: rgba(244, 247, 250, 0.55);
+  font: 10px var(--mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -504,8 +511,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(244, 247, 250, 0.45);
-  font: 10px var(--mono);
+  color: rgba(244, 247, 250, 0.62);
+  font: 10.5px var(--mono);
 }
 .header-device-state i {
   width: 1px;
@@ -535,21 +542,27 @@
 /* Workbench Subbars (Tabs) */
 .workbench-subbar {
   padding: 8px 24px 0;
+  overflow-x: auto;
   background: rgba(4, 6, 9, 0.5);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  scrollbar-width: thin;
 }
 .workbench-tabs {
   display: flex;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: min-content;
 }
 .workbench-tabs button {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 14px;
-  color: rgba(244, 247, 250, 0.5);
+  flex: none;
+  padding: 8px 12px;
+  color: rgba(244, 247, 250, 0.58);
   font: 600 11.5px var(--mono);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -599,11 +612,38 @@
 .cockpit {
   position: relative;
   min-height: calc(100vh - 120px);
-  padding: 0 34px;
+  padding: 0 34px 28px;
   overflow: hidden;
 }
+.cockpit-noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .22;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 42%, rgba(78, 227, 255, 0.08), transparent 62%),
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.015) 2px, rgba(255, 255, 255, 0.015) 3px);
+}
+.cockpit-word {
+  position: absolute;
+  left: 18px;
+  top: 54px;
+  z-index: 0;
+  margin: 0;
+  color: rgba(244, 247, 250, 0.035);
+  font: 700 clamp(72px, 11vw, 148px)/.86 var(--font);
+  letter-spacing: -0.06em;
+  pointer-events: none;
+  user-select: none;
+  text-transform: uppercase;
+}
+.cockpit-header,
+.cockpit-stage {
+  position: relative;
+  z-index: 1;
+}
 .cockpit-header {
-  height: 88px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -611,13 +651,13 @@
 }
 .cockpit-header small {
   display: block;
-  color: rgba(244, 247, 250, 0.35);
-  font: 700 9px var(--mono);
-  letter-spacing: 0.22em;
+  color: rgba(244, 247, 250, 0.48);
+  font: 700 9.5px var(--mono);
+  letter-spacing: 0.2em;
 }
 .cockpit-header h1 {
-  margin: 6px 0 0;
-  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  margin: 4px 0 0;
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
   font-weight: 600;
   letter-spacing: -0.04em;
   color: #fff;
@@ -864,6 +904,163 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+.workbench-content {
+  min-height: 0;
+}
+
+.device-lab .tabs {
+  gap: 2px;
+  margin: 0 0 18px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.device-lab .tabs button {
+  flex: none;
+  margin-right: 10px;
+  padding: 8px 2px;
+  color: rgba(244, 247, 250, 0.55);
+  font: 600 12px var(--mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.device-lab .monitor-tabs {
+  margin: 0 24px;
+  padding-top: 10px;
+}
+.device-lab .empty-card {
+  color: rgba(244, 247, 250, 0.55);
+  background: rgba(10, 14, 20, 0.4);
+}
+
+.device-lab .trollstore-page {
+  gap: 14px;
+  padding: 20px 24px;
+}
+.device-lab .trollstore-toolbar > button {
+  color: rgba(244, 247, 250, 0.72);
+  background: rgba(10, 14, 20, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+}
+.device-lab .trollstore-toolbar > button:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(78, 227, 255, 0.35);
+  background: rgba(78, 227, 255, 0.06);
+}
+.device-lab .trollstore-toolbar > button.primary-button {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.device-lab .trollstore-summary > .card {
+  position: relative;
+  padding: 14px 16px 14px 18px;
+  box-shadow: none;
+}
+.device-lab .trollstore-summary > .card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+.device-lab .trollstore-summary > .card.allowed::before {
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(78, 227, 255, 0.45);
+}
+.device-lab .trollstore-summary > .card.refused::before {
+  background: #ff8d87;
+}
+.device-lab .trollstore-note,
+.device-lab .trollstore-apps {
+  box-shadow: none;
+}
+.device-lab .trollstore-apps li {
+  padding: 9px 10px;
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.015);
+}
+.device-lab .trollstore-apps li.selected {
+  border-color: rgba(78, 227, 255, 0.35);
+  background: rgba(78, 227, 255, 0.06);
+}
+.device-lab .trollstore-empty {
+  margin: 16px 0 4px;
+  color: rgba(244, 247, 250, 0.5);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.device-lab .signing-mode-tabs {
+  background: rgba(10, 14, 20, 0.7);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.device-lab .signing-mode-tabs button {
+  color: rgba(244, 247, 250, 0.5);
+  font-size: 11px;
+}
+.device-lab .signing-mode-tabs button.active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  box-shadow: none;
+}
+.device-lab .account-signing-notice,
+.device-lab .signing-intro {
+  border-color: rgba(78, 227, 255, 0.22);
+  background: linear-gradient(110deg, rgba(78, 227, 255, 0.08), rgba(10, 14, 20, 0.65) 48%);
+}
+.device-lab .account-signing-notice > code {
+  color: var(--accent);
+  background: rgba(78, 227, 255, 0.08);
+  border-color: rgba(78, 227, 255, 0.22);
+}
+
+@media (max-width: 1180px), (max-height: 820px) {
+  .bench-device-stage { display: none; }
+  .session-probes { padding-top: 8px; padding-bottom: 8px; }
+}
+
+@media (max-width: 980px) {
+  .left-rail { width: 76px; }
+  .device-select-wrap { padding: 12px 10px 8px; }
+  .device-card { justify-content: center; padding: 8px; }
+  .device-card-copy,
+  .device-card > svg { display: none; }
+  .device-menu {
+    position: fixed;
+    top: 58px;
+    right: auto;
+    left: 80px;
+    width: 240px;
+  }
+  .session-probes { display: none; }
+  .bench-nav-wrap { padding: 10px 8px; }
+  .bench-nav-button { justify-content: center; padding: 12px 8px; }
+  .bench-nav-button .nav-copy { display: none; }
+  .left-rail-footer { justify-content: center; padding: 12px 8px; }
+  .left-rail-footer span { display: none; }
+  .workbench-subbar { padding-left: 16px; padding-right: 16px; }
+  .page-header { padding: 0 16px; }
+  .cockpit { padding: 0 18px 20px; }
+  .cockpit-stage {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    min-height: 0;
+  }
+  .cockpit-model,
+  .cockpit-readout { text-align: left; justify-self: stretch; width: 100%; }
+  .device-lab .monitor-tabs { margin: 0 16px; }
+  .device-lab .trollstore-page { padding: 16px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cockpit-phone, .toast, .device-menu { animation: none; transition: opacity 160ms ease; }
+  .mini-phone-frame { transition: none; }
+  .page-scroll { animation: none; }
 }

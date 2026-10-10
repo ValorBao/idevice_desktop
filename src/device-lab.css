@@ -1006,8 +1006,8 @@
   font-size: 11px;
 }
 .device-lab .signing-mode-tabs button.active {
-  color: var(--accent-contrast);
-  background: var(--accent);
+  color: var(--accent);
+  background: rgba(78, 227, 255, 0.12);
   box-shadow: none;
 }
 .device-lab .account-signing-notice,

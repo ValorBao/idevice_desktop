@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Package, RefreshCw, Upload } from 'lucide-react'
 import { api, dialogs, errorMessage, events, type TrollStoreStatus } from '../api'
 import { useDeviceTask } from '../lib/hooks'
 
@@ -108,10 +108,10 @@ export function TrollStore({ desktop, udid, onToast }: { desktop: boolean; udid:
       <div className="trollstore-toolbar">
         <button disabled={loading || Boolean(busy)} onClick={() => void refresh()}><RefreshCw size={14} className={loading ? 'spinning' : ''} />Refresh</button>
         {status?.helperSupported && selected && (
-          <button disabled={Boolean(busy)} onClick={replaceHelper}>Replace {selected.name}</button>
+          <button disabled={Boolean(busy)} onClick={replaceHelper}><Package size={14} />Replace {selected.name}</button>
         )}
         {status?.ipaInstallAvailable && (
-          <button disabled={Boolean(busy)} onClick={installIpa}>Install IPA</button>
+          <button className="primary-button" disabled={Boolean(busy)} onClick={installIpa}><Upload size={14} />Install IPA</button>
         )}
       </div>
 
@@ -148,14 +148,14 @@ export function TrollStore({ desktop, udid, onToast }: { desktop: boolean; udid:
         {status && status.removableApps.length > 0 ? (
           <ul>
             {status.removableApps.map((app) => (
-              <li key={app.bundleId}>
+              <li key={app.bundleId} className={app.bundleId === selected?.bundleId ? 'selected' : undefined}>
                 <button type="button" aria-pressed={app.bundleId === selected?.bundleId} onClick={() => setSelectedBundle(app.bundleId)}>{app.name}</button>
                 <code>{app.bundleName}</code>
               </li>
             ))}
           </ul>
         ) : (
-          <p>{loading ? 'Looking for removable system apps.' : 'No removable system app was found. Tips is the usual choice once it is installed from the App Store.'}</p>
+          <p className="trollstore-empty">{loading ? 'Looking for removable system apps.' : 'No removable system app was found. Tips is the usual choice once it is installed from the App Store.'}</p>
         )}
       </div>
     </section>

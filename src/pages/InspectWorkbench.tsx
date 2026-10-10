@@ -10,14 +10,16 @@ export type InspectSubView = 'overview' | 'diagnostics' | 'crashes'
 export const inspectTabs: readonly TabItem<InspectSubView>[] = [
   {
     id: 'overview',
-    label: 'Overview & Hardware',
+    label: 'Overview',
+    ariaLabel: 'Overview & Hardware',
     icon: <AppWindow size={14} />,
     title: 'Inspect Station',
     detail: 'Vehicle Telemetry · Diagnostics Relay · Crash Analytics',
   },
   {
     id: 'diagnostics',
-    label: 'Diagnostics Relay',
+    label: 'Diagnostics',
+    ariaLabel: 'Diagnostics Relay',
     icon: <Activity size={14} />,
     title: 'Diagnostics Relay',
     detail: 'com.apple.mobile.diagnostics_relay',

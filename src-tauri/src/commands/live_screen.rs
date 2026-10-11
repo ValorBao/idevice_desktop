@@ -3,9 +3,7 @@ use std::{future::Future, path::PathBuf, time::Duration};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use idevice::{
     IdeviceService, ReadWrite, RsdService,
-    core_device_proxy::CoreDeviceProxy,
     dvt::{remote_server::RemoteServerClient, screenshot::ScreenshotClient},
-    rsd::RsdHandshake,
     screenshotr::ScreenshotService,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -14,11 +12,12 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     device_version::{DeveloperGeneration, ios_version},
-    discovery::{LockdownTarget, RemotePairingTarget},
     error::{CommandError, CommandResult},
-    provider::routed_provider_for,
     state::AppState,
-    tunnel::{RsdTunnel, open_remote_pairing_tunnel, remote_pairing_path},
+    transport::{
+        DeviceContext, ROUTE_CORE_DEVICE_PROXY, ROUTE_REMOTE_PAIRING,
+        open_core_device_proxy_bounded,
+    },
     types::{LiveScreenFrame, LiveScreenStatus},
 };
 
@@ -29,14 +28,6 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 const FRAME_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_FRAME_BYTES: usize = 12 * 1024 * 1024;
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
-
-#[derive(Clone)]
-struct LiveScreenContext {
-    udid: String,
-    pairing_path: PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
-}
 
 #[derive(Clone)]
 struct StoredFrame {
@@ -137,24 +128,6 @@ fn frame_destination(value: &str) -> CommandResult<PathBuf> {
     Ok(path)
 }
 
-async fn context(
-    app: &AppHandle,
-    state: &AppState,
-    override_udid: Option<String>,
-) -> CommandResult<LiveScreenContext> {
-    let udid = state
-        .selected(override_udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let catalog = state.discovery.read().await;
-    Ok(LiveScreenContext {
-        pairing_path: remote_pairing_path(app, &udid)?,
-        lockdown_target: catalog.lockdown_target(&udid),
-        remote_target: catalog.remote_pairing_target(&udid),
-        udid,
-    })
-}
-
 async fn wait_for<T, E, F>(
     label: &str,
     duration: Duration,
@@ -180,39 +153,6 @@ where
             ))?
             .map_err(|error| CommandError::new("live_screen", error.to_string(), true)),
     }
-}
-
-async fn open_core_device_proxy(
-    provider: &crate::provider::RoutedProvider,
-    token: &CancellationToken,
-) -> CommandResult<RsdTunnel> {
-    let proxy = wait_for(
-        "opening CoreDeviceProxy",
-        CONNECT_TIMEOUT,
-        token,
-        CoreDeviceProxy::connect(provider),
-    )
-    .await?;
-    let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let mut adapter = proxy
-        .create_software_tunnel()
-        .map_err(|error| CommandError::new("live_screen", error.to_string(), true))?
-        .to_async_handle();
-    let stream = wait_for(
-        "connecting to RSD",
-        CONNECT_TIMEOUT,
-        token,
-        adapter.connect(rsd_port),
-    )
-    .await?;
-    let handshake = wait_for(
-        "performing the RSD handshake",
-        CONNECT_TIMEOUT,
-        token,
-        RsdHandshake::new(stream),
-    )
-    .await?;
-    Ok(RsdTunnel { adapter, handshake })
 }
 
 async fn stream_frames<S: FrameSource>(
@@ -279,14 +219,14 @@ async fn stream_frames<S: FrameSource>(
 
 async fn run_stream(
     app: AppHandle,
-    context: LiveScreenContext,
+    context: DeviceContext,
     token: CancellationToken,
 ) -> CommandResult<()> {
     let provider = wait_for(
         "opening the selected device",
         CONNECT_TIMEOUT,
         &token,
-        routed_provider_for(&context.udid, context.lockdown_target.as_ref()),
+        context.provider(),
     )
     .await?;
     let version = wait_for(
@@ -325,19 +265,14 @@ async fn run_stream(
                         "opening the RemotePairing tunnel",
                         CONNECT_TIMEOUT,
                         &token,
-                        open_remote_pairing_tunnel(
-                            &provider,
-                            &context.pairing_path,
-                            "idevice-desktop",
-                            context.remote_target.as_ref(),
-                        ),
+                        context.open_remote_pairing_tunnel(&provider, 1),
                     )
                     .await?;
-                    ("RemotePairing/RSD", tunnel)
+                    (ROUTE_REMOTE_PAIRING, tunnel)
                 }
                 DeveloperGeneration::CoreDeviceLockdown => (
-                    "CoreDeviceProxy/RSD",
-                    open_core_device_proxy(&provider, &token).await?,
+                    ROUTE_CORE_DEVICE_PROXY,
+                    open_core_device_proxy_bounded(&provider, &token, CONNECT_TIMEOUT).await?,
                 ),
                 DeveloperGeneration::Legacy => unreachable!(),
             };
@@ -390,7 +325,7 @@ pub async fn live_screen_start(
     screen_state: State<'_, LiveScreenState>,
     udid: Option<String>,
 ) -> CommandResult<()> {
-    let context = context(&app, &app_state, udid).await?;
+    let context = DeviceContext::resolve(&app, &app_state, udid).await?;
     let token = CancellationToken::new();
     app_state
         .replace_task(LIVE_SCREEN_TASK, token.clone())

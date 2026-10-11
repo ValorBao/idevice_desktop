@@ -124,7 +124,7 @@ export function TestLab({ desktop, udid, onToast }: { desktop: boolean; udid: st
 
   useEffect(() => { void refresh() }, [refresh])
 
-  const runners = snapshot?.runners ?? []
+  const runners = useMemo(() => snapshot?.runners ?? [], [snapshot])
   const shownRunners = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return runners

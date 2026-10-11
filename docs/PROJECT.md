@@ -1,8 +1,8 @@
 # idevice_desktop Project Overview
 
-> Last updated: 2026-08-29
+> Last updated: 2026-08-30
 > Current release: 0.0.2 Developer Preview
-> Development version: 0.0.3
+> Development version: 0.0.4
 
 ## 1. Project Positioning
 
@@ -49,7 +49,23 @@ The exception is Developer Mode, which Apple introduced in iOS 16. On iOS 14 and
 
 macOS 11.0 is the floor because releases are built for `arm64`, and Apple Silicon starts there. It matches what the binary itself requires, so the bundle no longer advertises a lower version than it can run on.
 
-Automatic DDI mounting for iOS 17 and later shells out to `devicectl`, which needs Xcode 15 and therefore macOS 13.5. That is a requirement of one feature, not of the application: mounting through Choose files works without it.
+Automatic DDI mounting for iOS 17 and later shells out to `devicectl`, which needs Xcode 15 and therefore macOS 13.5. That is a requirement of one feature, not of the application.
+
+Mounting has no interface. `ddi_ensure` runs once per device selection, checks whether an image is already mounted, and mounts one if not. iOS 17 and later personalize the image on the device, so nothing has to be supplied — Xcode's `/Library/Developer/DeveloperDiskImages/iOS_DDI` is one image set covering every product type, which is why that generation needs no per-version handling.
+
+iOS 16 and earlier mount a prebuilt image instead, and `legacy_ddi.rs` uses **one** pinned image for all of them rather than matching the device's release. That is a deliberate trade. Apple signs an image per release, and mounting a mismatched one is not guaranteed to work — see the known risk below — but the alternative makes behaviour depend on which Xcode a given Mac happens to have installed, which is not reproducible across machines or in a bug report.
+
+The image is **not** redistributed with the application. Apple's disk images are proprietary and the community mirrors that host them carry no license, so shipping one inside the bundle would put unlicensed, Apple-owned material in the release itself. Instead `ddi_download` fetches it once, only when the user asks, from a commit-pinned URL, checks both files against a pinned SHA-256 and byte length, and installs them atomically into the user's own `~/Library/Developer/DeveloperDiskImages/<version>`. That directory and a matching Xcode `DeviceSupport` folder are both read on startup, so a Mac that already has the file never downloads it. `ddi_ensure` reports a missing image as the error kind `ddi-missing`, which is what makes the Developer page offer the download instead of a failure.
+
+`cargo run --example verify_legacy_ddi` reports the install state, and `-- --install` exercises the production download path with no device attached.
+
+| | iOS 16 and earlier | iOS 17 and later |
+| --- | --- | --- |
+| Image | one pinned `DeveloperDiskImage.dmg` (currently 14.2) | personalized on the device |
+| Source | downloaded on request, or an existing Xcode copy | Xcode's `iOS_DDI`, via `devicectl` |
+| Network | once per Mac, user-initiated | never |
+
+**Known risk.** The pinned image is built for iOS 14.2, and iOS 14.2 is verified: an iPhone10,1 mounted it automatically on selection. The signature is over the image rather than bound to the device's release, so the mount itself is expected to succeed on other Legacy releases, but the developer tools inside the image are compiled for 14.x. An iOS 15 or 16 device may mount it and still have a developer service behave incorrectly. Only iOS 14.2 is covered until each release is verified on hardware; the choice of a single image is recorded here so a failure on 15 or 16 is read as this trade-off rather than as a transport defect.
 
 The unverified iOS floor is a statement about which code paths exist, not a compatibility claim. Nothing below 14.2 has been run. Systems old enough to need pre-TLS 1.2 handshakes are expected to fail outright, because the project builds `idevice` against rustls, which does not implement them.
 
@@ -78,6 +94,7 @@ The frontend detects the Tauri runtime and selects the appropriate mode automati
 | Diagnostics | Battery, MobileGestalt, IORegistry, NAND, and Wi-Fi data | Diagnostics Relay |
 | Files | Browse AFC and file-sharing app containers; upload, download, create directories, and remove recursively | AFC, House Arrest |
 | Apps | List user applications and icons; install and uninstall IPAs; show installation progress | Installation Proxy, SpringBoardServices |
+| Personal Sign | Sign in with an Apple Account and 2FA to register the selected device, acquire development assets, sign/export/install an IPA; or use a local profile and matching Keychain identity | `isideload`, Apple developer services, macOS Keychain, `codesign`, Installation Proxy |
 | Crash Reports | List, filter, preview, and export device reports | CrashReportCopyMobile, AFC |
 | Logs | Stream, filter, pause, and clear structured logs | OS Trace and syslog services |
 | Debug Tools | Manage Developer Mode and DDI; launch applications; maintain JIT sessions | AMFI, Image Mounter, CoreDevice, DVT, debug proxy |
@@ -92,6 +109,7 @@ flowchart LR
     CMD --> STATE["AppState\nDiscovery catalog, selected device,\nand task cancellation"]
     DISC["Discovery\nusbmuxd + Bonjour"] --> STATE
     CMD --> LIB["jkcoxson/idevice"]
+    CMD --> SIGN["isideload\nApple Account + personal signing"]
     LIB --> ROUTE["Provider routing\nusbmuxd or paired Bonjour TCP"]
     ROUTE --> MUX["USB / local network"]
     MUX --> IOS["iPhone / iPad"]
@@ -104,7 +122,9 @@ flowchart LR
 - React 18, TypeScript, and Vite
 - `src/App.tsx` holds the application shell: device selection, navigation, and page routing.
 - `src/pages/` contains one module per feature page, and `src/components/` holds the shell and shared presentation components.
-- `src/lib/` holds byte and value formatting plus the conversions between backend responses and view models.
+- `src/lib/` holds byte and value formatting, the conversions between backend responses and view models, and the shared hooks: `useDeviceSession` owns discovery, selection, pairing and the background DDI mount; `useDeviceEvents` owns the subscribe-start-stop lifecycle of a streaming page; `useDeviceTask` wraps the demo-mode guard and error reporting; `useInterval` and `useFileDrop` cover polling and native drops.
+- A page reports to the shell through one `onToast` prop, used for successes as well as failures. Hooks take `onError`, which only ever reports a failure.
+- `src/components/WorkbenchTabs.tsx` renders the tab bar for every workbench. A tab definition carries its own page-header copy, so the header and the tab cannot disagree.
 - `src/types.ts` defines the shell-level union types shared across pages.
 - `src/api.ts` defines the Tauri commands, events, and cross-boundary data types.
 - `src/data.ts` supplies browser-demo data.
@@ -114,7 +134,8 @@ flowchart LR
 ### Desktop Backend
 
 - Tauri 2, Rust 2024 edition, and Tokio
-- `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, crash reports, logs, developer, location, and screenshot commands.
+- `src-tauri/src/commands/` separates device, overview, diagnostics, files, apps, personal signing, crash reports, logs, developer, location, and screenshot commands.
+- `transport.rs` resolves the selected device into a `DeviceContext` and opens the RSD tunnel that matches its generation, including the RemotePairing retry loop. Command modules decide what to do with a tunnel; they do not open one themselves.
 - `AppState` stores the unified discovery catalog and selected device, and uses cancellation tokens for monitoring, logs, JIT, location, and other long-running tasks.
 - `discovery.rs` merges usbmuxd, `_apple-mobdev2._tcp`, `_remotepairing._tcp`, and manual RemotePairing observations. USB is preferred; Wi-Fi MAC address, UDID, hostname, and address overlap are used to reconcile transports.
 - A known paired device remains selectable through direct Bonjour TCP Lockdown if its usbmuxd observation disappears. Unidentified mobdev2 and manual RemotePairing records remain visible for association, while unidentifiable RemotePairing-only records are hidden.
@@ -154,7 +175,7 @@ JIT differs between generations beyond transport. iOS 17 and later launch the ap
 │   ├── App.tsx              # Application shell, navigation, and page routing
 │   ├── pages/               # One module per feature page
 │   ├── components/          # Shell and shared presentation components
-│   ├── lib/                 # Formatting and backend-to-view-model conversion
+│   ├── lib/                 # Shared hooks, formatting, view-model conversion
 │   ├── types.ts             # Shell-level shared types
 │   ├── api.ts               # Tauri API and event boundary
 │   ├── data.ts              # Browser demo data
@@ -162,9 +183,12 @@ JIT differs between generations beyond transport. iOS 17 and later launch the ap
 │   └── device-lab.css       # Device Lab theme layered over the base styles
 ├── src-tauri/               # Tauri and Rust backend
 │   ├── src/commands/        # Device capability commands
-│   ├── src/discovery.rs      # Unified usbmuxd and Bonjour device catalog
+│   ├── src/discovery.rs     # Unified usbmuxd and Bonjour device catalog
 │   ├── src/state.rs         # Application state and task lifecycle
+│   ├── src/transport.rs     # Device context and generation-aware RSD tunnels
 │   ├── src/tunnel.rs        # RemotePairing and RSD tunnels
+│   ├── src/types.rs         # Cross-boundary response types
+│   └── src/types/contract.rs # Contract tests against src/api.ts
 │   └── Cargo.toml
 ├── build.sh                 # Desktop build entry point
 └── package.json
@@ -187,6 +211,7 @@ npm install
 npm run dev
 npm run desktop:dev
 npm run build
+npm run lint
 cargo check --manifest-path src-tauri/Cargo.toml
 npm run desktop:build
 ```
@@ -197,7 +222,9 @@ npm run desktop:build
 
 - `src/api.ts` is the frontend-backend contract. Any Rust response-type change must be reflected in its TypeScript counterpart.
 - Switching or disconnecting a device must cancel tasks that depend on the previous device so log, JIT, and location sessions cannot leak.
-- Features that use iOS developer services must select a transport through `device_version.rs` instead of assuming one protocol for every system version.
+- Features that use iOS developer services must select a transport through `device_version.rs` instead of assuming one protocol for every system version, and must open it through `transport.rs` rather than building a tunnel of their own.
+- A streaming page registers its listeners through `useDeviceEvents` rather than hand-writing the subscribe-start-stop sequence; a missed branch there leaks a device session.
+- `npm run lint` runs ESLint with the React hook rules. CI runs it before the tests.
 - Keep local and CI Rust checks on the version in `rust-toolchain.toml`; floating Stable Clippy releases can introduce new warnings without a source change.
 - The upstream `idevice` dependency is pinned to `8eed181f39a16ea70380ec8c3cff6bed07a1ef69`. Upgrades follow the process below.
 
@@ -220,7 +247,6 @@ An upgrade that cannot be validated on hardware for a generation is recorded as 
 - RemotePairing on iOS 17.0 through 17.3 depends on Bonjour discovery and a locally stored pairing file, making it sensitive to network conditions.
 - Direct Bonjour TCP Lockdown and RemotePairing/RSD crash-report access pass on the validated iOS 17.0 device. The corresponding iOS 17.4+ CoreDeviceProxy crash-report path is integrated but not yet verified on hardware.
 - On iOS 14.2, USB discovery and routing, nested crash-report export, legacy screenshot and location services, OS Trace, five diagnostic request paths, AFC file round trips, and user-app listing with icons pass at the backend. Frontend interaction remains a separate acceptance layer.
-- The frontend is split into a shell, page modules, shared components, and helpers, but still has no component tests, so refactors rely on the type checker and the production build alone.
 - The project does not yet have systematic frontend tests, Rust integration tests, or automated real-device compatibility tests.
 - Map tiles come from the online OpenStreetMap service and will not work offline or on restricted networks.
 - The Tauri CSP restricts scripts to bundled code, but `style-src` still allows inline styles because React style props and Leaflet's map positioning both depend on them. Removing that would mean rewriting both.

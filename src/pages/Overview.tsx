@@ -5,7 +5,7 @@ import { api, errorMessage, type DeviceOverview } from '../api'
 import { deviceScreenCache } from '../lib/device'
 import { bytes } from '../lib/format'
 
-export function Overview({ device, desktop, onError }: { device: Device; desktop: boolean; onError: (message: string) => void }) {
+export function Overview({ device, desktop, onToast }: { device: Device; desktop: boolean; onToast: (message: string) => void }) {
   const [overview, setOverview] = useState<DeviceOverview | null>(null)
   const [screenImage, setScreenImage] = useState(() => deviceScreenCache.get(device.udid) ?? '')
   const [screenError, setScreenError] = useState('')
@@ -13,7 +13,9 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
   const [phoneRotation, setPhoneRotation] = useState({ x: 0, y: 0 })
   const [phoneDragging, setPhoneDragging] = useState(false)
   const dragStart = useRef<{ x: number; y: number; rx: number; ry: number } | null>(null)
-  const refreshScreen = useCallback(async (mountIfNeeded = false) => {
+  // The developer disk image is mounted when the device is selected, so a failed
+  // screenshot is a real failure rather than a missing mount.
+  const refreshScreen = useCallback(async () => {
     if (!desktop) return
     setScreenLoading(true)
     setScreenError('')
@@ -22,18 +24,7 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
       deviceScreenCache.set(device.udid, image)
       setScreenImage(image)
     } catch (error) {
-      if (!mountIfNeeded) {
-        setScreenError(errorMessage(error))
-      } else {
-        try {
-          await api.ddiMountAuto(device.udid)
-          const image = await api.screenshot(device.udid)
-          deviceScreenCache.set(device.udid, image)
-          setScreenImage(image)
-        } catch (setupError) {
-          setScreenError(errorMessage(setupError))
-        }
-      }
+      setScreenError(errorMessage(error))
     } finally {
       setScreenLoading(false)
     }
@@ -41,8 +32,8 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
   useEffect(() => {
     if (!desktop) return
     setOverview(null)
-    void api.overview(device.udid).then(setOverview).catch((error) => onError(errorMessage(error)))
-  }, [desktop, device.udid, onError])
+    void api.overview(device.udid).then(setOverview).catch((error) => onToast(errorMessage(error)))
+  }, [desktop, device.udid, onToast])
   useEffect(() => {
     const cached = deviceScreenCache.get(device.udid)
     if (cached) {
@@ -51,7 +42,7 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
       return
     }
     setScreenImage('')
-    void refreshScreen(true)
+    void refreshScreen()
   }, [device.udid, refreshScreen])
   const storageTotal = overview?.storage?.totalBytes ?? device.storageTotal * 1024 ** 3
   const storageUsed = overview?.storage?.usedBytes ?? device.storageUsed * 1024 ** 3
@@ -63,7 +54,7 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
   const screenStatus = screenError
     ? screenError.toLowerCase().includes('locked')
       ? 'Unlock iPhone\nthen refresh'
-      : 'DDI not mounted\ntap refresh'
+      : 'Screenshot failed\ntap refresh'
     : screenLoading ? 'Loading…' : device.chip
   const startPhoneRotation = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.target instanceof Element && event.target.closest('button')) return
@@ -123,7 +114,7 @@ export function Overview({ device, desktop, onError }: { device: Device; desktop
           <div className={`phone-frame cockpit-phone ${screenImage ? 'has-screen' : ''}`} title={screenError || 'Device screen'}>
             {screenImage ? <img src={screenImage} alt="Current device screen" /> : <div className="cockpit-screen"><Zap size={25} /><small>{screenStatus}</small></div>}
             <span className="phone-notch" />
-            {desktop && <button className={`phone-refresh ${screenLoading ? 'loading' : ''}`} type="button" title="Refresh device screen" aria-label="Refresh device screen" disabled={screenLoading} onClick={() => void refreshScreen(true)}><RefreshCw size={13} /></button>}
+            {desktop && <button className={`phone-refresh ${screenLoading ? 'loading' : ''}`} type="button" title="Refresh device screen" aria-label="Refresh device screen" disabled={screenLoading} onClick={() => void refreshScreen()}><RefreshCw size={13} /></button>}
           </div>
           <div className="cockpit-signal"><i /><span>{overview?.connection ?? device.conn}</span><b>LOCKDOWN / ACTIVE</b></div>
         </div>

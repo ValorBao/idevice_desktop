@@ -6,13 +6,11 @@ use std::{
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use idevice::{
-    IdeviceService, ReadWrite, RsdService,
+    ReadWrite, RsdService,
     core_device::{
         DataInclusionPolicy, GENERAL_PASTEBOARD, PasteboardPayload, PasteboardServiceClient,
         PasteboardSnapshot,
     },
-    core_device_proxy::CoreDeviceProxy,
-    rsd::RsdHandshake,
     tcp::handle::AdapterHandle,
 };
 use tauri::{AppHandle, State};
@@ -21,12 +19,10 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
-    discovery::{LockdownTarget, RemotePairingTarget},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
-    provider::{RoutedProvider, routed_provider_for},
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{
         PasteboardImagePreparation, PasteboardImageSnapshot, PasteboardImageWriteResult,
         PasteboardTextSnapshot, PasteboardWriteResult,
@@ -63,14 +59,6 @@ enum PasteboardTransport {
     Unsupported,
     RemoteRsd,
     CoreDeviceRsd,
-}
-
-#[derive(Clone)]
-struct PasteboardContext {
-    udid: String,
-    pairing_path: PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
 }
 
 struct PasteboardConnection {
@@ -455,72 +443,20 @@ fn image_preparation(image: &PreparedPasteboardImage) -> PasteboardImagePreparat
     }
 }
 
-async fn context(
-    app: &AppHandle,
-    state: &AppState,
-    override_udid: Option<String>,
-) -> CommandResult<PasteboardContext> {
-    let udid = state
-        .selected(override_udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let catalog = state.discovery.read().await;
-    Ok(PasteboardContext {
-        pairing_path: remote_pairing_path(app, &udid)?,
-        lockdown_target: catalog.lockdown_target(&udid),
-        remote_target: catalog.remote_pairing_target(&udid),
-        udid,
-    })
-}
-
-async fn open_core_device_proxy(
-    provider: &RoutedProvider,
-) -> CommandResult<(AdapterHandle, RsdHandshake)> {
-    let proxy = CoreDeviceProxy::connect(provider)
-        .await
-        .map_err(CommandError::from)?;
-    let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let mut adapter = proxy
-        .create_software_tunnel()
-        .map_err(|error| CommandError::new("pasteboard", error.to_string(), true))?
-        .to_async_handle();
-    let stream = adapter
-        .connect(rsd_port)
-        .await
-        .map_err(|error| CommandError::new("pasteboard", error.to_string(), true))?;
-    let handshake = RsdHandshake::new(stream)
-        .await
-        .map_err(CommandError::from)?;
-    Ok((adapter, handshake))
-}
-
-async fn connect(context: &PasteboardContext) -> CommandResult<PasteboardConnection> {
-    let provider = routed_provider_for(&context.udid, context.lockdown_target.as_ref()).await?;
-    let generation = ios_version(&provider).await?.developer_generation();
-    let (route, mut adapter, mut handshake) = match pasteboard_transport(generation) {
-        PasteboardTransport::Unsupported => {
-            return Err(CommandError::new(
-                "pasteboard",
-                "Pasteboard transfer requires iOS 17 or later",
-                false,
-            ));
-        }
-        PasteboardTransport::RemoteRsd => {
-            let tunnel = open_remote_pairing_tunnel(
-                &provider,
-                &context.pairing_path,
-                "idevice-desktop",
-                context.remote_target.as_ref(),
-            )
-            .await?;
-            ("RemotePairing/RSD", tunnel.adapter, tunnel.handshake)
-        }
-        PasteboardTransport::CoreDeviceRsd => {
-            let (adapter, handshake) = open_core_device_proxy(&provider).await?;
-            ("CoreDeviceProxy/RSD", adapter, handshake)
-        }
+async fn connect(context: &DeviceContext) -> CommandResult<PasteboardConnection> {
+    let provider = context.provider().await?;
+    let generation = developer_generation(&provider).await?;
+    if pasteboard_transport(generation) == PasteboardTransport::Unsupported {
+        return Err(CommandError::new(
+            "pasteboard",
+            "Pasteboard transfer requires iOS 17 or later",
+            false,
+        ));
+    }
+    let Some((route, mut tunnel)) = context.open_rsd_tunnel(&provider, generation, 1).await? else {
+        unreachable!("only Legacy devices have no RSD tunnel");
     };
-    let client = PasteboardServiceClient::connect_rsd(&mut adapter, &mut handshake)
+    let client = PasteboardServiceClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
         .await
         .map_err(|error| {
             CommandError::new(
@@ -532,7 +468,7 @@ async fn connect(context: &PasteboardContext) -> CommandResult<PasteboardConnect
     Ok(PasteboardConnection {
         client,
         transport: format!("CoreDevice Pasteboard · {route}"),
-        _adapter: adapter,
+        _adapter: tunnel.adapter,
     })
 }
 
@@ -560,7 +496,7 @@ where
     }
 }
 
-async fn read_text(context: PasteboardContext) -> CommandResult<PasteboardTextSnapshot> {
+async fn read_text(context: DeviceContext) -> CommandResult<PasteboardTextSnapshot> {
     let mut connection = connect(&context).await?;
     // Promise all item bytes first. Only a bounded plain-text item is resolved,
     // so reading text never pulls image or arbitrary pasteboard payloads.
@@ -632,7 +568,7 @@ async fn read_text(context: PasteboardContext) -> CommandResult<PasteboardTextSn
     })
 }
 
-async fn read_image(context: PasteboardContext) -> CommandResult<PasteboardImageSnapshot> {
+async fn read_image(context: DeviceContext) -> CommandResult<PasteboardImageSnapshot> {
     let mut connection = connect(&context).await?;
     // Promise all item bytes first, then resolve only a PNG/JPEG whose declared
     // size fits the cap. Arbitrary or unbounded pasteboard content stays remote.
@@ -700,7 +636,7 @@ async fn read_image(context: PasteboardContext) -> CommandResult<PasteboardImage
 }
 
 async fn write_text(
-    context: PasteboardContext,
+    context: DeviceContext,
     text: String,
     byte_length: u64,
     character_count: u64,
@@ -719,7 +655,7 @@ async fn write_text(
 }
 
 async fn write_image(
-    context: PasteboardContext,
+    context: DeviceContext,
     image: PreparedPasteboardImage,
 ) -> CommandResult<PasteboardImageWriteResult> {
     let mut connection = connect(&context).await?;
@@ -752,7 +688,7 @@ pub async fn pasteboard_text_read(
     state: State<'_, AppState>,
     udid: Option<String>,
 ) -> CommandResult<PasteboardTextSnapshot> {
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     let task_key = format!("pasteboard-read-{}", Uuid::new_v4());
     state.replace_task(task_key.clone(), token.clone()).await;
@@ -781,7 +717,7 @@ pub async fn pasteboard_text_write(
     text: String,
 ) -> CommandResult<PasteboardWriteResult> {
     let (byte_length, character_count) = validate_write_text(&text)?;
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     let task_key = format!("pasteboard-write-{}", Uuid::new_v4());
     state.replace_task(task_key.clone(), token.clone()).await;
@@ -808,7 +744,7 @@ pub async fn pasteboard_image_read(
     state: State<'_, AppState>,
     udid: Option<String>,
 ) -> CommandResult<PasteboardImageSnapshot> {
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     let task_key = format!("pasteboard-image-read-{}", Uuid::new_v4());
     state.replace_task(task_key.clone(), token.clone()).await;
@@ -913,7 +849,7 @@ pub async fn pasteboard_image_write(
     udid: Option<String>,
     preparation_id: String,
 ) -> CommandResult<PasteboardImageWriteResult> {
-    let context = context(&app, &app_state, udid).await?;
+    let context = DeviceContext::resolve(&app, &app_state, udid).await?;
     let image = pasteboard_state
         .prepared_image
         .lock()

@@ -333,6 +333,10 @@ pending.
 2. Complete XCTest and WDA execution only when launch parameters, event output,
    timeout, Stop, RemotePairing support, cleanup, readiness, and port bridging can
    be presented as one understandable workflow.
+3. Accept the new Apple Account Personal Signing flow on a dedicated account and
+   device before release. Cover 2FA, multiple-team behavior, certificate limits,
+   Keychain denial, Anisette/network failures, export/install cleanup, and sign-out.
+   `.p12` import and broader bundle behavior remain separate safety designs.
 
 High-risk activation, backup/restore, restore mode, HID injection, and Preboard do
 not enter the near-term roadmap. They require dedicated safety designs and must not
@@ -387,3 +391,24 @@ Screen main preview, read-only Lockdown profile inspection, and Test Lab's
 empty-runner/unsupported-route state. Network Capture, Notifications, and Pasteboard
 were intentionally limited to their safe initial states so no packet file,
 subscription, or clipboard access occurred without a dedicated acceptance action.
+
+On 2026-08-30 development moved to 0.0.4 for a bounded Personal Signing Assistant.
+The first slice takes an IPA and provisioning profile, validates archive paths and
+size, checks bundle ID, expiry, and the selected device, compares the SHA-1 hashes of
+the profile's embedded developer certificates against valid macOS Keychain code-
+signing identities, specializes wildcard application/keychain entitlements, signs in
+a UUID-scoped temporary workspace, verifies the result with `codesign`, and atomically
+exports a new IPA before offering the existing device installer. The source IPA is
+never overwritten. The workflow refuses symbolic links, app extensions, nested or
+Watch applications, expired profiles, unauthorized devices, and mismatched identities.
+The page now also defaults to an iLoader-compatible Apple Account mode backed by
+`isideload`. It requests the password only for the current login, clears the field
+immediately, zeroizes the Rust-side value, never persists the password, and stores
+certificate/Anisette material only in macOS Keychain. After 2FA it discovers the
+first developer team, registers the selected device, creates or reuses development
+assets, signs, exports, and hands the output to the existing installer. The route is
+explicitly marked unofficial because it uses Apple private endpoints and the
+community `ani.sidestore.io` service. Automated checks and browser visual acceptance
+pass; real-account login and signing remain a release gate. The signing library is
+`apple-codesign-quick`, licensed LGPL-2.1-or-later and linked unmodified; its notice
+and license text ship with the application. `.p12` import remains out of scope.

@@ -7,6 +7,9 @@ import {
   type NotificationObservationEvent,
   type NotificationObservationStatus,
 } from '../api'
+import { createSessionId } from '../lib/session'
+import { on, useDeviceEvents } from '../lib/useDeviceEvents'
+import { useInterval } from '../lib/useInterval'
 
 const MAX_HISTORY = 500
 const MAX_SUBSCRIPTIONS = 32
@@ -21,14 +24,6 @@ const PRESETS = [
   { name: 'com.apple.mobile.lockdown.trusted_host_attached', label: 'Trusted host attached', detail: 'A trusted host connected to the device.' },
   { name: 'com.apple.mobile.lockdown.host_detached', label: 'Host detached', detail: 'A host disconnected from the device.' },
 ] as const
-
-let fallbackSession = 0
-
-const createSessionId = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  fallbackSession += 1
-  return `notifications-${Date.now()}-${fallbackSession}`
-}
 
 const time = (timestampMs: number) => {
   const date = new Date(timestampMs)
@@ -52,7 +47,6 @@ export function Notifications({
   const [customName, setCustomName] = useState('')
   const [history, setHistory] = useState<NotificationObservationEvent[]>([])
   const [query, setQuery] = useState('')
-  const [listenersReady, setListenersReady] = useState(!desktop)
   const [status, setStatus] = useState<NotificationObservationStatus>({
     sessionId: '',
     state: 'idle',
@@ -76,63 +70,34 @@ export function Notifications({
     setHistory((current) => [event, ...current].slice(0, MAX_HISTORY))
   }, [])
 
-  useEffect(() => {
-    if (!desktop) return
-    let disposed = false
-    let stopEvent: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.notificationObservationEvent((event) => {
-        if (!disposed) appendEvent(event)
-      }),
-      events.notificationObservationStatus((next) => {
-        if (disposed || next.sessionId !== activeSessionRef.current) return
+  const listenersReady = useDeviceEvents(desktop, () => ({
+    listeners: [
+      on(events.notificationObservationEvent, appendEvent),
+      on(events.notificationObservationStatus, (next) => {
+        if (next.sessionId !== activeSessionRef.current) return
         if (next.state === 'error') requestedRef.current = false
         const state = next.state === 'stopped' && !requestedRef.current ? 'paused' : next.state
         setStatus({ ...next, state })
         if (next.state === 'error' && next.message) onToast(next.message)
       }),
-    ]).then(([eventListener, statusListener]) => {
-      if (disposed) {
-        eventListener()
-        statusListener()
-        return
-      }
-      stopEvent = eventListener
-      stopStatus = statusListener
-      setListenersReady(true)
-    }).catch((error) => {
-      if (!disposed) {
-        const message = errorMessage(error)
-        setStatus((current) => ({ ...current, state: 'error', message }))
-        onToast(message)
-      }
+    ],
+    stop: () => { if (requestedRef.current) void api.notificationObservationStop() },
+  }), (message) => {
+    setStatus((current) => ({ ...current, state: 'error', message }))
+    onToast(message)
+  }, [appendEvent, udid])
+
+  useInterval(!desktop && status.state === 'running', 1_600, () => {
+    const subscriptions = demoSubscriptionsRef.current
+    if (!subscriptions.length) return
+    demoSequenceRef.current += 1
+    appendEvent({
+      sessionId: activeSessionRef.current,
+      sequence: demoSequenceRef.current,
+      timestampMs: Date.now(),
+      name: subscriptions[(demoSequenceRef.current - 1) % subscriptions.length],
     })
-
-    return () => {
-      disposed = true
-      stopEvent?.()
-      stopStatus?.()
-      if (requestedRef.current) void api.notificationObservationStop()
-    }
-  }, [appendEvent, desktop, onToast, udid])
-
-  useEffect(() => {
-    if (desktop || status.state !== 'running') return
-    const timer = window.setInterval(() => {
-      const subscriptions = demoSubscriptionsRef.current
-      if (!subscriptions.length) return
-      demoSequenceRef.current += 1
-      appendEvent({
-        sessionId: activeSessionRef.current,
-        sequence: demoSequenceRef.current,
-        timestampMs: Date.now(),
-        name: subscriptions[(demoSequenceRef.current - 1) % subscriptions.length],
-      })
-    }, 1_600)
-    return () => window.clearInterval(timer)
-  }, [appendEvent, desktop, status.state])
+  })
 
   const active = status.state === 'connecting' || status.state === 'running'
   const subscriptions = useMemo(() => Array.from(selected), [selected])
@@ -155,6 +120,7 @@ export function Notifications({
   const addCustom = () => {
     const name = customName.trim()
     if (!name) return
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what is rejected
     if (new TextEncoder().encode(name).length > 200 || /[\u0000-\u001f\u007f]/.test(name)) {
       onToast('Notification names must be at most 200 visible bytes')
       return

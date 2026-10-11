@@ -7,6 +7,34 @@ export const bytes = (value: number | null | undefined) => {
   return `${(value / 1024 ** power).toFixed(power > 2 ? 1 : 0)} ${units[power]}`
 }
 
+/**
+ * A byte count at one decimal place below ten units, whole above.
+ *
+ * Pages that show a live, growing figure use this so the width stays steady.
+ * Pages with their own precision, such as the Pasteboard and Profiles size
+ * columns, keep their own formatter on purpose.
+ */
+export const byteSize = (value: number | null) => {
+  if (value === null) return '—'
+  if (value < 1024) return `${value} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let size = value / 1024
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${size < 10 ? size.toFixed(1) : size.toFixed(0)} ${units[unit]}`
+}
+
+/** A package size, never rounding a non-empty file down to zero. */
+export const packageSize = (value: number) => value < 1024 * 1024
+  ? `${Math.max(1, Math.round(value / 1024))} KB`
+  : `${(value / 1024 / 1024).toFixed(1)} MB`
+
+/** The last path segment, for showing a chosen file without its directory. */
+export const fileName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
+
 export const displaySizeToBytes = (value?: string) => {
   if (!value) return 0
   const match = value.match(/^([\d.]+)\s*(KB|MB|GB|TB|B)$/i)

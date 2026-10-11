@@ -8,6 +8,8 @@ import {
   type LiveScreenFrame,
   type LiveScreenStatus,
 } from '../api'
+import { on, useDeviceEvents } from '../lib/useDeviceEvents'
+import { useInterval } from '../lib/useInterval'
 
 const TARGET_FPS = 2
 
@@ -68,7 +70,6 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
   const [status, setStatus] = useState<LiveScreenStatus>(idleStatus)
   const [frame, setFrame] = useState<LiveScreenFrame | null>(null)
   const [fit, setFit] = useState(true)
-  const [listenersReady, setListenersReady] = useState(!desktop)
   const mountedRef = useRef(true)
   const ownsSessionRef = useRef(false)
   const demoSequenceRef = useRef(0)
@@ -78,20 +79,10 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
     return () => { mountedRef.current = false }
   }, [])
 
-  useEffect(() => {
-    if (!desktop) {
-      return () => { ownsSessionRef.current = false }
-    }
-    let disposed = false
-    let stopFrame: (() => void) | undefined
-    let stopStatus: (() => void) | undefined
-
-    void Promise.all([
-      events.liveScreenFrame((next) => {
-        if (!disposed) setFrame(next)
-      }),
-      events.liveScreenStatus((next) => {
-        if (disposed) return
+  const listenersReady = useDeviceEvents(desktop, () => ({
+    listeners: [
+      on(events.liveScreenFrame, setFrame),
+      on(events.liveScreenStatus, (next) => {
         if (next.state === 'error') {
           ownsSessionRef.current = false
           if (next.message) onToast(next.message)
@@ -99,38 +90,19 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
         if (next.state === 'stopped') ownsSessionRef.current = false
         setStatus(next.state === 'stopped' ? { ...next, state: 'paused' } : next)
       }),
-    ]).then(([frameListener, statusListener]) => {
-      if (disposed) {
-        frameListener()
-        statusListener()
-        return
-      }
-      stopFrame = frameListener
-      stopStatus = statusListener
-      setListenersReady(true)
-    }).catch((error) => {
-      if (!disposed) onToast(errorMessage(error))
-    })
-
-    return () => {
-      disposed = true
-      stopFrame?.()
-      stopStatus?.()
+    ],
+    stop: () => {
       if (ownsSessionRef.current) {
         ownsSessionRef.current = false
         void api.liveScreenStop()
       }
-    }
-  }, [desktop, onToast])
+    },
+  }), onToast, [])
 
-  useEffect(() => {
-    if (desktop || status.state !== 'running') return
-    const timer = window.setInterval(() => {
-      demoSequenceRef.current += 1
-      setFrame(demoFrame(demoSequenceRef.current))
-    }, 500)
-    return () => window.clearInterval(timer)
-  }, [desktop, status.state])
+  useInterval(!desktop && status.state === 'running', 500, () => {
+    demoSequenceRef.current += 1
+    setFrame(demoFrame(demoSequenceRef.current))
+  })
 
   useEffect(() => {
     const pauseWhenHidden = () => {

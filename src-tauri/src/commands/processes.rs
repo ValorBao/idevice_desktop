@@ -3,25 +3,23 @@ use std::{collections::HashSet, future::Future, time::Duration};
 use idevice::{
     IdeviceService, RsdService,
     core_device::{AppServiceClient, ProcessToken},
-    core_device_proxy::CoreDeviceProxy,
     dvt::{
         device_info::{DeviceInfoClient, RunningProcess},
         process_control::ProcessControlClient,
         remote_server::RemoteServerClient,
     },
     installation_proxy::InstallationProxyClient,
-    rsd::RsdHandshake,
 };
 use tauri::{AppHandle, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
-    discovery::{LockdownTarget, RemotePairingTarget},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
-    provider::{RoutedProvider, routed_provider_for},
+    provider::RoutedProvider,
     state::AppState,
-    tunnel::{RsdTunnel, open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
+    tunnel::RsdTunnel,
     types::{ProcessLaunch, ProcessSnapshot, ProcessSummary},
 };
 
@@ -31,14 +29,6 @@ const REMOTE_PAIRING_ATTEMPTS: usize = 3;
 const DVT_STOP_LIMITATION: &str = "Stopping applications is disabled on the DVT fallback because this device did not terminate an identity-checked test process. Enable the Developer Disk Image services so CoreDevice AppService is available.";
 const SIGTERM: u32 = 15;
 
-#[derive(Clone)]
-struct ProcessContext {
-    udid: String,
-    pairing_path: std::path::PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
-}
-
 enum ProcessConnection {
     Legacy,
     Core {
@@ -46,24 +36,6 @@ enum ProcessConnection {
         tunnel: Box<RsdTunnel>,
         user_app_names: HashSet<String>,
     },
-}
-
-async fn context(
-    app: &AppHandle,
-    state: &AppState,
-    override_udid: Option<String>,
-) -> CommandResult<ProcessContext> {
-    let udid = state
-        .selected(override_udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let catalog = state.discovery.read().await;
-    Ok(ProcessContext {
-        pairing_path: remote_pairing_path(app, &udid)?,
-        lockdown_target: catalog.lockdown_target(&udid),
-        remote_target: catalog.remote_pairing_target(&udid),
-        udid,
-    })
 }
 
 /// The software tunnel types are intentionally driven by a single-threaded
@@ -100,48 +72,21 @@ where
     .map_err(|error| CommandError::new("runtime", error.to_string(), true))?
 }
 
-async fn connect(context: &ProcessContext) -> CommandResult<ProcessConnection> {
-    let provider = routed_provider_for(&context.udid, context.lockdown_target.as_ref()).await?;
-    let generation = ios_version(&provider).await?.developer_generation();
+async fn connect(context: &DeviceContext) -> CommandResult<ProcessConnection> {
+    let provider = context.provider().await?;
+    let generation = developer_generation(&provider).await?;
     if generation == DeveloperGeneration::Legacy {
         return Ok(ProcessConnection::Legacy);
     }
     let user_app_names = user_application_names(&provider).await;
-    match generation {
-        DeveloperGeneration::Legacy => Ok(ProcessConnection::Legacy),
-        DeveloperGeneration::CoreDeviceRemote => {
-            let mut attempt = 1;
-            let tunnel = loop {
-                match open_remote_pairing_tunnel(
-                    &provider,
-                    &context.pairing_path,
-                    "idevice-desktop",
-                    context.remote_target.as_ref(),
-                )
-                .await
-                {
-                    Ok(tunnel) => break tunnel,
-                    Err(error) if error.retryable && attempt < REMOTE_PAIRING_ATTEMPTS => {
-                        tracing::warn!(
-                            attempt,
-                            error = %error.message,
-                            "retrying the Processes RemotePairing tunnel"
-                        );
-                        tokio::time::sleep(Duration::from_millis(250 * attempt as u64)).await;
-                        attempt += 1;
-                    }
-                    Err(error) => return Err(error),
-                }
-            };
-            Ok(ProcessConnection::Core {
-                route: "RemotePairing/RSD",
-                tunnel: Box::new(tunnel),
-                user_app_names,
-            })
-        }
-        DeveloperGeneration::CoreDeviceLockdown => Ok(ProcessConnection::Core {
-            route: "CoreDeviceProxy/RSD",
-            tunnel: Box::new(open_core_device_proxy(&provider).await?),
+    match context
+        .open_rsd_tunnel(&provider, generation, REMOTE_PAIRING_ATTEMPTS)
+        .await?
+    {
+        None => Ok(ProcessConnection::Legacy),
+        Some((route, tunnel)) => Ok(ProcessConnection::Core {
+            route,
+            tunnel: Box::new(tunnel),
             user_app_names,
         }),
     }
@@ -177,25 +122,6 @@ async fn user_application_names(provider: &RoutedProvider) -> HashSet<String> {
                 })
         })
         .collect()
-}
-
-async fn open_core_device_proxy(provider: &RoutedProvider) -> CommandResult<RsdTunnel> {
-    let proxy = CoreDeviceProxy::connect(provider)
-        .await
-        .map_err(CommandError::from)?;
-    let rsd_port = proxy.tunnel_info().server_rsd_port;
-    let mut adapter = proxy
-        .create_software_tunnel()
-        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?
-        .to_async_handle();
-    let stream = adapter
-        .connect(rsd_port)
-        .await
-        .map_err(|error| CommandError::new("tunnel", error.to_string(), true))?;
-    let handshake = RsdHandshake::new(stream)
-        .await
-        .map_err(CommandError::from)?;
-    Ok(RsdTunnel { adapter, handshake })
 }
 
 fn legacy_snapshot() -> ProcessSnapshot {
@@ -346,7 +272,7 @@ fn core_capabilities(has_app_service: bool) -> (bool, bool, Option<String>) {
     )
 }
 
-async fn list_impl(context: ProcessContext) -> CommandResult<ProcessSnapshot> {
+async fn list_impl(context: DeviceContext) -> CommandResult<ProcessSnapshot> {
     let ProcessConnection::Core {
         route,
         mut tunnel,
@@ -415,21 +341,12 @@ async fn list_impl(context: ProcessContext) -> CommandResult<ProcessSnapshot> {
 /// hardware verification harness. Keeping the harness on this function avoids
 /// proving a second copy of the transport-selection logic.
 pub async fn processes_snapshot_for_device(
-    udid: String,
-    pairing_path: std::path::PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
+    context: DeviceContext,
 ) -> CommandResult<ProcessSnapshot> {
-    list_impl(ProcessContext {
-        udid,
-        pairing_path,
-        lockdown_target,
-        remote_target,
-    })
-    .await
+    list_impl(context).await
 }
 
-async fn launch_impl(context: ProcessContext, bundle_id: String) -> CommandResult<ProcessLaunch> {
+async fn launch_impl(context: DeviceContext, bundle_id: String) -> CommandResult<ProcessLaunch> {
     validate_bundle_id(&bundle_id)?;
     let ProcessConnection::Core {
         route, mut tunnel, ..
@@ -488,25 +405,13 @@ async fn launch_impl(context: ProcessContext, bundle_id: String) -> CommandResul
 /// verification. This keeps hardware acceptance on the same route selection
 /// and protocol fallback as the desktop UI.
 pub async fn process_launch_for_device(
-    udid: String,
-    pairing_path: std::path::PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
+    context: DeviceContext,
     bundle_id: String,
 ) -> CommandResult<ProcessLaunch> {
-    launch_impl(
-        ProcessContext {
-            udid,
-            pairing_path,
-            lockdown_target,
-            remote_target,
-        },
-        bundle_id,
-    )
-    .await
+    launch_impl(context, bundle_id).await
 }
 
-async fn stop_impl(context: ProcessContext, pid: u32, identity: String) -> CommandResult<()> {
+async fn stop_impl(context: DeviceContext, pid: u32, identity: String) -> CommandResult<()> {
     let ProcessConnection::Core { mut tunnel, .. } = connect(&context).await? else {
         return Err(CommandError::new(
             "processes",
@@ -564,24 +469,11 @@ async fn stop_impl(context: ProcessContext, pid: u32, identity: String) -> Comma
 /// verification. The implementation always relists the process and validates
 /// its opaque identity and installed-user-app classification before signaling.
 pub async fn process_stop_for_device(
-    udid: String,
-    pairing_path: std::path::PathBuf,
-    lockdown_target: Option<LockdownTarget>,
-    remote_target: Option<RemotePairingTarget>,
+    context: DeviceContext,
     pid: u32,
     identity: String,
 ) -> CommandResult<()> {
-    stop_impl(
-        ProcessContext {
-            udid,
-            pairing_path,
-            lockdown_target,
-            remote_target,
-        },
-        pid,
-        identity,
-    )
-    .await
+    stop_impl(context, pid, identity).await
 }
 
 #[tauri::command]
@@ -590,19 +482,11 @@ pub async fn processes_list(
     state: State<'_, AppState>,
     udid: Option<String>,
 ) -> CommandResult<ProcessSnapshot> {
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     let task_key = format!("process-list:{}", uuid::Uuid::new_v4());
     state.replace_task(task_key.clone(), token.clone()).await;
-    let result = run_on_local_runtime(token, move || {
-        processes_snapshot_for_device(
-            context.udid,
-            context.pairing_path,
-            context.lockdown_target,
-            context.remote_target,
-        )
-    })
-    .await;
+    let result = run_on_local_runtime(token, move || processes_snapshot_for_device(context)).await;
     state.cancel_task(&task_key).await;
     result
 }
@@ -614,20 +498,12 @@ pub async fn process_launch(
     udid: Option<String>,
     bundle_id: String,
 ) -> CommandResult<ProcessLaunch> {
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     let task_key = format!("process-control:{}", uuid::Uuid::new_v4());
     state.replace_task(task_key.clone(), token.clone()).await;
-    let result = run_on_local_runtime(token, move || {
-        process_launch_for_device(
-            context.udid,
-            context.pairing_path,
-            context.lockdown_target,
-            context.remote_target,
-            bundle_id,
-        )
-    })
-    .await;
+    let result =
+        run_on_local_runtime(token, move || process_launch_for_device(context, bundle_id)).await;
     state.cancel_task(&task_key).await;
     result
 }
@@ -640,19 +516,12 @@ pub async fn process_stop(
     pid: u32,
     identity: String,
 ) -> CommandResult<()> {
-    let context = context(&app, &state, udid).await?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     let task_key = format!("process-control:{}", uuid::Uuid::new_v4());
     state.replace_task(task_key.clone(), token.clone()).await;
     let result = run_on_local_runtime(token, move || {
-        process_stop_for_device(
-            context.udid,
-            context.pairing_path,
-            context.lockdown_target,
-            context.remote_target,
-            pid,
-            identity,
-        )
+        process_stop_for_device(context, pid, identity)
     })
     .await;
     state.cancel_task(&task_key).await;

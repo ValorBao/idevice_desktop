@@ -1,18 +1,14 @@
 use std::time::{Duration, SystemTime};
 
-use idevice::{
-    IdeviceService, RsdService, core_device_proxy::CoreDeviceProxy, misagent::MisagentClient,
-    rsd::RsdHandshake,
-};
+use idevice::{IdeviceService, RsdService, misagent::MisagentClient};
 use plist::{Dictionary, Value};
 use tauri::{AppHandle, State};
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
-    provider::selected_provider,
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{ProvisioningProfileSnapshot, ProvisioningProfileSummary},
 };
 
@@ -265,8 +261,9 @@ async fn load_raw_profiles(
     state: &AppState,
     udid: Option<String>,
 ) -> CommandResult<(Vec<Vec<u8>>, String)> {
-    let (udid, provider) = selected_provider(state, udid).await?;
-    let generation = ios_version(&provider).await?.developer_generation();
+    let context = DeviceContext::resolve(app, state, udid).await?;
+    let provider = context.provider().await?;
+    let generation = developer_generation(&provider).await?;
     match provisioning_transport(provider.is_bonjour(), generation) {
         ProvisioningTransport::Lockdown => {
             let mut client = MisagentClient::connect(&provider)
@@ -281,57 +278,21 @@ async fn load_raw_profiles(
             false,
         )),
         ProvisioningTransport::RemoteRsd | ProvisioningTransport::CoreDeviceRsd => {
-            let (route, mut adapter, mut handshake) = match generation {
-                DeveloperGeneration::CoreDeviceRemote => {
-                    let pairing_path = remote_pairing_path(app, &udid)?;
-                    let target = state.discovery.read().await.remote_pairing_target(&udid);
-                    let tunnel = open_remote_pairing_tunnel(
-                        &provider,
-                        &pairing_path,
-                        "idevice-desktop",
-                        target.as_ref(),
-                    )
-                    .await?;
-                    ("RemotePairing/RSD", tunnel.adapter, tunnel.handshake)
-                }
-                DeveloperGeneration::CoreDeviceLockdown => {
-                    let proxy = CoreDeviceProxy::connect(&provider)
-                        .await
-                        .map_err(CommandError::from)?;
-                    let rsd_port = proxy.tunnel_info().server_rsd_port;
-                    let mut adapter = proxy
-                        .create_software_tunnel()
-                        .map_err(|error| {
-                            CommandError::new(
-                                "provisioning_profiles",
-                                format!("Unable to create the CoreDevice tunnel: {error}"),
-                                true,
-                            )
-                        })?
-                        .to_async_handle();
-                    let stream = adapter.connect(rsd_port).await.map_err(|error| {
+            let Some((route, mut tunnel)) =
+                context.open_rsd_tunnel(&provider, generation, 1).await?
+            else {
+                unreachable!("only Legacy devices have no RSD tunnel");
+            };
+            let mut client =
+                MisagentClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
+                    .await
+                    .map_err(|error| {
                         CommandError::new(
                             "provisioning_profiles",
-                            format!("Unable to connect to tunneled RSD: {error}"),
+                            format!("The network Misagent service is unavailable: {error}"),
                             true,
                         )
                     })?;
-                    let handshake = RsdHandshake::new(stream)
-                        .await
-                        .map_err(CommandError::from)?;
-                    ("CoreDeviceProxy/RSD", adapter, handshake)
-                }
-                DeveloperGeneration::Legacy => unreachable!(),
-            };
-            let mut client = MisagentClient::connect_rsd(&mut adapter, &mut handshake)
-                .await
-                .map_err(|error| {
-                    CommandError::new(
-                        "provisioning_profiles",
-                        format!("The network Misagent service is unavailable: {error}"),
-                        true,
-                    )
-                })?;
             let profiles = client.copy_all().await.map_err(CommandError::from)?;
             Ok((profiles, format!("Misagent shim · {route}")))
         }

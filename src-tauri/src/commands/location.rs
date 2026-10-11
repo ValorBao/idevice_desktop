@@ -2,19 +2,17 @@ use std::time::Duration;
 
 use idevice::{
     IdeviceService, RsdService,
-    core_device_proxy::CoreDeviceProxy,
     dvt::{location_simulation::LocationSimulationClient, remote_server::RemoteServerClient},
-    rsd::RsdHandshake,
     services::simulate_location::LocationSimulationService,
 };
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
+    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    tunnel::{open_remote_pairing_tunnel, remote_pairing_path},
+    transport::DeviceContext,
     types::{LocationSession, StreamStatus},
 };
 
@@ -51,13 +49,7 @@ pub async fn location_start(
 ) -> CommandResult<LocationSession> {
     validate_coordinates(latitude, longitude)?;
 
-    let udid = state
-        .selected(udid)
-        .await
-        .ok_or_else(|| CommandError::new("device", "No device selected", true))?;
-    let remote_target = state.discovery.read().await.remote_pairing_target(&udid);
-    let lockdown_target = state.discovery.read().await.lockdown_target(&udid);
-    let pairing_path = remote_pairing_path(&app, &udid)?;
+    let context = DeviceContext::resolve(&app, &state, udid).await?;
     let token = CancellationToken::new();
     state.replace_task("location", token.clone()).await;
     let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -83,44 +75,19 @@ pub async fn location_start(
             runtime.block_on(async move {
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
-                    let provider =
-                        crate::provider::routed_provider_for(&udid, lockdown_target.as_ref())
-                            .await?;
-                    let generation = ios_version(&provider).await?.developer_generation();
+                    let provider = context.provider().await?;
+                    let generation = developer_generation(&provider).await?;
 
                     if generation != DeveloperGeneration::Legacy {
-                        let (mut adapter, mut handshake) = match generation {
-                            DeveloperGeneration::CoreDeviceRemote => {
-                                let tunnel = open_remote_pairing_tunnel(
-                                    &provider,
-                                    &pairing_path,
-                                    "idevice-desktop",
-                                    remote_target.as_ref(),
-                                )
-                                .await?;
-                                (tunnel.adapter, tunnel.handshake)
-                            }
-                            DeveloperGeneration::CoreDeviceLockdown => {
-                                let proxy = CoreDeviceProxy::connect(&provider)
-                                    .await
-                                    .map_err(CommandError::from)?;
-                                let rsd_port = proxy.tunnel_info().server_rsd_port;
-                                let adapter = proxy.create_software_tunnel().map_err(|error| {
-                                    CommandError::new("tunnel", error.to_string(), true)
-                                })?;
-                                let mut adapter = adapter.to_async_handle();
-                                let stream = adapter.connect(rsd_port).await.map_err(|error| {
-                                    CommandError::new("tunnel", error.to_string(), true)
-                                })?;
-                                let handshake = RsdHandshake::new(stream)
-                                    .await
-                                    .map_err(CommandError::from)?;
-                                (adapter, handshake)
-                            }
-                            DeveloperGeneration::Legacy => unreachable!(),
+                        let Some((_, mut tunnel)) =
+                            context.open_rsd_tunnel(&provider, generation, 1).await?
+                        else {
+                            unreachable!("only Legacy devices have no RSD tunnel");
                         };
-                        let mut remote_server =
-                            RemoteServerClient::connect_rsd(&mut adapter, &mut handshake)
+                        let mut remote_server = RemoteServerClient::connect_rsd(
+                            &mut tunnel.adapter,
+                            &mut tunnel.handshake,
+                        )
                                 .await
                                 .map_err(CommandError::from)?;
                         remote_server

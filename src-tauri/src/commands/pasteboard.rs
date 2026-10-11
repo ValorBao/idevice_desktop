@@ -19,10 +19,10 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    task::tunnel_runtime,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{
         PasteboardImagePreparation, PasteboardImageSnapshot, PasteboardImageWriteResult,
         PasteboardTextSnapshot, PasteboardWriteResult,
@@ -54,6 +54,10 @@ pub struct PasteboardState {
     prepared_image: Mutex<Option<PreparedPasteboardImage>>,
 }
 
+#[cfg(test)]
+use crate::device_version::DeveloperGeneration;
+
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PasteboardTransport {
     Unsupported,
@@ -125,6 +129,7 @@ enum ImagePromiseDecision {
     Reject(NormalizedImage),
 }
 
+#[cfg(test)]
 fn pasteboard_transport(generation: DeveloperGeneration) -> PasteboardTransport {
     match generation {
         DeveloperGeneration::Legacy => PasteboardTransport::Unsupported,
@@ -445,31 +450,32 @@ fn image_preparation(image: &PreparedPasteboardImage) -> PasteboardImagePreparat
 
 async fn connect(context: &DeviceContext) -> CommandResult<PasteboardConnection> {
     let provider = context.provider().await?;
-    let generation = developer_generation(&provider).await?;
-    if pasteboard_transport(generation) == PasteboardTransport::Unsupported {
-        return Err(CommandError::new(
+    match context.open_service(&provider, &OpenOptions::new()).await? {
+        DeviceService::Legacy { .. } => Err(CommandError::new(
             "pasteboard",
             "Pasteboard transfer requires iOS 17 or later",
             false,
-        ));
+        )),
+        DeviceService::Core {
+            mut tunnel, route, ..
+        } => {
+            let client =
+                PasteboardServiceClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
+                    .await
+                    .map_err(|error| {
+                        CommandError::new(
+                            "pasteboard",
+                            format!("The CoreDevice pasteboard service is unavailable: {error}"),
+                            true,
+                        )
+                    })?;
+            Ok(PasteboardConnection {
+                client,
+                transport: format!("CoreDevice Pasteboard · {route}"),
+                _adapter: tunnel.adapter,
+            })
+        }
     }
-    let Some((route, mut tunnel)) = context.open_rsd_tunnel(&provider, generation, 1).await? else {
-        unreachable!("only Legacy devices have no RSD tunnel");
-    };
-    let client = PasteboardServiceClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
-        .await
-        .map_err(|error| {
-            CommandError::new(
-                "pasteboard",
-                format!("The CoreDevice pasteboard service is unavailable: {error}"),
-                true,
-            )
-        })?;
-    Ok(PasteboardConnection {
-        client,
-        transport: format!("CoreDevice Pasteboard · {route}"),
-        _adapter: tunnel.adapter,
-    })
 }
 
 async fn bounded_operation<T, F>(
@@ -694,10 +700,7 @@ pub async fn pasteboard_text_read(
     state.replace_task(task_key.clone(), token.clone()).await;
     let worker_token = token.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| CommandError::new("runtime", error.to_string(), true))?;
+        let runtime = tunnel_runtime()?;
         runtime.block_on(bounded_operation(
             &worker_token,
             "reading the device pasteboard",
@@ -723,10 +726,7 @@ pub async fn pasteboard_text_write(
     state.replace_task(task_key.clone(), token.clone()).await;
     let worker_token = token.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| CommandError::new("runtime", error.to_string(), true))?;
+        let runtime = tunnel_runtime()?;
         runtime.block_on(bounded_operation(
             &worker_token,
             "replacing the device pasteboard",
@@ -750,10 +750,7 @@ pub async fn pasteboard_image_read(
     state.replace_task(task_key.clone(), token.clone()).await;
     let worker_token = token.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| CommandError::new("runtime", error.to_string(), true))?;
+        let runtime = tunnel_runtime()?;
         runtime.block_on(bounded_operation(
             &worker_token,
             "reading the device pasteboard image",
@@ -879,10 +876,7 @@ pub async fn pasteboard_image_write(
     let worker_token = token.clone();
     let completed_id = image.preparation_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| CommandError::new("runtime", error.to_string(), true))?;
+        let runtime = tunnel_runtime()?;
         runtime.block_on(bounded_operation(
             &worker_token,
             "replacing the device pasteboard image",

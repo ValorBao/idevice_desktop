@@ -14,11 +14,11 @@ use tauri::{AppHandle, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     provider::RoutedProvider,
     state::AppState,
-    transport::DeviceContext,
+    task::tunnel_runtime,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     tunnel::RsdTunnel,
     types::{ProcessLaunch, ProcessSnapshot, ProcessSummary},
 };
@@ -38,8 +38,8 @@ enum ProcessConnection {
     },
 }
 
-/// The software tunnel types are intentionally driven by a single-threaded
-/// runtime. This is the same boundary used by screenshot, location, and JIT.
+/// Process commands hop onto [`tunnel_runtime`] for the adapter constraint
+/// documented there, then apply their own operation timeout on top.
 async fn run_on_local_runtime<T, F, Fut>(token: CancellationToken, operation: F) -> CommandResult<T>
 where
     T: Send + 'static,
@@ -47,10 +47,7 @@ where
     Fut: Future<Output = CommandResult<T>> + 'static,
 {
     tokio::task::spawn_blocking(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| CommandError::new("runtime", error.to_string(), true))?;
+        let runtime = tunnel_runtime()?;
         runtime.block_on(async move {
             tokio::select! {
                 _ = token.cancelled() => Err(CommandError::new(
@@ -74,20 +71,18 @@ where
 
 async fn connect(context: &DeviceContext) -> CommandResult<ProcessConnection> {
     let provider = context.provider().await?;
-    let generation = developer_generation(&provider).await?;
-    if generation == DeveloperGeneration::Legacy {
-        return Ok(ProcessConnection::Legacy);
-    }
-    let user_app_names = user_application_names(&provider).await;
     match context
-        .open_rsd_tunnel(&provider, generation, REMOTE_PAIRING_ATTEMPTS)
+        .open_service(
+            &provider,
+            &OpenOptions::new().remote_pairing_attempts(REMOTE_PAIRING_ATTEMPTS),
+        )
         .await?
     {
-        None => Ok(ProcessConnection::Legacy),
-        Some((route, tunnel)) => Ok(ProcessConnection::Core {
+        DeviceService::Legacy { .. } => Ok(ProcessConnection::Legacy),
+        DeviceService::Core { route, tunnel, .. } => Ok(ProcessConnection::Core {
             route,
             tunnel: Box::new(tunnel),
-            user_app_names,
+            user_app_names: user_application_names(&provider).await,
         }),
     }
 }

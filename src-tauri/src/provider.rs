@@ -114,29 +114,7 @@ pub async fn routed_provider_for(
             true,
         )
     })?;
-    let address = target
-        .addresses
-        .iter()
-        .filter_map(|address| IpAddr::from_str(address).ok())
-        .min_by_key(|address| match address {
-            IpAddr::V4(_) => 0,
-            IpAddr::V6(address) if !address.is_unicast_link_local() => 1,
-            IpAddr::V6(_) => 2,
-        })
-        .ok_or_else(|| {
-            CommandError::new(
-                "bonjour",
-                format!("Bonjour returned no usable address for {}", target.hostname),
-                true,
-            )
-        })?;
-    if matches!(address, IpAddr::V6(address) if address.is_unicast_link_local()) {
-        return Err(CommandError::new(
-            "bonjour",
-            "The device only advertised a link-local IPv6 address; reconnect it to the same IPv4 network",
-            true,
-        ));
-    }
+    let address = bonjour_lockdown_address(target)?;
 
     let mut mux = UsbmuxdConnection::default()
         .await
@@ -167,4 +145,72 @@ pub async fn selected_provider(
     let target = state.discovery.read().await.lockdown_target(&udid);
     let provider = routed_provider_for(&udid, target.as_ref()).await?;
     Ok((udid, provider))
+}
+
+/// Prefer IPv4, then global IPv6. A link-local-only advertisement is refused
+/// because the host cannot route it without a matching scoped interface.
+pub(crate) fn bonjour_lockdown_address(target: &LockdownTarget) -> CommandResult<IpAddr> {
+    let address = target
+        .addresses
+        .iter()
+        .filter_map(|address| IpAddr::from_str(address).ok())
+        .min_by_key(|address| match address {
+            IpAddr::V4(_) => 0,
+            IpAddr::V6(address) if !address.is_unicast_link_local() => 1,
+            IpAddr::V6(_) => 2,
+        })
+        .ok_or_else(|| {
+            CommandError::new(
+                "bonjour",
+                format!("Bonjour returned no usable address for {}", target.hostname),
+                true,
+            )
+        })?;
+    if matches!(address, IpAddr::V6(address) if address.is_unicast_link_local()) {
+        return Err(CommandError::new(
+            "bonjour",
+            "The device only advertised a link-local IPv6 address; reconnect it to the same IPv4 network",
+            true,
+        ));
+    }
+    Ok(address)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target(addresses: &[&str]) -> LockdownTarget {
+        LockdownTarget {
+            hostname: "phone.local".into(),
+            addresses: addresses.iter().map(|address| (*address).into()).collect(),
+        }
+    }
+
+    #[test]
+    fn prefers_ipv4_over_global_and_link_local_ipv6() {
+        let address =
+            bonjour_lockdown_address(&target(&["fe80::1", "2001:db8::1", "192.168.1.20"])).unwrap();
+        assert_eq!(address, IpAddr::from_str("192.168.1.20").unwrap());
+    }
+
+    #[test]
+    fn prefers_global_ipv6_when_no_ipv4_is_advertised() {
+        let address = bonjour_lockdown_address(&target(&["fe80::1", "2001:db8::8"])).unwrap();
+        assert_eq!(address, IpAddr::from_str("2001:db8::8").unwrap());
+    }
+
+    #[test]
+    fn refuses_link_local_only_ipv6() {
+        let error = bonjour_lockdown_address(&target(&["fe80::1"])).unwrap_err();
+        assert_eq!(error.kind, "bonjour");
+        assert!(error.message.contains("link-local"));
+    }
+
+    #[test]
+    fn refuses_unparseable_addresses() {
+        let error = bonjour_lockdown_address(&target(&["not-an-ip"])).unwrap_err();
+        assert_eq!(error.kind, "bonjour");
+        assert!(error.message.contains("no usable address"));
+    }
 }

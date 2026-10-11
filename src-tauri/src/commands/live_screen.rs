@@ -11,13 +11,10 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, ios_version},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::{
-        DeviceContext, ROUTE_CORE_DEVICE_PROXY, ROUTE_REMOTE_PAIRING,
-        open_core_device_proxy_bounded,
-    },
+    task::tunnel_runtime,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{LiveScreenFrame, LiveScreenStatus},
 };
 
@@ -229,16 +226,11 @@ async fn run_stream(
         context.provider(),
     )
     .await?;
-    let version = wait_for(
-        "reading the iOS version",
-        CONNECT_TIMEOUT,
-        &token,
-        ios_version(&provider),
-    )
-    .await?;
-
-    match version.developer_generation() {
-        DeveloperGeneration::Legacy => {
+    let options = OpenOptions::new()
+        .with_cancel(&token)
+        .stage_timeout(CONNECT_TIMEOUT);
+    match context.open_service(&provider, &options).await? {
+        DeviceService::Legacy { .. } => {
             let mut source = wait_for(
                 "opening the screenshot service",
                 CONNECT_TIMEOUT,
@@ -258,24 +250,9 @@ async fn run_stream(
             })?;
             stream_frames(&app, &mut source, "Screenshotr · Lockdown".into(), &token).await
         }
-        DeveloperGeneration::CoreDeviceRemote | DeveloperGeneration::CoreDeviceLockdown => {
-            let (route, mut tunnel) = match version.developer_generation() {
-                DeveloperGeneration::CoreDeviceRemote => {
-                    let tunnel = wait_for(
-                        "opening the RemotePairing tunnel",
-                        CONNECT_TIMEOUT,
-                        &token,
-                        context.open_remote_pairing_tunnel(&provider, 1),
-                    )
-                    .await?;
-                    (ROUTE_REMOTE_PAIRING, tunnel)
-                }
-                DeveloperGeneration::CoreDeviceLockdown => (
-                    ROUTE_CORE_DEVICE_PROXY,
-                    open_core_device_proxy_bounded(&provider, &token, CONNECT_TIMEOUT).await?,
-                ),
-                DeveloperGeneration::Legacy => unreachable!(),
-            };
+        DeviceService::Core {
+            mut tunnel, route, ..
+        } => {
             let mut remote = wait_for(
                 "opening the DVT remote server",
                 CONNECT_TIMEOUT,
@@ -334,10 +311,7 @@ pub async fn live_screen_start(
     emit_status(&app, "connecting", None, None);
 
     tauri::async_runtime::spawn_blocking(move || {
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
+        let runtime = match tunnel_runtime() {
             Ok(runtime) => runtime,
             Err(error) => {
                 emit_status(&app, "error", Some(error.to_string()), None);

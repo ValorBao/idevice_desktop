@@ -11,16 +11,19 @@ use idevice::{
 use tauri::{AppHandle, State};
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{CrashReportContent, CrashReportSummary},
 };
 
 const MAX_PREVIEW_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REPORTS: usize = 2_000;
 
+#[cfg(test)]
+use crate::device_version::DeveloperGeneration;
+
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CrashTransport {
     Lockdown,
@@ -29,6 +32,7 @@ enum CrashTransport {
     UsbRequired,
 }
 
+#[cfg(test)]
 fn crash_transport(is_bonjour: bool, generation: DeveloperGeneration) -> CrashTransport {
     match (is_bonjour, generation) {
         (false, _) => CrashTransport::Lockdown,
@@ -145,30 +149,25 @@ async fn crash_client(
 ) -> CommandResult<CrashClient> {
     let context = DeviceContext::resolve(app, state, udid).await?;
     let provider = context.provider().await?;
-    let generation = developer_generation(&provider).await?;
-    match crash_transport(provider.is_bonjour(), generation) {
-        CrashTransport::Lockdown => {
-            if flush_pending && let Err(error) = flush_reports(&provider).await {
-                tracing::warn!(?error, "unable to flush pending crash reports");
-            }
-            let inner = CrashReportCopyMobileClient::connect(&provider)
-                .await
-                .map_err(CommandError::from)?;
-            Ok(CrashClient {
-                inner,
-                _adapter: None,
-            })
+    if !provider.is_bonjour() {
+        if flush_pending && let Err(error) = flush_reports(&provider).await {
+            tracing::warn!(?error, "unable to flush pending crash reports");
         }
-        CrashTransport::UsbRequired => Err(CommandError::new(
+        let inner = CrashReportCopyMobileClient::connect(&provider)
+            .await
+            .map_err(CommandError::from)?;
+        return Ok(CrashClient {
+            inner,
+            _adapter: None,
+        });
+    }
+    match context.open_service(&provider, &OpenOptions::new()).await? {
+        DeviceService::Legacy { .. } => Err(CommandError::new(
             "crash_reports",
             "Crash reports over the network require iOS 17 or later. Connect the device by USB.",
             false,
         )),
-        CrashTransport::RemoteRsd | CrashTransport::CoreDeviceRsd => {
-            let Some((_, mut tunnel)) = context.open_rsd_tunnel(&provider, generation, 1).await?
-            else {
-                unreachable!("only Legacy devices have no RSD tunnel");
-            };
+        DeviceService::Core { mut tunnel, .. } => {
             let inner =
                 CrashReportCopyMobileClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
                     .await

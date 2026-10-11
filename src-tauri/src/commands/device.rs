@@ -241,6 +241,9 @@ pub async fn device_monitor_start(app: AppHandle, state: State<'_, AppState>) ->
 
     let usb_app = app.clone();
     let usb_token = token.clone();
+    // Device-monitor threads are long-lived usbmuxd/Bonjour watchers, not
+    // software-tunnel adapters. They keep their own current_thread runtime
+    // rather than [`crate::task::tunnel_runtime`].
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -300,6 +303,7 @@ pub async fn device_monitor_start(app: AppHandle, state: State<'_, AppState>) ->
 }
 
 fn spawn_bonjour_monitor(app: AppHandle, token: CancellationToken) {
+    // Same constraint as the USB monitor: this is a watcher, not a tunnel adapter.
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

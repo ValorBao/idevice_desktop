@@ -60,7 +60,13 @@ async fn connect_host(hostname: &str, port: u16) -> CommandResult<TcpStream> {
     ))
 }
 
-async fn discover_remote_pairing() -> CommandResult<RemotePairingTarget> {
+/// Harness-only: browse Bonjour for the first RemotePairing service.
+///
+/// Production commands must pass a catalog target. This function is easy to
+/// point at the wrong device when more than one phone is on the network —
+/// that is why it is named, and why [`crate::transport::DeviceContext::standalone`]
+/// no longer calls it.
+pub async fn discover_first_remote_pairing() -> CommandResult<RemotePairingTarget> {
     let daemon = ServiceDaemon::new()
         .map_err(|error| CommandError::new("bonjour", error.to_string(), true))?;
     let receiver = daemon
@@ -161,6 +167,13 @@ pub async fn open_remote_pairing_tunnel(
     host_identifier: &str,
     discovered_target: Option<&RemotePairingTarget>,
 ) -> CommandResult<RsdTunnel> {
+    let target = discovered_target.cloned().ok_or_else(|| {
+        CommandError::new(
+            "pairing",
+            "RemotePairing requires a discovered service for this device; standalone callers must pass one",
+            false,
+        )
+    })?;
     if RpPairingFile::read_from_file(pairing_path).await.is_err() {
         let mut last_error = None;
         for attempt in 0..3 {
@@ -181,10 +194,6 @@ pub async fn open_remote_pairing_tunnel(
             return Err(error);
         }
     }
-    let target = match discovered_target {
-        Some(target) => target.clone(),
-        None => discover_remote_pairing().await?,
-    };
     let pairing_stream = connect_host(&target.hostname, target.port).await?;
     let pairing_socket = RpPairingSocket::new(pairing_stream);
 

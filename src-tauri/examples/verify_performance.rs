@@ -8,8 +8,7 @@
 use std::{future::Future, path::PathBuf, time::Duration};
 
 use idevice::{
-    IdeviceError, IdeviceService, ReadWrite, RsdService,
-    core_device_proxy::CoreDeviceProxy,
+    IdeviceError, ReadWrite, RsdService,
     dvt::{
         device_info::DeviceInfoClient,
         message::AuxValue,
@@ -20,10 +19,11 @@ use idevice::{
     tcp::handle::AdapterHandle,
 };
 use idevice_desktop_lib::{
-    device_version::{DeveloperGeneration, ios_version},
+    device_version::ios_version,
     error::{CommandError, CommandResult},
     provider::routed_provider_for,
-    tunnel::open_remote_pairing_tunnel,
+    transport::{DeviceContext, DeviceService, OpenOptions},
+    tunnel::discover_first_remote_pairing,
 };
 use plist::{Dictionary, Value};
 
@@ -165,37 +165,26 @@ async fn run(udid: &str) -> CommandResult<()> {
         version.developer_generation()
     );
 
-    let mut transport = match version.developer_generation() {
-        DeveloperGeneration::Legacy => {
+    let pairing_path = app_data_dir().join(format!("remote-pairing-{udid}.plist"));
+    let remote_target = discover_first_remote_pairing().await.ok();
+    let context = DeviceContext::standalone(udid.to_owned(), pairing_path, None, remote_target);
+    let mut transport = match timeout(
+        "opening the developer transport",
+        context.open_service(&provider, &OpenOptions::new()),
+    )
+    .await?
+    {
+        DeviceService::Legacy { .. } => {
             return Err(CommandError::new(
                 "performance",
                 "Legacy sysmontap is intentionally unavailable",
                 false,
             ));
         }
-        DeveloperGeneration::CoreDeviceRemote => {
-            let pairing_path = app_data_dir().join(format!("remote-pairing-{udid}.plist"));
-            let tunnel = timeout(
-                "opening the RemotePairing developer tunnel",
-                open_remote_pairing_tunnel(&provider, &pairing_path, "idevice-desktop", None),
-            )
-            .await?;
-            RsdTransport {
-                adapter: tunnel.adapter,
-                handshake: tunnel.handshake,
-            }
-        }
-        DeveloperGeneration::CoreDeviceLockdown => {
-            timeout("opening the CoreDeviceProxy developer tunnel", async {
-                let proxy = CoreDeviceProxy::connect(&provider).await?;
-                let rsd_port = proxy.tunnel_info().server_rsd_port;
-                let mut adapter = proxy.create_software_tunnel()?.to_async_handle();
-                let stream = adapter.connect(rsd_port).await?;
-                let handshake = RsdHandshake::new(stream).await?;
-                Ok::<_, idevice::IdeviceError>(RsdTransport { adapter, handshake })
-            })
-            .await?
-        }
+        DeviceService::Core { tunnel, .. } => RsdTransport {
+            adapter: tunnel.adapter,
+            handshake: tunnel.handshake,
+        },
     };
 
     let mut remote = timeout(

@@ -17,12 +17,13 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, IosVersion, ios_version},
+    device_version::{DeveloperGeneration, IosVersion},
     error::{CommandError, CommandResult},
     legacy_ddi,
     provider::selected_provider,
     state::AppState,
-    transport::DeviceContext,
+    task::tunnel_runtime,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{DeveloperStatus, JitSession, OperationProgress, StreamStatus},
     utils::plist_to_json,
 };
@@ -528,14 +529,16 @@ async fn mounted_images(
         Ok(mut client) => client.copy_devices().await.unwrap_or_default(),
         Err(_) => Vec::new(),
     };
-    let mut mounted = !images.is_empty();
+    let mounted = !images.is_empty();
     #[cfg(target_os = "macos")]
-    if !mounted
+    let mounted = if !mounted
         && version
             .is_some_and(|version| version.developer_generation() != DeveloperGeneration::Legacy)
     {
-        mounted = devicectl_ddi_is_usable(udid).await;
-    }
+        devicectl_ddi_is_usable(udid).await
+    } else {
+        mounted
+    };
     #[cfg(not(target_os = "macos"))]
     let _ = (udid, version);
     (mounted, images)
@@ -924,10 +927,7 @@ pub async fn jit_start(
         .name("idevice-jit".into())
         .stack_size(8 * 1024 * 1024)
         .spawn(move || {
-            let runtime = match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
+            let runtime = match tunnel_runtime() {
                 Ok(runtime) => runtime,
                 Err(error) => {
                     let _ = sender.send(Err(CommandError::new("runtime", error.to_string(), true)));
@@ -938,33 +938,27 @@ pub async fn jit_start(
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
                     let provider = jit_step("connecting to the device", context.provider()).await?;
-                    let generation = jit_step("reading the iOS version", ios_version(&provider))
-                        .await?
-                        .developer_generation();
-                    let mut transport = jit_step("opening the developer transport", async {
-                        let result = match generation {
-                            // iOS 16 and earlier publish debugserver and the
-                            // instruments server directly over lockdown once a
-                            // DeveloperDiskImage is mounted.
-                            DeveloperGeneration::Legacy => JitTransport::Lockdown {
-                                provider: &provider,
-                            },
-                            DeveloperGeneration::CoreDeviceRemote
-                            | DeveloperGeneration::CoreDeviceLockdown => {
-                                let Some((_, tunnel)) =
-                                    context.open_rsd_tunnel(&provider, generation, 1).await?
-                                else {
-                                    unreachable!("only Legacy devices have no RSD tunnel");
-                                };
-                                JitTransport::Rsd {
-                                    adapter: tunnel.adapter,
-                                    handshake: tunnel.handshake,
-                                }
-                            }
-                        };
-                        Ok(result)
-                    })
-                    .await?;
+                    let service = context
+                        .open_service(
+                            &provider,
+                            &OpenOptions::new()
+                                .with_cancel(&token)
+                                .stage_timeout(JIT_STEP_TIMEOUT),
+                        )
+                        .await?;
+                    let generation = service.generation();
+                    let mut transport = match service {
+                        // iOS 16 and earlier publish debugserver and the
+                        // instruments server directly over lockdown once a
+                        // DeveloperDiskImage is mounted.
+                        DeviceService::Legacy { .. } => JitTransport::Lockdown {
+                            provider: &provider,
+                        },
+                        DeviceService::Core { tunnel, .. } => JitTransport::Rsd {
+                            adapter: tunnel.adapter,
+                            handshake: tunnel.handshake,
+                        },
+                    };
 
                     let target = if generation == DeveloperGeneration::Legacy {
                         // The instruments server is unusable here, so the user

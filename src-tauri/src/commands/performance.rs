@@ -14,10 +14,10 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::developer_generation,
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    task::tunnel_runtime,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     tunnel::RsdTunnel,
     types::{PerformanceExportRow, PerformanceProcessSample, PerformanceSample, PerformanceStatus},
 };
@@ -204,10 +204,16 @@ fn validated_interval(interval_ms: Option<u32>) -> CommandResult<u32> {
 
 async fn connect(context: &DeviceContext) -> CommandResult<Option<(&'static str, RsdTunnel)>> {
     let provider = context.provider().await?;
-    let generation = developer_generation(&provider).await?;
-    context
-        .open_rsd_tunnel(&provider, generation, REMOTE_PAIRING_ATTEMPTS)
-        .await
+    match context
+        .open_service(
+            &provider,
+            &OpenOptions::new().remote_pairing_attempts(REMOTE_PAIRING_ATTEMPTS),
+        )
+        .await?
+    {
+        DeviceService::Legacy { .. } => Ok(None),
+        DeviceService::Core { route, tunnel, .. } => Ok(Some((route, tunnel))),
+    }
 }
 
 fn emit_status(
@@ -551,10 +557,7 @@ pub async fn performance_start(
     emit_status(&app, "connecting", None, None, interval_ms);
 
     tauri::async_runtime::spawn_blocking(move || {
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
+        let runtime = match tunnel_runtime() {
             Ok(runtime) => runtime,
             Err(error) => {
                 emit_status(&app, "error", Some(error.to_string()), None, interval_ms);

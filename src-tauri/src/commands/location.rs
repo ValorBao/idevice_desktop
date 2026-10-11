@@ -9,10 +9,10 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    task::tunnel_runtime,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{LocationSession, StreamStatus},
 };
 
@@ -57,10 +57,7 @@ pub async fn location_start(
     std::thread::Builder::new()
         .name("idevice-location".into())
         .spawn(move || {
-            let runtime = match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
+            let runtime = match tunnel_runtime() {
                 Ok(runtime) => runtime,
                 Err(error) => {
                     let _ = sender.send(Err(CommandError::new(
@@ -76,14 +73,11 @@ pub async fn location_start(
                 let mut sender = Some(sender);
                 let result: CommandResult<()> = async {
                     let provider = context.provider().await?;
-                    let generation = developer_generation(&provider).await?;
+                    let service = context
+                        .open_service(&provider, &OpenOptions::new().with_cancel(&token))
+                        .await?;
 
-                    if generation != DeveloperGeneration::Legacy {
-                        let Some((_, mut tunnel)) =
-                            context.open_rsd_tunnel(&provider, generation, 1).await?
-                        else {
-                            unreachable!("only Legacy devices have no RSD tunnel");
-                        };
+                    if let DeviceService::Core { mut tunnel, .. } = service {
                         let mut remote_server = RemoteServerClient::connect_rsd(
                             &mut tunnel.adapter,
                             &mut tunnel.handshake,

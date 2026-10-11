@@ -11,9 +11,8 @@
 use std::{future::Future, io::Write, time::Duration};
 
 use idevice::{
-    IdeviceService, RsdService,
+    RsdService,
     core_device::{AppServiceClient, ProcessToken},
-    core_device_proxy::CoreDeviceProxy,
     dvt::{
         device_info::{DeviceInfoClient, RunningProcess},
         process_control::ProcessControlClient,
@@ -26,7 +25,8 @@ use idevice_desktop_lib::{
     device_version::{DeveloperGeneration, ios_version},
     error::{CommandError, CommandResult},
     provider::{lockdown_service_socket, routed_provider_for},
-    tunnel::open_remote_pairing_tunnel,
+    transport::{DeviceContext, DeviceService, OpenOptions},
+    tunnel::discover_first_remote_pairing,
 };
 
 const STEP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -137,13 +137,19 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
             }
             verify_legacy(&provider).await
         }
-        DeveloperGeneration::CoreDeviceRemote => {
+        DeveloperGeneration::CoreDeviceRemote | DeveloperGeneration::CoreDeviceLockdown => {
             let pairing_path = app_data_dir().join(format!("remote-pairing-{udid}.plist"));
             println!("     pairing file: {}", pairing_path.display());
-            let tunnel = step("opening the RemotePairing developer tunnel", async {
-                open_remote_pairing_tunnel(&provider, &pairing_path, "idevice-desktop", None).await
+            let remote_target = discover_first_remote_pairing().await.ok();
+            let context =
+                DeviceContext::standalone(udid.clone(), pairing_path, None, remote_target);
+            let service = step("opening the developer transport", async {
+                context.open_service(&provider, &OpenOptions::new()).await
             })
             .await?;
+            let DeviceService::Core { tunnel, .. } = service else {
+                return verify_legacy(&provider).await;
+            };
             verify_core_device(
                 RsdTransport {
                     adapter: tunnel.adapter,
@@ -152,18 +158,6 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
                 bundle_id,
             )
             .await
-        }
-        DeveloperGeneration::CoreDeviceLockdown => {
-            let transport = step("opening the CoreDeviceProxy developer tunnel", async {
-                let proxy = CoreDeviceProxy::connect(&provider).await?;
-                let rsd_port = proxy.tunnel_info().server_rsd_port;
-                let mut adapter = proxy.create_software_tunnel()?.to_async_handle();
-                let stream = adapter.connect(rsd_port).await?;
-                let handshake = RsdHandshake::new(stream).await?;
-                Ok(RsdTransport { adapter, handshake })
-            })
-            .await?;
-            verify_core_device(transport, bundle_id).await
         }
     }
 }

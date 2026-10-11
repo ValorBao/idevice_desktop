@@ -3,13 +3,13 @@ import { ArrowRight, ClipboardPaste, Download, Eraser, Image as ImageIcon, Refre
 import {
   api,
   dialogs,
-  errorMessage,
   type PasteboardImagePreparation,
   type PasteboardImageSnapshot,
   type PasteboardImageWriteResult,
   type PasteboardTextSnapshot,
   type PasteboardWriteResult,
 } from '../api'
+import { reportCommand } from '../lib/commandError'
 
 const MAX_TEXT_BYTES = 1024 * 1024
 const DEMO_IMAGE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
@@ -117,9 +117,8 @@ export function Pasteboard({
       setReadStale(false)
     } catch (error) {
       if (request !== requestRef.current) return
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       if (request === requestRef.current) setBusy('idle')
     }
@@ -147,9 +146,8 @@ export function Pasteboard({
       onToast(`Replaced ${deviceName} pasteboard with ${result.characterCount.toLocaleString()} characters`)
     } catch (error) {
       if (request !== requestRef.current) return
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       if (request === requestRef.current) setBusy('idle')
     }
@@ -166,9 +164,8 @@ export function Pasteboard({
       setImageReadStale(false)
     } catch (error) {
       if (request !== imageRequestRef.current) return
-      const message = errorMessage(error)
-      setImageFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setImageFailure(err.message)
     } finally {
       if (request === imageRequestRef.current) setImageBusy('idle')
     }
@@ -196,9 +193,8 @@ export function Pasteboard({
       setImagePreparation(prepared)
     } catch (error) {
       if (request !== imageRequestRef.current) return
-      const message = errorMessage(error)
-      setImageFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setImageFailure(err.message)
     } finally {
       if (request === imageRequestRef.current) setImageBusy('idle')
     }
@@ -214,9 +210,8 @@ export function Pasteboard({
       try {
         await api.pasteboardImageDiscard(prepared.preparationId)
       } catch (error) {
-        const message = errorMessage(error)
-        setImageFailure(message)
-        onToast(message)
+        const err = reportCommand(error, onToast)
+        setImageFailure(err.message)
       }
     }
   }
@@ -252,9 +247,8 @@ export function Pasteboard({
       onToast(`Replaced ${deviceName} pasteboard with ${result.width.toLocaleString()} × ${result.height.toLocaleString()} image`)
     } catch (error) {
       if (request !== imageRequestRef.current) return
-      const message = errorMessage(error)
-      setImageFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setImageFailure(err.message)
     } finally {
       if (request === imageRequestRef.current) setImageBusy('idle')
     }

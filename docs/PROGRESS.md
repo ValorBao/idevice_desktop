@@ -64,6 +64,32 @@ The product direction is confirmed: developer tools first, macOS-only for the in
 
 ## 4. Completed Milestones
 
+### 2026-10-11: Honor CommandError.kind at one UI boundary
+
+Rejected commands already crossed the IPC boundary as
+`{ kind, message, retryable }`, but `errorMessage` dropped everything except the
+string and `Developer.tsx` detected a passcode refusal with `/passcode/i`.
+`src/lib/commandError.ts` is now the one place a reject is parsed and acted on:
+`reportCommand` toasts every kind except `cancelled`, and pages branch with
+`isCommandKind` instead of reading the message. `useDeviceTask`,
+`useDeviceSession`, `useDeviceEvents`, and the ad-hoc catch sites that toast
+all go through that helper — they were not folded into `useDeviceTask`, because
+most of those catches also reset page state.
+
+`developer_mode_enable` now reports kind `passcode` when the device refuses
+remote enable (observed string: `Device has a passcode set`). The field-name
+contract still covers `CommandError`; a second contract test requires the
+product kinds to stay named in `api.ts`.
+
+`PROJECT.md` no longer claims `ddi-missing` is what makes the Developer page
+offer the download. That page still decides from mount status and generation;
+the kind remains the session toast for a missing Legacy image.
+
+None of this is verified on a device. Confirm Developer Mode enable on a
+passcode-protected iOS 16+ device (kind `passcode`, Settings instruction, no
+raw idevice toast) and that cancelling Live Screen / Performance / a file
+transfer does not toast as an error.
+
 ### 2026-09-17: Shared Transport and Frontend Lifecycles
 
 A structural pass with no intended behaviour change, after the Personal Signing

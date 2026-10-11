@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { Search, Upload } from 'lucide-react'
 import { installedApps, type AppInfo } from '../data'
-import { api, dialogs, errorMessage, events } from '../api'
+import { api, dialogs, events } from '../api'
+import { reportCommand } from '../lib/commandError'
 import { installedToApp } from '../lib/device'
 import { useFileDrop } from '../lib/useFileDrop'
 import { AppIcon } from '../components/AppIcon'
@@ -21,7 +22,7 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
       const loaded = (await api.appsList(udid)).filter((app) => !app.system).map(installedToApp)
       setApps(loaded)
       setSelectedId((current) => loaded.some((app) => app.id === current) ? current : loaded[0]?.id ?? '')
-    } catch (error) { onToast(errorMessage(error)) }
+    } catch (error) { reportCommand(error, onToast) }
   }, [desktop, udid, onToast])
 
   useEffect(() => { void loadApps() }, [loadApps])
@@ -46,7 +47,7 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
         onToast(`${name} installed`)
       } catch (error) {
         setInstall(null)
-        onToast(errorMessage(error))
+        reportCommand(error, onToast)
       }
       return
     }
@@ -118,7 +119,7 @@ export function Apps({ desktop, udid, onToast }: { desktop: boolean; udid: strin
       setInstall(null)
       await loadApps()
       onToast(`${selected.name} uninstalled`)
-    } catch (error) { setInstall(null); onToast(errorMessage(error)) }
+    } catch (error) { setInstall(null); reportCommand(error, onToast) }
   }
 
   return (

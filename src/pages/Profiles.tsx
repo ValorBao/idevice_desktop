@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clock3, RefreshCw, Search, ShieldCheck } from 'lucide-react'
-import { api, errorMessage, type ProvisioningProfileSnapshot, type ProvisioningProfileSummary } from '../api'
+import { api, type ProvisioningProfileSnapshot, type ProvisioningProfileSummary } from '../api'
+import { reportCommand } from '../lib/commandError'
 
 const dateFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString()
 
@@ -86,9 +87,8 @@ export function Profiles({ desktop, udid, onToast }: { desktop: boolean; udid: s
       setSelectedId((current) => next.profiles.some((profile) => profile.id === current) ? current : next.profiles[0]?.id ?? '')
     } catch (error) {
       if (request !== requestRef.current) return
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       if (request === requestRef.current) setLoading(false)
     }

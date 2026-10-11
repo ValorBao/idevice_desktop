@@ -130,6 +130,27 @@ describe('useDeviceSession', () => {
     expect(screen.getByTestId('device')).toHaveTextContent('b')
   })
 
+  it('does not toast a cancelled background mount as an error', async () => {
+    const onError = vi.fn()
+    backend.api.deviceList.mockResolvedValue([summary('a')])
+    backend.api.ddiEnsure.mockRejectedValue({ kind: 'cancelled', message: 'DDI cancelled', retryable: false })
+
+    render(<Harness onError={onError} />)
+
+    await waitFor(() => expect(backend.api.ddiEnsure).toHaveBeenCalledWith('udid-a'))
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('still reports a missing disk image from the background mount', async () => {
+    const onError = vi.fn()
+    backend.api.deviceList.mockResolvedValue([summary('a')])
+    backend.api.ddiEnsure.mockRejectedValue({ kind: 'ddi-missing', message: 'Download the Developer Disk Image once', retryable: false })
+
+    render(<Harness onError={onError} />)
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('Download the Developer Disk Image once'))
+  })
+
   it('reports a listing failure and holds no session', async () => {
     const onError = vi.fn()
     backend.api.deviceList.mockRejectedValue(new Error('usbmuxd is unavailable'))

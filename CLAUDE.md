@@ -27,9 +27,12 @@ Every page branches on a `desktop` boolean. When false, it renders mock data fro
 browser says nothing about whether the device transport works — say which mode you
 verified in.
 
-`useDeviceTask` (`src/lib/hooks.ts`) wraps the guard-and-report pattern: it skips the
-call in demo mode and routes thrown errors to the page's toast. Use it for device
-operations rather than repeating the try/catch.
+`useDeviceTask` (`src/lib/hooks.ts`) wraps the demo-mode guard and reports thrown
+errors through `reportCommand` (`src/lib/commandError.ts`). That is the one place
+a rejected command's `kind` / `retryable` are acted on: `cancelled` does not toast.
+A catch that also resets page state should call `reportCommand` itself — do not
+fold those into `useDeviceTask`. Branch on `isCommandKind(error, 'passcode')` (or
+another product kind) instead of regexing the message.
 
 ## Browser APIs that are silently dead on the desktop
 

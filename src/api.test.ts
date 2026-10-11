@@ -12,7 +12,8 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   save: vi.fn(),
 }))
 
-import { dialogs } from './api'
+import { invoke } from '@tauri-apps/api/core'
+import { api, dialogs } from './api'
 
 describe('destructive confirmation', () => {
   afterEach(() => {
@@ -42,5 +43,21 @@ describe('destructive confirmation', () => {
 
     expect(browserConfirm).toHaveBeenCalledWith('Delete the file?')
     expect(tauriDialog.confirm).not.toHaveBeenCalled()
+  })
+})
+
+describe('invoke failures', () => {
+  it('rethrows a rejected command with its kind and retryable flag', async () => {
+    vi.mocked(invoke).mockRejectedValueOnce({
+      kind: 'network_discovery',
+      message: 'Connect over USB',
+      retryable: true,
+    })
+
+    await expect(api.deviceList()).rejects.toEqual({
+      kind: 'network_discovery',
+      message: 'Connect over USB',
+      retryable: true,
+    })
   })
 })

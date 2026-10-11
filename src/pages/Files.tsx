@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppWindow, ChevronRight, File, FilePlus, FileWarning, Folder, HardDrive, Plus, Upload } from 'lucide-react'
 import { fileSystem, installedApps } from '../data'
-import { api, dialogs, errorMessage, events, type FileSharingApp, type OperationProgress, type RemoteFileEntry } from '../api'
+import { api, dialogs, events, type FileSharingApp, type OperationProgress, type RemoteFileEntry } from '../api'
+import { reportCommand } from '../lib/commandError'
 import { bytes, displaySizeToBytes } from '../lib/format'
 import { useDeviceTask } from '../lib/hooks'
 import { useFileDrop } from '../lib/useFileDrop'
@@ -57,7 +58,7 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
     void api.fileSharingApps(udid).then((apps) => {
       setRemoteSharingApps(apps)
       setSelectedBundle((current) => apps.some((app) => app.bundleId === current) ? current : apps[0]?.bundleId ?? '')
-    }).catch((error) => onToast(errorMessage(error)))
+    }).catch((error) => reportCommand(error, onToast))
   }, [desktop, udid, onToast])
 
   const refresh = useCallback(async () => {
@@ -72,7 +73,7 @@ export function Files({ desktop, udid, onToast }: { desktop: boolean; udid: stri
       setSelected(null)
     } catch (error) {
       setRemoteEntries([])
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     }
   }, [desktop, sourceAvailable, currentPath, udid, bundleId, onToast])
   useEffect(() => { void refresh() }, [refresh])

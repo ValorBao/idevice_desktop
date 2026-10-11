@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bug, Download, RefreshCw, Search, X } from 'lucide-react'
-import { api, dialogs, errorMessage, type CrashReportContent, type CrashReportSummary } from '../api'
+import { api, dialogs, type CrashReportContent, type CrashReportSummary } from '../api'
+import { reportCommand } from '../lib/commandError'
 import { bytes } from '../lib/format'
 import { useDeviceTask } from '../lib/hooks'
 
@@ -65,7 +66,7 @@ export function CrashReports({ desktop, udid, onToast }: { desktop: boolean; udi
       setReports(loaded)
       setSelectedPath((current) => loaded.some((report) => report.path === current) ? current : loaded[0]?.path ?? '')
     } catch (error) {
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     } finally {
       setLoading(false)
     }
@@ -85,7 +86,7 @@ export function CrashReports({ desktop, udid, onToast }: { desktop: boolean; udi
         setContent(result)
         setReports((items) => items.map((report) => report.path === result.path ? { ...report, sizeBytes: result.sizeBytes } : report))
       })
-      .catch((error) => { if (!disposed) onToast(errorMessage(error)) })
+      .catch((error) => { if (!disposed) reportCommand(error, onToast) })
     return () => { disposed = true }
   }, [desktop, selectedPath, udid, onToast])
 

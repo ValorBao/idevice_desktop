@@ -3,12 +3,12 @@ import { Download, Pause, Play, Search } from 'lucide-react'
 import {
   api,
   dialogs,
-  errorMessage,
   events,
   type PerformanceExportRow,
   type PerformanceSample,
   type PerformanceStatus,
 } from '../api'
+import { COMMAND_KIND, reportCommand } from '../lib/commandError'
 import { byteSize } from '../lib/format'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
@@ -179,7 +179,7 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
       if (mountedRef.current) setStatus((current) => ({ ...current, state: 'paused', message: null }))
     } catch (error) {
       runningRequestedRef.current = true
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     }
   }
 
@@ -191,9 +191,9 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
       if (desktop) await api.performanceStart(udid, intervalMs)
     } catch (error) {
       runningRequestedRef.current = false
-      const message = errorMessage(error)
-      setStatus((current) => ({ ...current, state: 'error', message }))
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      setStatus((current) => ({ ...current, state: 'error', message: err.message }))
     }
   }
 
@@ -216,7 +216,7 @@ export function Performance({ desktop, udid, onToast }: { desktop: boolean; udid
       }
       onToast(`Exported ${exportRows.length} performance samples`)
     } catch (error) {
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     }
   }
 

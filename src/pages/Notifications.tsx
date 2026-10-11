@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BellRing, Pause, Play, Plus, Search, Trash2 } from 'lucide-react'
 import {
   api,
-  errorMessage,
   events,
   type NotificationObservationEvent,
   type NotificationObservationStatus,
 } from '../api'
+import { COMMAND_KIND, reportCommand } from '../lib/commandError'
 import { createSessionId } from '../lib/session'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
@@ -162,9 +162,9 @@ export function Notifications({
     } catch (error) {
       if (activeSessionRef.current !== sessionId) return
       requestedRef.current = false
-      const message = errorMessage(error)
-      setStatus({ sessionId, state: 'error', message, transport: null, subscriptions })
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      setStatus({ sessionId, state: 'error', message: err.message, transport: null, subscriptions })
     }
   }
 
@@ -176,7 +176,7 @@ export function Notifications({
       if (mountedRef.current) setStatus((current) => ({ ...current, state: 'paused', message: null }))
     } catch (error) {
       requestedRef.current = true
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     }
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Device } from '../data'
-import { api, dialogs, errorMessage, events, type DeveloperStatus, type InstalledApp } from '../api'
+import { api, dialogs, events, type DeveloperStatus, type InstalledApp } from '../api'
+import { COMMAND_KIND, isCommandKind, reportCommand } from '../lib/commandError'
 import { useDeviceTask } from '../lib/hooks'
 
 export function Developer({ desktop, device, onToast }: { desktop: boolean; device: Device; onToast: (message: string) => void }) {
@@ -32,7 +33,7 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
       setStatus(nextStatus)
       setApps(nextApps)
       setBundleId((current) => nextApps.some((app) => app.bundleId === current) ? current : nextApps[0]?.bundleId ?? '')
-    } catch (error) { onToast(errorMessage(error)) }
+    } catch (error) { reportCommand(error, onToast) }
   }, [desktop, device.udid, onToast])
   useEffect(() => { void refresh() }, [refresh])
   useEffect(() => { jitRef.current = jit }, [jit])
@@ -97,7 +98,7 @@ export function Developer({ desktop, device, onToast }: { desktop: boolean; devi
         // remotely, which is most devices. That is not a failure to report as
         // one: the switch still exists, it just has to be flipped on the
         // device. Verified on iPhone10,4 / iOS 16.7.16.
-        if (/passcode/i.test(errorMessage(error))) {
+        if (isCommandKind(error, COMMAND_KIND.passcode)) {
           await api.developerReveal(device.udid).catch(() => {})
           return onToast(`${device.name} has a passcode, so it must be enabled on the device: Settings › Privacy & Security › Developer Mode. It restarts when you turn it on`)
         }

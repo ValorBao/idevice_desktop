@@ -131,8 +131,8 @@ describe('Provisioning Profiles workflow', () => {
     backend.api.provisioningProfiles.mockRejectedValue(new Error('Misagent unavailable'))
     render(<Profiles desktop udid="device-1" onToast={onToast} />)
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Error: Misagent unavailable')
-    expect(onToast).toHaveBeenCalledWith('Error: Misagent unavailable')
+    expect(await screen.findByRole('status')).toHaveTextContent('Misagent unavailable')
+    expect(onToast).toHaveBeenCalledWith('Misagent unavailable')
     expect(screen.queryByText('Device Lab Development')).not.toBeInTheDocument()
   })
 

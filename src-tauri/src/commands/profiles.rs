@@ -5,10 +5,9 @@ use plist::{Dictionary, Value};
 use tauri::{AppHandle, State};
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{ProvisioningProfileSnapshot, ProvisioningProfileSummary},
 };
 
@@ -17,6 +16,10 @@ const MAX_PROFILES: usize = 512;
 const MAX_PROFILE_BYTES: usize = 8 * 1024 * 1024;
 const EXPIRING_DAYS: i64 = 30;
 
+#[cfg(test)]
+use crate::device_version::DeveloperGeneration;
+
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProvisioningTransport {
     Lockdown,
@@ -25,6 +28,7 @@ enum ProvisioningTransport {
     UsbRequired,
 }
 
+#[cfg(test)]
 fn provisioning_transport(
     is_bonjour: bool,
     generation: DeveloperGeneration,
@@ -263,26 +267,22 @@ async fn load_raw_profiles(
 ) -> CommandResult<(Vec<Vec<u8>>, String)> {
     let context = DeviceContext::resolve(app, state, udid).await?;
     let provider = context.provider().await?;
-    let generation = developer_generation(&provider).await?;
-    match provisioning_transport(provider.is_bonjour(), generation) {
-        ProvisioningTransport::Lockdown => {
-            let mut client = MisagentClient::connect(&provider)
-                .await
-                .map_err(CommandError::from)?;
-            let profiles = client.copy_all().await.map_err(CommandError::from)?;
-            Ok((profiles, "Misagent · Lockdown".into()))
-        }
-        ProvisioningTransport::UsbRequired => Err(CommandError::new(
+    if !provider.is_bonjour() {
+        let mut client = MisagentClient::connect(&provider)
+            .await
+            .map_err(CommandError::from)?;
+        let profiles = client.copy_all().await.map_err(CommandError::from)?;
+        return Ok((profiles, "Misagent · Lockdown".into()));
+    }
+    match context.open_service(&provider, &OpenOptions::new()).await? {
+        DeviceService::Legacy { .. } => Err(CommandError::new(
             "provisioning_profiles",
             "Provisioning profiles over the network require iOS 17 or later. Connect the device by USB.",
             false,
         )),
-        ProvisioningTransport::RemoteRsd | ProvisioningTransport::CoreDeviceRsd => {
-            let Some((route, mut tunnel)) =
-                context.open_rsd_tunnel(&provider, generation, 1).await?
-            else {
-                unreachable!("only Legacy devices have no RSD tunnel");
-            };
+        DeviceService::Core {
+            mut tunnel, route, ..
+        } => {
             let mut client =
                 MisagentClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
                     .await

@@ -99,4 +99,20 @@ mod tests {
         assert_eq!(generation("17.4"), DeveloperGeneration::CoreDeviceLockdown);
         assert_eq!(generation("18.0"), DeveloperGeneration::CoreDeviceLockdown);
     }
+
+    /// `"17.4-beta"` is not a ProductVersion the device reports. The current
+    /// parser treats the non-numeric minor as 0, so this string maps to
+    /// 17.0.0 / CoreDeviceRemote. Do not "fix" that here — a real 17.4
+    /// device reports `17.4` or `17.4.x`.
+    #[test]
+    fn beta_suffix_on_17_4_currently_parses_as_17_0() {
+        let version = IosVersion::parse("17.4-beta").unwrap();
+        assert_eq!(version.major, 17);
+        assert_eq!(version.minor, 0);
+        assert_eq!(version.patch, 0);
+        assert_eq!(
+            version.developer_generation(),
+            DeveloperGeneration::CoreDeviceRemote
+        );
+    }
 }

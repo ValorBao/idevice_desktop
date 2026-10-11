@@ -11,7 +11,6 @@ use std::time::Duration;
 
 use idevice::{
     IdeviceService, ReadWrite, RsdService,
-    core_device_proxy::CoreDeviceProxy,
     debug_proxy::DebugProxyClient,
     dvt::{process_control::ProcessControlClient, remote_server::RemoteServerClient},
     installation_proxy::InstallationProxyClient,
@@ -22,7 +21,8 @@ use idevice_desktop_lib::{
     device_version::{DeveloperGeneration, ios_version},
     error::{CommandError, CommandResult},
     provider::{lockdown_service_socket, routed_provider_for},
-    tunnel::open_remote_pairing_tunnel,
+    transport::{DeviceContext, DeviceService, OpenOptions},
+    tunnel::discover_first_remote_pairing,
 };
 
 /// Mirrors `LEGACY_DVT_SERVICES` in `commands/developer.rs`.
@@ -161,8 +161,6 @@ async fn main() {
 async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
     println!("== JIT verification for {udid} ==");
 
-    // Discovery targets come from the running app's catalog; the harness lets the
-    // tunnel fall back to its own Bonjour discovery by passing None.
     let provider = step("connecting to the device", routed_provider_for(&udid, None)).await?;
     println!(
         "     route: {}",
@@ -185,27 +183,15 @@ async fn run(udid: String, bundle_id: Option<String>) -> CommandResult<()> {
         println!("     pairing file: {}", pairing_path.display());
     }
 
+    let remote_target = discover_first_remote_pairing().await.ok();
+    let context = DeviceContext::standalone(udid.clone(), pairing_path, None, remote_target);
     let mut transport = step("opening the developer transport", async {
-        match generation {
-            // iOS 16 and earlier publish each developer service over lockdown.
-            DeveloperGeneration::Legacy => Ok(Transport::Lockdown),
-            DeveloperGeneration::CoreDeviceRemote => {
-                let tunnel =
-                    open_remote_pairing_tunnel(&provider, &pairing_path, "idevice-desktop", None)
-                        .await?;
-                Ok(Transport::Rsd {
-                    adapter: tunnel.adapter,
-                    handshake: tunnel.handshake,
-                })
-            }
-            DeveloperGeneration::CoreDeviceLockdown => {
-                let proxy = CoreDeviceProxy::connect(&provider).await?;
-                let rsd_port = proxy.tunnel_info().server_rsd_port;
-                let mut adapter = proxy.create_software_tunnel()?.to_async_handle();
-                let stream = adapter.connect(rsd_port).await?;
-                let handshake = RsdHandshake::new(stream).await?;
-                Ok(Transport::Rsd { adapter, handshake })
-            }
+        match context.open_service(&provider, &OpenOptions::new()).await? {
+            DeviceService::Legacy { .. } => Ok(Transport::Lockdown),
+            DeviceService::Core { tunnel, .. } => Ok(Transport::Rsd {
+                adapter: tunnel.adapter,
+                handshake: tunnel.handshake,
+            }),
         }
     })
     .await?;

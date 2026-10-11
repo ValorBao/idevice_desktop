@@ -27,10 +27,9 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    transport::{DeviceContext, DeviceService, OpenOptions as ServiceOptions},
     types::{NetworkCaptureFilter, NetworkCaptureProgress, NetworkCaptureStatus},
 };
 
@@ -199,6 +198,8 @@ fn available_space(path: &Path) -> io::Result<u64> {
     }
     // SAFETY: statvfs returned success and initialized the output structure.
     let stats = unsafe { stats.assume_init() };
+    // `f_bavail` is `u64` on this libc and `u32` on others; `from` keeps both.
+    #[allow(clippy::useless_conversion)]
     Ok(u64::from(stats.f_bavail).saturating_mul(stats.f_frsize))
 }
 
@@ -243,31 +244,34 @@ async fn connect_capture(context: &DeviceContext) -> CommandResult<CaptureClient
         });
     }
 
-    let generation = developer_generation(&provider).await?;
-    if generation == DeveloperGeneration::Legacy {
-        return Err(CommandError::new(
+    match context
+        .open_service(&provider, &ServiceOptions::new())
+        .await?
+    {
+        DeviceService::Legacy { .. } => Err(CommandError::new(
             "network_capture",
             "Network capture on iOS 16 and earlier requires a USB connection",
             false,
-        ));
+        )),
+        DeviceService::Core {
+            mut tunnel, route, ..
+        } => {
+            let client = PcapdClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
+                .await
+                .map_err(|error| {
+                    CommandError::new(
+                        "network_capture",
+                        format!("The network pcapd service is unavailable: {error}"),
+                        true,
+                    )
+                })?;
+            Ok(CaptureClient {
+                client,
+                transport: format!("Pcapd · {route}"),
+                _adapter: Some(tunnel.adapter),
+            })
+        }
     }
-    let Some((route, mut tunnel)) = context.open_rsd_tunnel(&provider, generation, 1).await? else {
-        unreachable!("only Legacy devices have no RSD tunnel");
-    };
-    let client = PcapdClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
-        .await
-        .map_err(|error| {
-            CommandError::new(
-                "network_capture",
-                format!("The network pcapd service is unavailable: {error}"),
-                true,
-            )
-        })?;
-    Ok(CaptureClient {
-        client,
-        transport: format!("Pcapd · {route}"),
-        _adapter: Some(tunnel.adapter),
-    })
 }
 
 fn elapsed_ms(started: Instant) -> u64 {

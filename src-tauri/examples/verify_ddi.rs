@@ -14,14 +14,12 @@
 
 use std::time::Duration;
 
-use idevice::{
-    IdeviceService, core_device_proxy::CoreDeviceProxy, mobile_image_mounter::ImageMounter,
-    rsd::RsdHandshake,
-};
+use idevice::{IdeviceService, mobile_image_mounter::ImageMounter};
 use idevice_desktop_lib::{
     device_version::{DeveloperGeneration, IosVersion, ios_version},
     provider::{RoutedProvider, lockdown_service_socket, routed_provider_for},
-    tunnel::open_remote_pairing_tunnel,
+    transport::{DeviceContext, DeviceService, OpenOptions},
+    tunnel::discover_first_remote_pairing,
 };
 
 /// Developer services iOS 16 and earlier publish over lockdown once a DDI is
@@ -96,30 +94,21 @@ async fn report_state(
         return;
     }
 
-    // Each generation reaches RSD differently: iOS 17.0-17.3 through
-    // RemotePairing, iOS 17.4 and later through CoreDeviceProxy.
+    // Each generation reaches RSD through DeviceContext::open_service.
     let pairing_path = std::path::PathBuf::from(std::env::var("HOME").expect("HOME")).join(
         format!("Library/Application Support/dev.idevice.desktop/remote-pairing-{udid}.plist"),
     );
-    let handshake = match generation {
-        DeveloperGeneration::CoreDeviceRemote => tokio::time::timeout(
-            TUNNEL_TIMEOUT,
-            open_remote_pairing_tunnel(provider, &pairing_path, "idevice-desktop", None),
-        )
-        .await
-        .map(|result| result.map(|tunnel| tunnel.handshake)),
-        DeveloperGeneration::CoreDeviceLockdown => {
-            tokio::time::timeout(TUNNEL_TIMEOUT, async {
-                let proxy = CoreDeviceProxy::connect(provider).await?;
-                let rsd_port = proxy.tunnel_info().server_rsd_port;
-                let mut adapter = proxy.create_software_tunnel()?.to_async_handle();
-                let stream = adapter.connect(rsd_port).await?;
-                Ok(RsdHandshake::new(stream).await?)
-            })
-            .await
+    let remote_target = discover_first_remote_pairing().await.ok();
+    let context = DeviceContext::standalone(udid.to_owned(), pairing_path, None, remote_target);
+    let handshake = tokio::time::timeout(TUNNEL_TIMEOUT, async {
+        match context.open_service(provider, &OpenOptions::new()).await? {
+            DeviceService::Legacy { .. } => unreachable!("returned above"),
+            DeviceService::Core { tunnel, .. } => {
+                Ok::<_, idevice_desktop_lib::error::CommandError>(tunnel.handshake)
+            }
         }
-        DeveloperGeneration::Legacy => unreachable!("returned above"),
-    };
+    })
+    .await;
     match handshake {
         Ok(Ok(handshake)) => {
             let total = handshake.services.len();

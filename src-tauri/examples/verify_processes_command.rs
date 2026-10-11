@@ -12,6 +12,7 @@ use idevice_desktop_lib::commands::{
     process_launch_for_device, process_stop_for_device, processes_snapshot_for_device,
 };
 use idevice_desktop_lib::transport::DeviceContext;
+use idevice_desktop_lib::tunnel::discover_first_remote_pairing;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -27,7 +28,10 @@ async fn main() {
     let pairing_path = std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
         .join("Library/Application Support/dev.idevice.desktop")
         .join(format!("remote-pairing-{udid}.plist"));
-    let context = DeviceContext::standalone(udid, pairing_path);
+    // Named browse: production commands use the discovery catalog. A harness
+    // that still wants "first RemotePairing on the LAN" must call this by name.
+    let remote_target = discover_first_remote_pairing().await.ok();
+    let context = DeviceContext::standalone(udid, pairing_path, None, remote_target);
 
     let snapshot = match processes_snapshot_for_device(context.clone()).await {
         Ok(snapshot) => snapshot,

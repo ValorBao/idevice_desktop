@@ -8,10 +8,9 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    device_version::{DeveloperGeneration, developer_generation},
     error::{CommandError, CommandResult},
     state::AppState,
-    transport::DeviceContext,
+    transport::{DeviceContext, DeviceService, OpenOptions},
     types::{NotificationObservationEvent, NotificationObservationStatus},
 };
 
@@ -21,6 +20,10 @@ const MAX_SUBSCRIPTIONS: usize = 32;
 const MAX_NAME_BYTES: usize = 200;
 const MAX_SESSION_ID_BYTES: usize = 128;
 
+#[cfg(test)]
+use crate::device_version::DeveloperGeneration;
+
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NotificationTransport {
     Lockdown,
@@ -35,6 +38,7 @@ struct NotificationConnection {
     _adapter: Option<AdapterHandle>,
 }
 
+#[cfg(test)]
 fn notification_transport(
     is_bonjour: bool,
     generation: DeveloperGeneration,
@@ -98,26 +102,24 @@ fn validate_subscriptions(values: Vec<String>) -> CommandResult<Vec<String>> {
 
 async fn connect(context: &DeviceContext) -> CommandResult<NotificationConnection> {
     let provider = context.provider().await?;
-    let generation = developer_generation(&provider).await?;
-    match notification_transport(provider.is_bonjour(), generation) {
-        NotificationTransport::Lockdown => Ok(NotificationConnection {
+    if !provider.is_bonjour() {
+        return Ok(NotificationConnection {
             client: NotificationProxyClient::connect(&provider)
                 .await
                 .map_err(CommandError::from)?,
             transport: "Notification Proxy · Lockdown".into(),
             _adapter: None,
-        }),
-        NotificationTransport::UsbRequired => Err(CommandError::new(
+        });
+    }
+    match context.open_service(&provider, &OpenOptions::new()).await? {
+        DeviceService::Legacy { .. } => Err(CommandError::new(
             "notifications",
             "Notification observation over the network requires iOS 17 or later. Connect this device by USB.",
             false,
         )),
-        NotificationTransport::RemoteRsd | NotificationTransport::CoreDeviceRsd => {
-            let Some((route, mut tunnel)) =
-                context.open_rsd_tunnel(&provider, generation, 1).await?
-            else {
-                unreachable!("only Legacy devices have no RSD tunnel");
-            };
+        DeviceService::Core {
+            mut tunnel, route, ..
+        } => {
             let client =
                 NotificationProxyClient::connect_rsd(&mut tunnel.adapter, &mut tunnel.handshake)
                     .await

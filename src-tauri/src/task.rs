@@ -4,6 +4,51 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{CommandError, CommandResult};
 
+/// The software-tunnel adapter (`AdapterHandle`) is driven from the current
+/// executor: its I/O wakers are registered on whatever runtime first polls
+/// `create_software_tunnel`. A multi-thread Tokio runtime can move the
+/// continuation to another worker after that poll, and later service calls
+/// then stall.
+///
+/// Commands that open a Core-generation tunnel therefore hop onto a dedicated
+/// `current_thread` runtime before they drive the adapter. Screenshot,
+/// location, and JIT defined this boundary; Live Screen, performance,
+/// processes, and pasteboard already follow it. This helper is that decision
+/// written down — not leftover boilerplate to delete.
+///
+/// Device-monitor threads stay on their own dedicated runtimes because they
+/// are long-lived usbmuxd/Bonjour watchers, not tunnel adapters.
+///
+/// Crash reports, profiles, notifications, and network capture still run on
+/// the Tauri runtime today. They open a tunnel only for the Bonjour/Core
+/// path and keep the adapter on that runtime. Moving them onto
+/// `tunnel_runtime` would change scheduling of an already-working path, so
+/// they stay put until a stall shows up. New commands that open Core tunnels
+/// should use this helper.
+pub fn tunnel_runtime() -> CommandResult<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| CommandError::new("runtime", error.to_string(), true))
+}
+
+/// Build [`tunnel_runtime`] and `block_on` the operation.
+pub fn block_on_tunnel<T>(operation: impl Future<Output = CommandResult<T>>) -> CommandResult<T> {
+    tunnel_runtime()?.block_on(operation)
+}
+
+/// Hop off the Tauri runtime onto [`tunnel_runtime`] for adapter work.
+pub async fn run_on_tunnel_runtime<T, F, Fut>(operation: F) -> CommandResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: Future<Output = CommandResult<T>> + 'static,
+{
+    tokio::task::spawn_blocking(move || block_on_tunnel(operation()))
+        .await
+        .map_err(|error| CommandError::new("runtime", error.to_string(), true))?
+}
+
 /// Bound an asynchronous stage, including cancellation before its first poll.
 /// A synchronous library call cannot be interrupted; check again when it yields.
 pub async fn stage<T>(

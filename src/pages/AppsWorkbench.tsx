@@ -13,14 +13,16 @@ export type AppsSubView = 'manager' | 'jit' | 'profiles' | 'signing' | 'xctest' 
 export const appsTabs: readonly TabItem<AppsSubView>[] = [
   {
     id: 'manager',
-    label: 'Applications & Sideload',
+    label: 'Apps',
+    ariaLabel: 'Applications & Sideload',
     icon: <AppWindow size={14} />,
     title: 'Applications & JIT',
     detail: 'Installation Proxy · Sideloading · Debugger Tunnel',
   },
   {
     id: 'jit',
-    label: 'JIT & Debugger Tunnel',
+    label: 'JIT',
+    ariaLabel: 'JIT & Debugger Tunnel',
     icon: <Code2 size={14} />,
     title: 'JIT & Debugger Tunnel',
     detail: 'com.apple.dt.* services',

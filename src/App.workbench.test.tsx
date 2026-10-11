@@ -25,6 +25,6 @@ describe('App workbench UI', () => {
 
     await user.click(screen.getByRole('button', { name: 'APPS' }))
     expect(screen.getByText('Applications & JIT')).toBeInTheDocument()
-    expect(screen.getByText('Applications & Sideload')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Applications & Sideload' })).toBeInTheDocument()
   })
 })

@@ -9,8 +9,8 @@ export type FilesSubView = 'afc' | 'pasteboard'
 export const filesTabs: readonly TabItem<FilesSubView>[] = [
   {
     id: 'afc',
-    label: 'AFC & Sandboxes',
-    ariaLabel: 'Files',
+    label: 'AFC',
+    ariaLabel: 'AFC & Sandboxes',
     icon: <FolderOpen size={14} />,
     title: 'Payload Files',
     detail: 'Apple File Conduit (AFC) · Application Sandboxes',

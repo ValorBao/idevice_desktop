@@ -16,7 +16,7 @@ import {
   type NetworkCaptureProgress,
   type NetworkCaptureStatus,
 } from '../api'
-import { byteSize, fileName } from '../lib/format'
+import { byteSize, duration, fileName } from '../lib/format'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
 
@@ -36,16 +36,6 @@ const idleStatus = (): NetworkCaptureStatus => ({
   transport: null,
   filter: { pid: null, interfaceName: null },
 })
-
-const duration = (milliseconds: number) => {
-  const totalSeconds = Math.floor(milliseconds / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  return hours
-    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
 
 const captureFilename = () => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '-').replace('Z', '')

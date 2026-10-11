@@ -1,5 +1,6 @@
 
 
+/** Catalog sizes. Zero and missing values render as an em dash, unlike `byteSize`. */
 export const bytes = (value: number | null | undefined) => {
   if (!value) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -31,6 +32,17 @@ export const byteSize = (value: number | null) => {
 export const packageSize = (value: number) => value < 1024 * 1024
   ? `${Math.max(1, Math.round(value / 1024))} KB`
   : `${(value / 1024 / 1024).toFixed(1)} MB`
+
+/** Elapsed capture time as `mm:ss`, or `h:mm:ss` once an hour has passed. */
+export const duration = (milliseconds: number) => {
+  const totalSeconds = Math.floor(milliseconds / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
 
 /** The last path segment, for showing a chosen file without its directory. */
 export const fileName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path

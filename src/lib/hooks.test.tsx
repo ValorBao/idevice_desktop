@@ -43,4 +43,18 @@ describe('useDeviceTask', () => {
     expect(task).toHaveBeenCalledOnce()
     expect(onError).toHaveBeenCalledWith('Device disconnected')
   })
+
+  it('does not toast a cancelled command as an error', async () => {
+    const task = vi.fn(async () => {
+      throw { kind: 'cancelled', message: 'JIT cancelled', retryable: false }
+    })
+    const onError = vi.fn()
+    const { result } = renderHook(() => useDeviceTask(true, onError))
+
+    await act(async () => {
+      await result.current(task)
+    })
+
+    expect(onError).not.toHaveBeenCalled()
+  })
 })

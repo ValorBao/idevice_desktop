@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DependencyList } from 'react'
-import { errorMessage, type UnlistenFn } from '../api'
+import type { UnlistenFn } from '../api'
+import { reportCommand } from './commandError'
 
 /**
  * A Tauri event subscription whose handler is only invoked while the owning
@@ -89,7 +90,7 @@ export function useDeviceEvents(
           }
         }
       } catch (error) {
-        if (alive) onErrorRef.current(errorMessage(error))
+        if (alive) reportCommand(error, onErrorRef.current)
       }
     })()
 

@@ -130,6 +130,22 @@ fn command_error_matches_typescript() {
 }
 
 #[test]
+fn command_error_product_kinds_are_named_in_the_contract() {
+    for kind in [
+        "cancelled",
+        "passcode",
+        "ddi-missing",
+        "developer-mode",
+        "network_discovery",
+    ] {
+        assert!(
+            API_TS.contains(kind),
+            "{kind} must stay named in src/api.ts so the UI contract lists it"
+        );
+    }
+}
+
+#[test]
 fn device_summary_matches_typescript() {
     assert_matches("DeviceSummary", &device_summary());
 }

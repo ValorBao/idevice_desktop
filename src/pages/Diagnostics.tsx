@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { gestalt, ioTree, type Device } from '../data'
-import { api, errorMessage } from '../api'
+import { api } from '../api'
+import { reportCommand } from '../lib/commandError'
 import { flatten } from '../lib/format'
 
 function StatValue({ value }: { value: string }) {
@@ -77,7 +78,7 @@ export function Diagnostics({ device, desktop, onToast }: { device: Device; desk
     setLoading(true)
     void api.diagnostic(tab, device.udid)
       .then(setRaw)
-      .catch((error) => onToast(errorMessage(error)))
+      .catch((error) => reportCommand(error, onToast))
       .finally(() => setLoading(false))
   }, [desktop, tab, device.udid, onToast])
   const filteredGestalt = gestalt.filter(([key, value]) => `${key} ${value}`.toLowerCase().includes(query.toLowerCase()))

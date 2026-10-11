@@ -1,8 +1,17 @@
 import { invoke } from '@tauri-apps/api/core'
+import { commandError } from './lib/commandError'
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event'
 import { confirm, open, save } from '@tauri-apps/plugin-dialog'
 
 export type CommandError = { kind: string; message: string; retryable: boolean }
+
+/**
+ * Product kinds the UI branches on. `reportCommand` in `src/lib/commandError.ts`
+ * is the one place a rejected command's kind is acted on: `cancelled` is silent,
+ * and pages match `passcode`, `ddi-missing`, `developer-mode`, and
+ * `network_discovery` instead of regexing `message`.
+ */
+export { commandError, errorMessage, isCommandKind, reportCommand } from './lib/commandError'
 
 export type DeviceSummary = {
   id: string
@@ -435,7 +444,13 @@ declare global {
 
 export const isDesktopRuntime = () => typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__)
 
-const call = <T>(command: string, args: Record<string, unknown> = {}) => invoke<T>(command, args)
+const call = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
+  try {
+    return await invoke<T>(command, args)
+  } catch (error) {
+    throw commandError(error)
+  }
+}
 
 export const api = {
   deviceList: () => call<DeviceSummary[]>('device_list'),
@@ -579,11 +594,6 @@ export const dialogs = {
     isDesktopRuntime()
       ? confirm(message, { title: actionLabel, kind: 'warning', okLabel: actionLabel, cancelLabel: 'Cancel' })
       : Promise.resolve(window.confirm(message)),
-}
-
-export const errorMessage = (error: unknown) => {
-  if (typeof error === 'object' && error && 'message' in error) return String((error as CommandError).message)
-  return String(error)
 }
 
 export type { UnlistenFn }

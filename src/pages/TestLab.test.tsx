@@ -135,8 +135,8 @@ describe('XCTest preflight workflow', () => {
     backend.api.xctestPreflight.mockRejectedValue(new Error('Installation Proxy unavailable'))
     render(<TestLab desktop udid="device-1" onToast={onToast} />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error: Installation Proxy unavailable')
-    expect(onToast).toHaveBeenCalledWith('Error: Installation Proxy unavailable')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Installation Proxy unavailable')
+    expect(onToast).toHaveBeenCalledWith('Installation Proxy unavailable')
     expect(screen.queryByText('WebDriverAgentRunner')).not.toBeInTheDocument()
   })
 

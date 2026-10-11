@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { errorMessage } from '../api'
+import { reportCommand } from './commandError'
 
 /**
  * What a task should do when the app is running in the browser demo rather than
@@ -9,12 +9,12 @@ import { errorMessage } from '../api'
 type BrowserFallback = string | (() => void)
 
 /**
- * Wraps a device operation with the guard and error handling every page repeats:
- * skip the call entirely in browser demo mode, and report a thrown error through
- * the page's notification callback.
+ * Wraps a device operation with the demo-mode guard and reports thrown errors
+ * through `reportCommand` so cancelled commands do not toast as failures.
  *
  * Guards that depend on page state stay inside the task, where they keep their
- * original order relative to the desktop check.
+ * original order relative to the desktop check. A catch that also resets page
+ * state should call `reportCommand` itself rather than moving into this hook.
  */
 export function useDeviceTask(desktop: boolean, onError: (message: string) => void) {
   return useCallback(
@@ -27,7 +27,7 @@ export function useDeviceTask(desktop: boolean, onError: (message: string) => vo
       try {
         await task()
       } catch (error) {
-        onError(errorMessage(error))
+        reportCommand(error, onError)
       }
     },
     [desktop, onError],

@@ -161,7 +161,11 @@ describe('developer disk image download', () => {
   it('points at Settings when the device refuses because it has a passcode', async () => {
     const user = userEvent.setup()
     const onToast = vi.fn()
-    backend.api.developerEnable.mockRejectedValue(new Error('unknown error `Device has a passcode set` returned from device'))
+    backend.api.developerEnable.mockRejectedValue({
+      kind: 'passcode',
+      message: 'unknown error `Device has a passcode set` returned from device',
+      retryable: false,
+    })
     render(<Developer desktop device={legacyDevice} onToast={onToast} />)
 
     await user.click(screen.getByRole('button', { name: 'Enable Developer Mode' }))

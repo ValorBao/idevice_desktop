@@ -4,11 +4,11 @@ import { demoProcesses, installedApps } from '../data'
 import {
   api,
   dialogs,
-  errorMessage,
   type InstalledApp,
   type ProcessSnapshot,
   type ProcessSummary,
 } from '../api'
+import { COMMAND_KIND, commandError, reportCommand } from '../lib/commandError'
 
 const demoSnapshot: ProcessSnapshot = {
   processes: demoProcesses,
@@ -60,9 +60,10 @@ export function Processes({ desktop, udid, onToast }: { desktop: boolean; udid: 
       setLoadError('')
     } catch (error) {
       if (!mountedRef.current) return
-      const message = errorMessage(error)
-      setLoadError(message)
-      if (reportError) onToast(message)
+      const err = commandError(error)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      setLoadError(err.message)
+      if (reportError) reportCommand(error, onToast)
     } finally {
       requestRunningRef.current = false
       if (mountedRef.current) {
@@ -100,7 +101,7 @@ export function Processes({ desktop, udid, onToast }: { desktop: boolean; udid: 
         setApps(launchable)
         setBundleId((current) => launchable.some((app) => app.bundleId === current) ? current : launchable[0]?.bundleId ?? '')
       })
-      .catch((error) => { if (!disposed) onToast(errorMessage(error)) })
+      .catch((error) => { if (!disposed) reportCommand(error, onToast) })
     return () => { disposed = true }
   }, [desktop, onToast, udid])
 
@@ -137,7 +138,7 @@ export function Processes({ desktop, udid, onToast }: { desktop: boolean; udid: 
       onToast(`${result.bundleId} launched as pid ${result.pid}`)
       await loadProcesses(false)
     } catch (error) {
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     } finally {
       if (mountedRef.current) setLaunching(false)
     }
@@ -160,7 +161,7 @@ export function Processes({ desktop, udid, onToast }: { desktop: boolean; udid: 
       onToast(`${process.name} stopped`)
       await loadProcesses(false)
     } catch (error) {
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     } finally {
       if (mountedRef.current) setStoppingPid(null)
     }

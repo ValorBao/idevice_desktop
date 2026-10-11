@@ -5,10 +5,11 @@ import {
   LockKeyhole, LogOut, PackageCheck, ShieldCheck, Smartphone,
 } from 'lucide-react'
 import {
-  api, dialogs, errorMessage, events, type OperationProgress,
+  api, dialogs, events, type OperationProgress,
   type PersonalAccountSigningResult, type PersonalAccountStatus,
   type PersonalAccountTwoFactor,
 } from '../api'
+import { errorMessage, reportCommand } from '../lib/commandError'
 import { fileName, packageSize } from '../lib/format'
 
 const demoStatus: PersonalAccountStatus = {
@@ -118,9 +119,8 @@ export function PersonalAccountSigning({
       setTwoFactor(null)
       onToast(`Signed in as ${next.email}`)
     } catch (error) {
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       submittedPassword = ''
       setLoggingIn(false)
@@ -136,9 +136,8 @@ export function PersonalAccountSigning({
       setTwoFactor(null)
       setVerificationCode('')
     } catch (error) {
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       setSubmittingCode(false)
     }
@@ -231,10 +230,9 @@ export function PersonalAccountSigning({
       onToast(`${signed.appName} signed with your Apple Account`)
     } catch (error) {
       if (!current()) return
-      const message = errorMessage(error)
-      setFailure(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
       setProgress(null)
-      onToast(message)
     } finally {
       if (current()) {
         signingOperation.current = null
@@ -253,9 +251,8 @@ export function PersonalAccountSigning({
       if (desktop) await api.appInstall(result.outputPath, udid)
       onToast(`${result.appName} installed`)
     } catch (error) {
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       setInstalling(false)
     }

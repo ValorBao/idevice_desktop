@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw, Zap } from 'lucide-react'
 import type { Device } from '../data'
-import { api, errorMessage, type DeviceOverview } from '../api'
+import { api, type DeviceOverview } from '../api'
+import { errorMessage, reportCommand } from '../lib/commandError'
 import { deviceScreenCache } from '../lib/device'
 import { bytes } from '../lib/format'
 
@@ -32,7 +33,7 @@ export function Overview({ device, desktop, onToast }: { device: Device; desktop
   useEffect(() => {
     if (!desktop) return
     setOverview(null)
-    void api.overview(device.udid).then(setOverview).catch((error) => onToast(errorMessage(error)))
+    void api.overview(device.udid).then(setOverview).catch((error) => reportCommand(error, onToast))
   }, [desktop, device.udid, onToast])
   useEffect(() => {
     const cached = deviceScreenCache.get(device.udid)

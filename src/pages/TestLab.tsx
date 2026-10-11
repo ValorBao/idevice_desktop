@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Beaker, Bot, CheckCircle2, CircleDashed, LockKeyhole, RefreshCw, Search, ShieldCheck, Smartphone } from 'lucide-react'
 import {
   api,
-  errorMessage,
   type DeveloperStatus,
   type XCTestPlanRequest,
   type XCTestPreflightSnapshot,
   type XCTestRunPlan,
   type XCTestRunnerCandidate,
 } from '../api'
+import { reportCommand } from '../lib/commandError'
 
 const demoSnapshot = (): XCTestPreflightSnapshot => ({
   iosVersion: '17.4',
@@ -114,9 +114,8 @@ export function TestLab({ desktop, udid, onToast }: { desktop: boolean; udid: st
       setSelectedTargetId((current) => next.targets.some((target) => target.bundleId === current) ? current : '')
     } catch (error) {
       if (request !== requestRef.current) return
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       if (request === requestRef.current) setLoading(false)
     }
@@ -208,9 +207,8 @@ export function TestLab({ desktop, udid, onToast }: { desktop: boolean; udid: st
       setPlan(next)
     } catch (error) {
       if (validation !== planRequestRef.current) return
-      const message = errorMessage(error)
-      setPlanFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setPlanFailure(err.message)
     } finally {
       if (validation === planRequestRef.current) setPlanBusy(false)
     }

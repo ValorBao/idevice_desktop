@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Package, RefreshCw, Upload } from 'lucide-react'
-import { api, dialogs, errorMessage, events, type TrollStoreStatus } from '../api'
+import { api, dialogs, events, type TrollStoreStatus } from '../api'
+import { reportCommand } from '../lib/commandError'
 import { useDeviceTask } from '../lib/hooks'
 
 const demoStatus = (): TrollStoreStatus => ({
@@ -45,9 +46,8 @@ export function TrollStore({ desktop, udid, onToast }: { desktop: boolean; udid:
         : next.removableApps.find((app) => app.bundleId === 'com.apple.tips')?.bundleId ?? next.removableApps[0]?.bundleId ?? '')
     } catch (error) {
       if (request !== requestRef.current) return
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       if (request === requestRef.current) setLoading(false)
     }

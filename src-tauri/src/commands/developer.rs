@@ -664,7 +664,27 @@ pub async fn developer_mode_enable(
     client
         .enable_developer_mode()
         .await
-        .map_err(CommandError::from)
+        .map_err(developer_enable_error)
+}
+
+/// A device with a passcode refuses remote enable. That is a product kind, not
+/// an `idevice` transport failure, so the UI can send the user to Settings
+/// without matching the message.
+fn developer_enable_error(error: idevice::IdeviceError) -> CommandError {
+    let message = error.to_string();
+    if developer_enable_kind(&message) == "passcode" {
+        CommandError::new("passcode", message, false)
+    } else {
+        CommandError::from(error)
+    }
+}
+
+fn developer_enable_kind(message: &str) -> &'static str {
+    if message.to_ascii_lowercase().contains("passcode") {
+        "passcode"
+    } else {
+        "idevice"
+    }
 }
 
 #[tauri::command]
@@ -1190,5 +1210,18 @@ mod tests {
     fn ignores_replies_that_only_look_like_an_error() {
         // A stop packet whose payload happens to start with E is not an error.
         assert_eq!(attach_failure(Some("Exception")), None);
+    }
+
+    #[test]
+    fn labels_a_passcode_refusal_so_the_ui_does_not_read_the_message() {
+        // Observed on iPhone10,4 / iOS 16.7.16.
+        assert_eq!(
+            developer_enable_kind("unknown error `Device has a passcode set` returned from device"),
+            "passcode"
+        );
+        assert_eq!(developer_enable_kind("Device locked"), "idevice");
+        let mapped = developer_enable_error(idevice::IdeviceError::InvalidHostID);
+        assert_eq!(mapped.kind, "idevice");
+        assert!(!mapped.retryable);
     }
 }

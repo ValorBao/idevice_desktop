@@ -4,9 +4,10 @@ import {
   KeyRound, LoaderCircle, PackageCheck, ShieldCheck, Smartphone,
 } from 'lucide-react'
 import {
-  api, dialogs, errorMessage, events, type OperationProgress, type PersonalSigningPreflight,
+  api, dialogs, events, type OperationProgress, type PersonalSigningPreflight,
   type PersonalSigningResult,
 } from '../api'
+import { reportCommand } from '../lib/commandError'
 import { fileName, packageSize } from '../lib/format'
 import { PersonalAccountSigning } from './PersonalAccountSigning'
 
@@ -77,9 +78,8 @@ export function PersonalSigning({ desktop, udid, deviceName = 'iPhone', onToast 
       setIdentityHash(next.selectedIdentityHash ?? next.identities.find((identity) => identity.matchesProfile)?.hash ?? '')
     }).catch((error) => {
       if (generation !== requestGeneration.current) return
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     }).finally(() => {
       if (generation === requestGeneration.current) setChecking(false)
     })
@@ -128,10 +128,9 @@ export function PersonalSigning({ desktop, udid, deviceName = 'iPhone', onToast 
       setProgress({ operation: 'personal-signing', item: 'Signed IPA ready', percent: 100 })
       onToast(`${signed.appName} signed successfully`)
     } catch (error) {
-      const message = errorMessage(error)
-      setFailure(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
       setProgress(null)
-      onToast(message)
     } finally {
       setSigning(false)
     }
@@ -150,9 +149,8 @@ export function PersonalSigning({ desktop, udid, deviceName = 'iPhone', onToast 
       onToast(`${result.appName} installed`)
       setProgress({ operation: 'install', item: 'Installed on device', percent: 100 })
     } catch (error) {
-      const message = errorMessage(error)
-      setFailure(message)
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      setFailure(err.message)
     } finally {
       setInstalling(false)
     }

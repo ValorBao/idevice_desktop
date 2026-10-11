@@ -10,12 +10,12 @@ import {
 import {
   api,
   dialogs,
-  errorMessage,
   events,
   type NetworkCaptureFilter,
   type NetworkCaptureProgress,
   type NetworkCaptureStatus,
 } from '../api'
+import { COMMAND_KIND, reportCommand } from '../lib/commandError'
 import { byteSize, duration, fileName } from '../lib/format'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
@@ -139,9 +139,9 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
       }
     } catch (error) {
       ownsCaptureRef.current = false
-      const message = errorMessage(error)
-      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message }))
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message: err.message }))
     }
   }
 
@@ -158,9 +158,9 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
         onToast(`${fileName(status.destination)} saved in demonstration mode`)
       }
     } catch (error) {
-      const message = errorMessage(error)
-      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message }))
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message: err.message }))
     }
   }
 
@@ -177,9 +177,9 @@ export function NetworkCapture({ desktop, udid, onToast }: { desktop: boolean; u
         onToast('Capture discarded')
       }
     } catch (error) {
-      const message = errorMessage(error)
-      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message }))
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message: err.message }))
     }
   }
 

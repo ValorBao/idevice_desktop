@@ -3,11 +3,11 @@ import { CircleStop, Download, Expand, Minimize2, Play, ScanLine } from 'lucide-
 import {
   api,
   dialogs,
-  errorMessage,
   events,
   type LiveScreenFrame,
   type LiveScreenStatus,
 } from '../api'
+import { COMMAND_KIND, reportCommand } from '../lib/commandError'
 import { on, useDeviceEvents } from '../lib/useDeviceEvents'
 import { useInterval } from '../lib/useInterval'
 
@@ -113,7 +113,7 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
         state: 'paused',
         message: 'Preview paused while the window was hidden.',
       }))
-      if (desktop) void api.liveScreenStop().catch((error) => onToast(errorMessage(error)))
+      if (desktop) void api.liveScreenStop().catch((error) => reportCommand(error, onToast))
     }
     document.addEventListener('visibilitychange', pauseWhenHidden)
     return () => document.removeEventListener('visibilitychange', pauseWhenHidden)
@@ -131,9 +131,9 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
       }
     } catch (error) {
       ownsSessionRef.current = false
-      const message = errorMessage(error)
-      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message }))
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message: err.message }))
     }
   }
 
@@ -145,9 +145,9 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
       if (mountedRef.current) setStatus((current) => ({ ...current, state: 'paused', message: null }))
     } catch (error) {
       ownsSessionRef.current = true
-      const message = errorMessage(error)
-      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message }))
-      onToast(message)
+      const err = reportCommand(error, onToast)
+      if (err.kind === COMMAND_KIND.cancelled) return
+      if (mountedRef.current) setStatus((current) => ({ ...current, state: 'error', message: err.message }))
     }
   }
 
@@ -164,7 +164,7 @@ export function LiveScreen({ desktop, udid, onToast }: { desktop: boolean; udid:
         onToast(`${filename} ready in demonstration mode`)
       }
     } catch (error) {
-      onToast(errorMessage(error))
+      reportCommand(error, onToast)
     }
   }
 

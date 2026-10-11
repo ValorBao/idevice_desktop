@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { devices, type Device } from '../data'
-import { api, errorMessage, events } from '../api'
+import { api, events } from '../api'
+import { reportCommand } from './commandError'
 import type { Connection } from '../types'
 import { summaryToDevice } from './device'
 
@@ -104,7 +105,7 @@ export function useDeviceSession({
             setConnection('none')
             onSessionLostRef.current()
             await api.deviceDisconnect().catch((error) => {
-              if (lifecycleIsCurrent()) onErrorRef.current(errorMessage(error))
+              if (lifecycleIsCurrent()) reportCommand(error, onErrorRef.current)
             })
             continue
           }
@@ -122,14 +123,14 @@ export function useDeviceSession({
             setConnection('detected')
             onSessionLostRef.current()
             await api.deviceDisconnect().catch((error) => {
-              if (lifecycleIsCurrent()) onErrorRef.current(errorMessage(error))
+              if (lifecycleIsCurrent()) reportCommand(error, onErrorRef.current)
             })
           }
         } catch (error) {
           if (!lifecycleIsCurrent()) return
           if (refreshPendingRef.current) continue
           setConnection('none')
-          onErrorRef.current(errorMessage(error))
+          reportCommand(error, onErrorRef.current)
         }
       }
     } finally {
@@ -150,10 +151,10 @@ export function useDeviceSession({
         if (disposed) stop()
         else unlisten = stop
       })
-      .catch((error) => { if (!disposed) onErrorRef.current(errorMessage(error)) })
+      .catch((error) => { if (!disposed) reportCommand(error, onErrorRef.current) })
     void api.deviceMonitorStart()
       .then(() => { if (!disposed) return refresh() })
-      .catch((error) => { if (!disposed) onErrorRef.current(errorMessage(error)) })
+      .catch((error) => { if (!disposed) reportCommand(error, onErrorRef.current) })
     return () => {
       disposed = true
       unlisten?.()
@@ -169,7 +170,7 @@ export function useDeviceSession({
     if (!desktop || !connected || !device?.udid) return
     let disposed = false
     void api.ddiEnsure(device.udid).catch((error) => {
-      if (!disposed) onErrorRef.current(errorMessage(error))
+      if (!disposed) reportCommand(error, onErrorRef.current)
     })
     return () => { disposed = true }
   }, [desktop, connected, device?.udid])
@@ -185,12 +186,12 @@ export function useDeviceSession({
       setConnection('connected')
     } catch (error) {
       setConnection('detected')
-      onErrorRef.current(errorMessage(error))
+      reportCommand(error, onErrorRef.current)
     }
   }, [desktop])
 
   const disconnect = useCallback(async () => {
-    if (desktop) await api.deviceDisconnect().catch((error) => onErrorRef.current(errorMessage(error)))
+    if (desktop) await api.deviceDisconnect().catch((error) => reportCommand(error, onErrorRef.current))
     setConnection('none')
     onSessionLostRef.current()
   }, [desktop])
@@ -207,7 +208,7 @@ export function useDeviceSession({
       setConnection('connected')
       return true
     } catch (error) {
-      onErrorRef.current(errorMessage(error))
+      reportCommand(error, onErrorRef.current)
       return false
     }
   }, [desktop, device.udid, refresh])

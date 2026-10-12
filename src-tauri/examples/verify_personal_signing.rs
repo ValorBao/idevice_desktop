@@ -9,20 +9,26 @@ use idevice_desktop_lib::commands::personal_signing_preflight;
 #[tokio::main]
 async fn main() {
     let arguments = std::env::args().collect::<Vec<_>>();
-    if arguments.len() != 4 {
-        eprintln!(
-            "usage: verify_personal_signing <app.ipa> <profile.mobileprovision> <device-udid>"
-        );
-        std::process::exit(2);
-    }
+    let (ipa, profile, udid) = match arguments.len() {
+        4 => (
+            arguments[1].clone(),
+            arguments[2].clone(),
+            arguments[3].clone(),
+        ),
+        3 => (
+            arguments[1].clone(),
+            arguments[2].clone(),
+            idevice_desktop_lib::device_rig::udid_or_exit(None),
+        ),
+        _ => {
+            eprintln!(
+                "usage: verify_personal_signing <app.ipa> <profile.mobileprovision> [device-udid]"
+            );
+            std::process::exit(2);
+        }
+    };
 
-    match personal_signing_preflight(
-        arguments[1].clone(),
-        arguments[2].clone(),
-        arguments[3].clone(),
-    )
-    .await
-    {
+    match personal_signing_preflight(ipa, profile, udid).await {
         Ok(preflight) => println!(
             "{}",
             serde_json::to_string_pretty(&preflight).expect("serialize preflight")

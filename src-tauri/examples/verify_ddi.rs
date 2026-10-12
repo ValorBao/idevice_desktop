@@ -143,9 +143,9 @@ async fn report_state(
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let mut args = std::env::args().skip(1);
-    let udid = args.next().expect("usage: verify_ddi <udid> [--unmount]");
-    let unmount = args.next().as_deref() == Some("--unmount");
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
+    let unmount = args.iter().any(|value| value == "--unmount");
 
     let provider = routed_provider_for(&udid, None).await.expect("provider");
     let version = ios_version(&provider).await.expect("version");

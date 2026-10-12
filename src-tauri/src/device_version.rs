@@ -49,6 +49,49 @@ impl IosVersion {
     }
 }
 
+impl DeveloperGeneration {
+    pub const ALL: [Self; 3] = [
+        Self::Legacy,
+        Self::CoreDeviceRemote,
+        Self::CoreDeviceLockdown,
+    ];
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::CoreDeviceRemote => "core-device-remote",
+            Self::CoreDeviceLockdown => "core-device-lockdown",
+        }
+    }
+
+    pub fn from_slug(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "legacy" | "ios16" | "ios-16" => Some(Self::Legacy),
+            "core-device-remote" | "coredeviceremote" | "ios17" | "remote" => {
+                Some(Self::CoreDeviceRemote)
+            }
+            "core-device-lockdown" | "coredevicelockdown" | "ios17.4" | "lockdown" => {
+                Some(Self::CoreDeviceLockdown)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Legacy => "Legacy (iOS 16 and earlier)",
+            Self::CoreDeviceRemote => "CoreDeviceRemote (iOS 17.0–17.3)",
+            Self::CoreDeviceLockdown => "CoreDeviceLockdown (iOS 17.4+)",
+        }
+    }
+}
+
+impl std::fmt::Display for DeveloperGeneration {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.slug())
+    }
+}
+
 /// Reads the iOS version and maps it to its developer-service generation.
 pub async fn developer_generation(
     provider: &impl IdeviceProvider,
@@ -98,6 +141,21 @@ mod tests {
         assert_eq!(generation("17.3.1"), DeveloperGeneration::CoreDeviceRemote);
         assert_eq!(generation("17.4"), DeveloperGeneration::CoreDeviceLockdown);
         assert_eq!(generation("18.0"), DeveloperGeneration::CoreDeviceLockdown);
+    }
+
+    #[test]
+    fn generation_slug_round_trips() {
+        for generation in DeveloperGeneration::ALL {
+            assert_eq!(
+                DeveloperGeneration::from_slug(generation.slug()),
+                Some(generation)
+            );
+        }
+        assert_eq!(
+            DeveloperGeneration::from_slug("ios17"),
+            Some(DeveloperGeneration::CoreDeviceRemote)
+        );
+        assert_eq!(DeveloperGeneration::from_slug("unknown"), None);
     }
 
     /// `"17.4-beta"` is not a ProductVersion the device reports. The current

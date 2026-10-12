@@ -1,0 +1,201 @@
+name: Device tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 16 * * *"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: device-tests
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'device-test'))
+    runs-on: [self-hosted, macOS, ios-devices]
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.preflight.outputs.matrix }}
+      legacy: ${{ steps.preflight.outputs.legacy }}
+      core_device_remote: ${{ steps.preflight.outputs.core_device_remote }}
+      core_device_lockdown: ${{ steps.preflight.outputs.core_device_lockdown }}
+      ok: ${{ steps.preflight.outputs.ok }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run device preflight
+        id: preflight
+        run: |
+          mkdir -p device-rig-logs
+          scripts/device-rig/preflight.sh \
+            --json-file device-rig-logs/preflight.json \
+            --github-output "$GITHUB_OUTPUT" \
+            | tee device-rig-logs/preflight.txt
+
+      - name: Catalog uniqueness
+        run: cargo run --manifest-path src-tauri/Cargo.toml --example verify_discovery | tee device-rig-logs/verify_discovery.log
+
+      - name: Pairing records (non-destructive)
+        run: cargo run --manifest-path src-tauri/Cargo.toml --example verify_pairing | tee device-rig-logs/verify_pairing.log
+
+      - name: Upload preflight logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-preflight
+          path: device-rig-logs
+          if-no-files-found: warn
+
+  device-matrix:
+    name: ${{ matrix.generation }}
+    needs: preflight
+    if: |
+      always() &&
+      needs.preflight.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'schedule' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'device-test')))
+    runs-on: [self-hosted, macOS, ios-devices]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
+    env:
+      IDEVICE_TEST_UDID: ${{ matrix.udid }}
+      IDEVICE_TEST_GENERATION: ${{ matrix.generation }}
+      DEVICE_RIG_LOG_DIR: device-rig-logs/${{ matrix.generation }}
+    steps:
+      - name: Check out the repository
+        if: matrix.udid != ''
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Skip missing generation
+        if: matrix.udid == ''
+        run: |
+          echo "No USB phone for ${{ matrix.generation }}; skipping this matrix cell."
+          mkdir -p "$DEVICE_RIG_LOG_DIR"
+          echo "skipped=true" | tee "$DEVICE_RIG_LOG_DIR/result.txt"
+          echo "No ${{ matrix.generation }} device attached." > "$GITHUB_STEP_SUMMARY"
+
+      - name: Run generation harnesses
+        if: matrix.udid != ''
+        run: scripts/device-rig/run-harnesses.sh
+
+      - name: Upload generation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-${{ matrix.generation }}
+          path: device-rig-logs/${{ matrix.generation }}
+          if-no-files-found: warn
+
+  comment:
+    name: PR summary
+    needs: [preflight, device-matrix]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'device-test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download device logs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Post or update the summary comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const marker = '<!-- device-rig-summary -->';
+            const generations = ['legacy', 'core-device-remote', 'core-device-lockdown'];
+            const line = (label, value) => `| ${label} | ${value} |`;
+
+            function read(file) {
+              try { return fs.readFileSync(file, 'utf8').trim(); } catch { return ''; }
+            }
+
+            const preflightText = read('artifacts/device-preflight/preflight.txt');
+            let rows = [
+              line('preflight', process.env.PREFLIGHT_RESULT || 'unknown'),
+              line('legacy UDID', process.env.LEGACY_UDID || '(none)'),
+              line('core-device-remote UDID', process.env.REMOTE_UDID || '(none)'),
+              line('core-device-lockdown UDID', process.env.LOCKDOWN_UDID || '(none)'),
+            ];
+            for (const generation of generations) {
+              const dir = `artifacts/device-${generation}`;
+              const result = read(path.join(dir, 'result.txt'));
+              const status = result.includes('FAIL')
+                ? 'fail'
+                : result.includes('skipped=true')
+                  ? 'skipped (no device)'
+                  : result.includes('PASS')
+                    ? 'pass'
+                    : (process.env.MATRIX_RESULT || 'unknown');
+              rows.push(line(generation, status));
+            }
+
+            const body = [
+              marker,
+              '## Device rig',
+              '',
+              '| Check | Result |',
+              '| --- | --- |',
+              ...rows,
+              '',
+              '<details><summary>preflight</summary>',
+              '',
+              '```',
+              preflightText || '(no preflight log)',
+              '```',
+              '',
+              '</details>',
+              '',
+              `_Run ${{ github.run_id }} on ${{ github.sha }}_`,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 },
+            );
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+        env:
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          MATRIX_RESULT: ${{ needs.device-matrix.result }}
+          LEGACY_UDID: ${{ needs.preflight.outputs.legacy }}
+          REMOTE_UDID: ${{ needs.preflight.outputs.core_device_remote }}
+          LOCKDOWN_UDID: ${{ needs.preflight.outputs.core_device_lockdown }}

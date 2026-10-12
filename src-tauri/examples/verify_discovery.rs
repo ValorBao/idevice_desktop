@@ -13,8 +13,17 @@ use idevice_desktop_lib::discovery::{DiscoveryCatalog, UsbDiscovery};
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let mut mux = UsbmuxdConnection::default().await.expect("usbmuxd");
-    let devices = mux.get_devices().await.expect("get_devices");
+    let mut mux = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        UsbmuxdConnection::default(),
+    )
+    .await
+    .expect("usbmuxd connect timed out")
+    .expect("usbmuxd");
+    let devices = tokio::time::timeout(std::time::Duration::from_secs(20), mux.get_devices())
+        .await
+        .expect("get_devices timed out")
+        .expect("get_devices");
     println!("usbmuxd records: {}\n", devices.len());
 
     let mut catalog = DiscoveryCatalog::default();

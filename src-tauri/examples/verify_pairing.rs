@@ -22,15 +22,25 @@ use idevice_desktop_lib::{commands, provider::routed_provider_for};
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--repair") {
-        let udid = args.get(1).expect("usage: verify_pairing --repair <udid>");
-        repair(udid).await;
+        args.remove(0);
+        let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
+        repair(&udid).await;
         return;
     }
 
-    let mut mux = UsbmuxdConnection::default().await.expect("usbmuxd");
-    let devices = mux.get_devices().await.expect("get_devices");
+    let mut mux = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        UsbmuxdConnection::default(),
+    )
+    .await
+    .expect("usbmuxd connect timed out")
+    .expect("usbmuxd");
+    let devices = tokio::time::timeout(std::time::Duration::from_secs(20), mux.get_devices())
+        .await
+        .expect("get_devices timed out")
+        .expect("get_devices");
     println!("== pairing verification: {} device(s) ==\n", devices.len());
 
     for device in devices {

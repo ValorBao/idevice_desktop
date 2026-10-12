@@ -132,9 +132,9 @@ async fn main() {
         )
         .init();
 
-    let mut args = std::env::args().skip(1);
-    let udid = args.next().expect("usage: verify_jit <udid> [bundle_id]");
-    let bundle_id = args.next();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
+    let bundle_id = args.into_iter().next();
 
     // The JIT worker runs on a dedicated 8 MB stack in production; match that here.
     let handle = std::thread::Builder::new()

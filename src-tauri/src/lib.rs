@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod device_rig;
 pub mod device_version;
 pub mod discovery;
 pub mod error;

@@ -310,21 +310,31 @@ pub async fn live_screen_start(
     *screen_state.latest.lock().await = None;
     emit_status(&app, "connecting", None, None);
 
-    tauri::async_runtime::spawn_blocking(move || {
-        let runtime = match tunnel_runtime() {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                emit_status(&app, "error", Some(error.to_string()), None);
-                return;
+    // The tokio blocking pool's stack is too small for the RemoteXPC handshake
+    // in a debug build: it overflows and aborts the process.
+    let thread_app = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("live-screen".into())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(move || {
+            let app = thread_app;
+            let runtime = match tunnel_runtime() {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    emit_status(&app, "error", Some(error.message), None);
+                    return;
+                }
+            };
+            let completion_token = token.clone();
+            if let Err(error) = runtime.block_on(run_stream(app.clone(), context, token))
+                && !completion_token.is_cancelled()
+            {
+                emit_status(&app, "error", Some(error.message), None);
             }
-        };
-        let completion_token = token.clone();
-        if let Err(error) = runtime.block_on(run_stream(app.clone(), context, token))
-            && !completion_token.is_cancelled()
-        {
-            emit_status(&app, "error", Some(error.message), None);
-        }
-    });
+        });
+    if let Err(error) = spawned {
+        emit_status(&app, "error", Some(error.to_string()), None);
+    }
     Ok(())
 }
 

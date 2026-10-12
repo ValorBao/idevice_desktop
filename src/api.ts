@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import { commandError } from './lib/commandError'
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event'
 import { confirm, open, save } from '@tauri-apps/plugin-dialog'
@@ -206,6 +206,29 @@ export type LiveScreenStatus = {
   message: string | null
   transport: string | null
   targetFps: number
+}
+export type ScreenRecording = {
+  id: string
+  path: string
+  deviceName: string
+  durationMs: number
+  width: number
+  height: number
+  bytes: number
+}
+export type ScreenRecordingStatus = {
+  sessionId: string
+  state: string
+  message: string | null
+  deviceName: string | null
+  recording: ScreenRecording | null
+}
+export type ScreenRecordingSegment = {
+  startMs: number
+  endMs: number
+}
+export type ScreenRecordingExportProgress = {
+  progress: number
 }
 export type ProvisioningProfileSummary = {
   id: string
@@ -444,6 +467,9 @@ declare global {
 
 export const isDesktopRuntime = () => typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__)
 
+/** A webview URL for a file inside the asset-protocol scope in `tauri.conf.json`. */
+export const localMediaUrl = (path: string) => convertFileSrc(path)
+
 const call = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
   try {
     return await invoke<T>(command, args)
@@ -510,6 +536,14 @@ export const api = {
   liveScreenStart: (udid?: string) => call<void>('live_screen_start', { udid }),
   liveScreenStop: () => call<void>('live_screen_stop'),
   liveScreenExportFrame: (localPath: string) => call<void>('live_screen_export_frame', { localPath }),
+  screenRecordingStart: (sessionId: string, deviceName?: string) => call<void>('screen_recording_start', { sessionId, deviceName }),
+  screenRecordingStop: () => call<ScreenRecording>('screen_recording_stop'),
+  screenRecordingCancel: () => call<void>('screen_recording_cancel'),
+  screenRecordingCurrent: () => call<ScreenRecording | null>('screen_recording_current'),
+  screenRecordingDiscard: () => call<void>('screen_recording_discard'),
+  screenRecordingExport: (destination: string, segments: ScreenRecordingSegment[]) =>
+    call<void>('screen_recording_export', { destination, segments }),
+  screenRecordingExportCancel: () => call<void>('screen_recording_export_cancel'),
   provisioningProfiles: (udid?: string) => call<ProvisioningProfileSnapshot>('provisioning_profiles_list', { udid }),
   personalSigningPreflight: (ipaPath: string, profilePath: string, udid: string) => call<PersonalSigningPreflight>('personal_signing_preflight', { ipaPath, profilePath, udid }),
   personalSigningExport: (request: PersonalSigningRequest, udid: string) => call<PersonalSigningResult>('personal_signing_export', { request, udid }),
@@ -562,6 +596,8 @@ export const events = {
   notificationObservationStatus: (handler: (payload: NotificationObservationStatus) => void) => listen<NotificationObservationStatus>('notifications://status', (event) => handler(event.payload)),
   liveScreenFrame: (handler: (payload: LiveScreenFrame) => void) => listen<LiveScreenFrame>('live-screen://frame', (event) => handler(event.payload)),
   liveScreenStatus: (handler: (payload: LiveScreenStatus) => void) => listen<LiveScreenStatus>('live-screen://status', (event) => handler(event.payload)),
+  screenRecordingStatus: (handler: (payload: ScreenRecordingStatus) => void) => listen<ScreenRecordingStatus>('screen-recording://status', (event) => handler(event.payload)),
+  screenRecordingExportProgress: (handler: (payload: ScreenRecordingExportProgress) => void) => listen<ScreenRecordingExportProgress>('screen-recording://export-progress', (event) => handler(event.payload)),
   appProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('apps://install-progress', (event) => handler(event.payload)),
   personalSigningProgress: (handler: (payload: OperationProgress) => void) => listen<OperationProgress>('personal-signing://progress', (event) => handler(event.payload)),
   personalAccountTwoFactor: (handler: (payload: PersonalAccountTwoFactor) => void) => listen<PersonalAccountTwoFactor>('personal-account://two-factor-required', (event) => handler(event.payload)),
@@ -580,6 +616,7 @@ export const dialogs = {
   saveFile: (defaultPath: string) => save({ defaultPath }),
   pcapDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'Packet capture', extensions: ['pcap'] }] }),
   pngDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'PNG image', extensions: ['png'] }] }),
+  mp4Destination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'MP4 video', extensions: ['mp4'] }] }),
   signedIpaDestination: (defaultPath: string) => save({ defaultPath, filters: [{ name: 'Signed iOS application', extensions: ['ipa'] }] }),
   /**
    * Confirms a destructive action.

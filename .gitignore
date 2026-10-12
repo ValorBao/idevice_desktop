@@ -17,6 +17,7 @@ website/
 *.ipa
 *.mobiledevicepairing
 *.plist
+!src-tauri/Info.plist
 exports/
 screenshots/*.png
 !idevice/project/screenshots/overview.png

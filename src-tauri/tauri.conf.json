@@ -26,6 +26,7 @@
         "default-src": "'self'",
         "connect-src": "'self' ipc: http://ipc.localhost",
         "img-src": "'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
+        "media-src": "'self' asset: http://asset.localhost",
         "style-src": "'self' 'unsafe-inline'",
         "script-src": "'self'",
         "font-src": "'self'",
@@ -38,6 +39,7 @@
         "default-src": "'self'",
         "connect-src": "'self' ipc: http://ipc.localhost ws://localhost:5173 http://localhost:5173",
         "img-src": "'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
+        "media-src": "'self' asset: http://asset.localhost",
         "style-src": "'self' 'unsafe-inline'",
         "script-src": "'self'",
         "font-src": "'self'",
@@ -45,6 +47,10 @@
         "base-uri": "'self'",
         "frame-ancestors": "'none'",
         "form-action": "'none'"
+      },
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPCACHE/screen-recordings/*"]
       }
     }
   },

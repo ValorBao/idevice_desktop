@@ -288,6 +288,41 @@ pub struct LiveScreenStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ScreenRecording {
+    pub id: String,
+    pub path: String,
+    pub device_name: String,
+    pub duration_ms: u64,
+    pub width: u32,
+    pub height: u32,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenRecordingStatus {
+    pub session_id: String,
+    pub state: String,
+    pub message: Option<String>,
+    pub device_name: Option<String>,
+    pub recording: Option<ScreenRecording>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenRecordingSegment {
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenRecordingExportProgress {
+    pub progress: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProvisioningProfileSummary {
     pub id: String,
     pub uuid: Option<String>,

@@ -572,7 +572,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .live-screen-toolbar > small.connecting i { background: #febc2e; }
 .live-screen-toolbar > small.error i { background: #ff5f57; }
 .live-screen-layout { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(360px, 1fr) 280px; gap: 12px; }
-.live-screen-stage { position: relative; min-height: 420px; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 20px; background-color: #08080b; background-image: linear-gradient(45deg, rgba(255,255,255,.025) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,.025) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,.025) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.025) 75%); background-position: 0 0, 0 8px, 8px -8px, -8px 0; background-size: 16px 16px; }
+/* Pages size to their content, so the stage takes the viewport height left below the toolbar: without a
+   definite height, max-height: 100% cannot fit a portrait frame and the frame grows the page instead. */
+.live-screen-stage { position: relative; min-height: 360px; height: calc(100vh - 224px); display: flex; align-items: center; justify-content: center; overflow: auto; padding: 20px; background-color: #08080b; background-image: linear-gradient(45deg, rgba(255,255,255,.025) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,.025) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,.025) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.025) 75%); background-position: 0 0, 0 8px, 8px -8px, -8px 0; background-size: 16px 16px; }
 .live-screen-stage img { display: block; flex: none; background: #000; border-radius: 18px; box-shadow: 0 18px 55px rgba(0,0,0,.48); }
 .live-screen-stage.fit img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
 .live-screen-stage.actual { align-items: flex-start; justify-content: flex-start; }
@@ -600,9 +602,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .live-screen-note b { font-size: 10px; }
 .live-screen-note p, .live-screen-hint { margin: 5px 0 0; font-size: 9.5px; line-height: 1.55; }
 .live-screen-hint { padding-top: 14px; color: var(--faint); border-top: 1px solid var(--border); }
-/* Pages size to their content, so a percentage cannot bound a portrait video: the stage takes the height left
-   above the editor and the video is laid out inside it rather than sizing it. */
-.recorder-stage { min-height: 360px; height: calc(100vh - 360px); }
+.recorder-stage { height: calc(100vh - 360px); }
 .recorder-stage video { position: absolute; inset: 20px; width: calc(100% - 40px); height: calc(100% - 40px); object-fit: contain; }
 .recorder-clock { font: 300 34px var(--mono) !important; letter-spacing: 1px; }
 .recorder-editor { flex: none; display: grid; gap: 10px; padding: 12px 14px; }

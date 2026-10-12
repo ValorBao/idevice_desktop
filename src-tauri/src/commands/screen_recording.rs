@@ -219,11 +219,58 @@ pub async fn screen_recording_cancel(
     Ok(())
 }
 
+/// The newest `.mov` left in the cache. Restarting the app drops the in-memory
+/// handle, but the file is still the recording the editor should reopen.
+fn newest_working_copy(directory: &Path) -> Option<PathBuf> {
+    let mut copies = std::fs::read_dir(directory)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("mov"))
+        })
+        .collect::<Vec<_>>();
+    copies.sort_by_key(|path| {
+        std::fs::metadata(path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+    });
+    copies.pop()
+}
+
+fn recover_working_copy(path: &Path) -> Option<ScreenRecording> {
+    let movie = screen_capture::inspect(path).ok()?;
+    Some(ScreenRecording {
+        id: path.file_stem()?.to_str()?.to_string(),
+        path: path.to_string_lossy().into_owned(),
+        device_name: movie.device_name,
+        duration_ms: movie.duration_ms,
+        width: movie.width,
+        height: movie.height,
+        bytes: movie.bytes,
+    })
+}
+
 #[tauri::command]
 pub async fn screen_recording_current(
+    app: AppHandle,
     state: State<'_, ScreenRecordingState>,
 ) -> CommandResult<Option<ScreenRecording>> {
-    Ok(state.current.lock().await.clone())
+    if let Some(current) = state.current.lock().await.clone() {
+        return Ok(Some(current));
+    }
+    let Some(path) = newest_working_copy(&recordings_directory(&app)?) else {
+        return Ok(None);
+    };
+    let recovered = tauri::async_runtime::spawn_blocking(move || recover_working_copy(&path))
+        .await
+        .map_err(|error| CommandError::new("screen_recording", error.to_string(), true))?;
+    if let Some(recording) = &recovered {
+        *state.current.lock().await = Some(recording.clone());
+    }
+    Ok(recovered)
 }
 
 #[tauri::command]
@@ -328,6 +375,20 @@ mod tests {
         assert!(!valid_session_id("../escape"));
         assert!(!valid_session_id("a/b"));
         assert!(!valid_session_id(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn the_newest_working_copy_is_reopened() {
+        let directory = std::env::temp_dir().join(format!("recordings-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let older = directory.join("older.mov");
+        let newer = directory.join("newer.mov");
+        std::fs::write(&older, b"x").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&newer, b"y").unwrap();
+        assert_eq!(newest_working_copy(&directory).as_ref(), Some(&newer));
+        assert!(newest_working_copy(&directory.join("missing")).is_none());
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

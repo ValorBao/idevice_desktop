@@ -310,6 +310,10 @@ export function ScreenRecorder({ desktop, deviceName, onToast }: {
                 ref={videoRef}
                 src={localMediaUrl(recording.path)}
                 preload="auto"
+                onLoadedData={(event) => {
+                  if (event.currentTarget.currentTime === 0) event.currentTarget.currentTime = 0.05
+                }}
+                onError={() => onToast('The recording could not be played')}
                 onEnded={() => setPlaying(false)}
                 onPause={() => setPlaying(false)}
                 aria-label="Recorded device screen"
@@ -337,7 +341,7 @@ export function ScreenRecorder({ desktop, deviceName, onToast }: {
             <span className={phase === 'recording' ? 'running' : ''}>{label}</span>
           </header>
           <dl>
-            <div><dt>Device</dt><dd>{recording?.deviceName ?? recordingDevice ?? deviceName}</dd></div>
+            <div><dt>Device</dt><dd>{recording?.deviceName || recordingDevice || deviceName}</dd></div>
             <div><dt>Original length</dt><dd>{recording ? formatClock(recording.durationMs) : '—'}</dd></div>
             <div><dt>After cuts</dt><dd>{recording ? formatClock(resultMs) : '—'}</dd></div>
             <div><dt>Kept segments</dt><dd>{recording ? kept.length : '—'}</dd></div>

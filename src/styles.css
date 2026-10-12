@@ -600,7 +600,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .live-screen-note b { font-size: 10px; }
 .live-screen-note p, .live-screen-hint { margin: 5px 0 0; font-size: 9.5px; line-height: 1.55; }
 .live-screen-hint { padding-top: 14px; color: var(--faint); border-top: 1px solid var(--border); }
-.recorder-stage video { display: block; flex: none; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; background: #000; border-radius: 18px; box-shadow: 0 18px 55px rgba(0,0,0,.48); }
+/* Pages size to their content, so a percentage cannot bound a portrait video: the stage takes the height left
+   above the editor and the video is laid out inside it rather than sizing it. */
+.recorder-stage { min-height: 360px; height: calc(100vh - 360px); }
+.recorder-stage video { position: absolute; inset: 20px; width: calc(100% - 40px); height: calc(100% - 40px); object-fit: contain; }
 .recorder-clock { font: 300 34px var(--mono) !important; letter-spacing: 1px; }
 .recorder-editor { flex: none; display: grid; gap: 10px; padding: 12px 14px; }
 .recorder-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

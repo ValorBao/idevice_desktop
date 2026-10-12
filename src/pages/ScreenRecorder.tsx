@@ -309,8 +309,6 @@ export function ScreenRecorder({ desktop, deviceName, onToast }: {
               <video
                 ref={videoRef}
                 src={localMediaUrl(recording.path)}
-                width={recording.width}
-                height={recording.height}
                 preload="auto"
                 onEnded={() => setPlaying(false)}
                 onPause={() => setPlaying(false)}

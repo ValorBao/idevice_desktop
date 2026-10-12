@@ -4,6 +4,7 @@ pub mod discovery;
 pub mod error;
 pub mod legacy_ddi;
 pub mod provider;
+pub mod screen_capture;
 mod state;
 mod task;
 pub mod transport;
@@ -12,7 +13,10 @@ pub mod tunnel;
 pub mod types;
 mod utils;
 
-use commands::{AccountSigningState, LiveScreenState, NetworkCaptureState, PasteboardState};
+use commands::{
+    AccountSigningState, LiveScreenState, NetworkCaptureState, PasteboardState,
+    ScreenRecordingState,
+};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,6 +36,7 @@ pub fn run() {
         .manage(AppState::default())
         .manage(NetworkCaptureState::default())
         .manage(LiveScreenState::default())
+        .manage(ScreenRecordingState::default())
         .manage(PasteboardState::default())
         .manage(AccountSigningState::default())
         .invoke_handler(tauri::generate_handler![
@@ -82,6 +87,13 @@ pub fn run() {
             commands::live_screen_start,
             commands::live_screen_stop,
             commands::live_screen_export_frame,
+            commands::screen_recording_start,
+            commands::screen_recording_stop,
+            commands::screen_recording_cancel,
+            commands::screen_recording_current,
+            commands::screen_recording_discard,
+            commands::screen_recording_export,
+            commands::screen_recording_export_cancel,
             commands::provisioning_profiles_list,
             commands::personal_signing_preflight,
             commands::personal_signing_export,

@@ -483,6 +483,41 @@ fn live_screen_types_match_typescript() {
 }
 
 #[test]
+fn screen_recording_types_match_typescript() {
+    let recording = ScreenRecording {
+        id: String::new(),
+        path: String::new(),
+        device_name: String::new(),
+        duration_ms: 0,
+        width: 0,
+        height: 0,
+        bytes: 0,
+    };
+    assert_matches("ScreenRecording", &recording);
+    assert_matches(
+        "ScreenRecordingStatus",
+        &ScreenRecordingStatus {
+            session_id: String::new(),
+            state: String::new(),
+            message: None,
+            device_name: None,
+            recording: Some(recording),
+        },
+    );
+    assert_matches(
+        "ScreenRecordingSegment",
+        &ScreenRecordingSegment {
+            start_ms: 0,
+            end_ms: 0,
+        },
+    );
+    assert_matches(
+        "ScreenRecordingExportProgress",
+        &ScreenRecordingExportProgress { progress: 0.0 },
+    );
+}
+
+#[test]
 fn provisioning_profile_types_match_typescript() {
     let profile = ProvisioningProfileSummary {
         id: String::new(),

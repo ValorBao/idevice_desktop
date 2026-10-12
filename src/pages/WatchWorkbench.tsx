@@ -1,11 +1,12 @@
-import { MapPin, ScreenShare, TerminalSquare } from 'lucide-react'
+import { Clapperboard, MapPin, ScreenShare, TerminalSquare } from 'lucide-react'
 import type { Device } from '../data'
 import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
 import { Monitor } from './Monitor'
 import { Location } from './Location'
 import { LiveScreen } from './LiveScreen'
+import { ScreenRecorder } from './ScreenRecorder'
 
-export type WatchInstrument = 'monitor' | 'location' | 'screen'
+export type WatchInstrument = 'monitor' | 'location' | 'screen' | 'recorder'
 
 export const watchTabs: readonly TabItem<WatchInstrument>[] = [
   {
@@ -32,6 +33,14 @@ export const watchTabs: readonly TabItem<WatchInstrument>[] = [
     icon: <ScreenShare size={14} />,
     title: 'Live Screen',
     detail: 'Live PNG device preview and still-frame capture',
+  },
+  {
+    id: 'recorder',
+    label: 'Recorder',
+    ariaLabel: 'Screen Recorder',
+    icon: <Clapperboard size={14} />,
+    title: 'Screen Recorder',
+    detail: 'Record the iPhone screen over USB, cut it, and export MP4',
   },
 ]
 
@@ -68,6 +77,9 @@ export function WatchWorkbench({
         )}
         {activeInstrument === 'screen' && (
           <LiveScreen desktop={desktop} udid={device.udid} onToast={onToast} />
+        )}
+        {activeInstrument === 'recorder' && (
+          <ScreenRecorder key={device.udid} desktop={desktop} deviceName={device.name} onToast={onToast} />
         )}
       </div>
     </div>

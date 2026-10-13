@@ -46,7 +46,7 @@ async fn main() {
     {
         Err(_) => {
             println!("RESULT: FAIL — listing processes timed out");
-            return;
+            std::process::exit(1);
         }
         Ok(result) => match result {
             Ok(snapshot) => snapshot,
@@ -55,7 +55,7 @@ async fn main() {
                 println!(
                     "Wake or reconnect the selected device, then run the same read-only check again"
                 );
-                return;
+                std::process::exit(1);
             }
         },
     };

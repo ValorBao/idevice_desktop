@@ -308,12 +308,20 @@ async fn main() {
     }
 
     if report_install_state().is_some() {
+        println!("RESULT: PASS — pinned Legacy DDI is installed");
         return;
     }
     if arguments.iter().any(|value| value == "--install") {
-        install().await;
+        if install().await.is_some() {
+            println!("RESULT: PASS — downloaded the pinned Legacy DDI");
+        } else {
+            println!("RESULT: FAIL — download or install failed");
+            std::process::exit(1);
+        }
     } else {
         println!("\n{}", legacy_ddi::missing_image_message());
         println!("Re-run with --install to download it.");
+        println!("RESULT: FAIL — pinned Legacy DDI is not installed");
+        std::process::exit(1);
     }
 }

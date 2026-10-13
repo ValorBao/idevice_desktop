@@ -52,7 +52,7 @@ bash scripts/device-rig/setup-runner.sh
 bash scripts/device-rig/preflight.sh
 ```
 
-应看到三部 USB 手机，各自的 UDID、iOS、世代、paired/trusted、锁状态、Developer Mode、电量和是否在充。某部锁着、没信任、或没插，进程以非 0 退出并打印原因。
+应看到三部 USB 手机，各自的 UDID、iOS、世代、paired/trusted、锁状态、Developer Mode、电量和是否在充。某部锁着、没信任、或没插，进程以非 0 退出并打印原因。同一部机的 Wi-Fi 记录标成 `OPTIONAL (Wi-Fi)`，失败不改变退出码。
 
 指定世代（CI 矩阵用）：
 
@@ -67,10 +67,12 @@ workflow：`.github/workflows/device-tests.yml`
 | 触发 | 条件 |
 | --- | --- |
 | 每天 UTC 16:00 | `master` 上的 schedule（约北京时间 0:00） |
-| PR 标签 `device-test` | **仅限本仓库的 PR**。Fork PR 即使贴了标签也不会跑 |
-| `workflow_dispatch` | Actions 页手动 Run |
+| 本仓库 PR 标签 `device-test` | `pull_request_target`，workflow YAML 来自 base。仅当 head 就是本仓库且不是 fork 时才 checkout PR SHA |
+| `workflow_dispatch` | Actions 页手动 Run（只能选本仓库的分支） |
 
-Fork PR 被硬性排除：`github.event.pull_request.head.repo.full_name == github.repository`。自托管 runner 上有真机，不能执行外人的代码。
+**Fork 的代码永远不会上这台 Mac mini。** 不用 `pull_request`：那个事件会跑 PR head 里的 workflow YAML，fork 只要删掉 job 的 `if:` 就能在自托管 runner 上执行任意命令。现在用 `pull_request_target`（YAML 来自受信任的 base）+ 同仓库且 `fork == false` 的双重门闩 + checkout 前再拒绝一次。`contents: read`，不持久化 credentials。schedule / `workflow_dispatch` 只能从本仓库触发。
+
+Wi-Fi / Bonjour 的 usbmuxd 记录是 **optional**：失败会记下来，但不会把 preflight 打红。USB 锁定、未信任、或根本没插 USB 才会非 0 退出。
 
 跑完会：
 

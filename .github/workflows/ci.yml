@@ -40,6 +40,9 @@ jobs:
       - name: Run frontend regression tests
         run: npm test
 
+      - name: Test device-rig script classification
+        run: bash scripts/device-rig/classify-result.test.sh
+
       - name: Build the frontend
         run: npm run build
 

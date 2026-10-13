@@ -11,6 +11,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 # shellcheck disable=SC1091
+source "$(cd "$(dirname "$0")" && pwd)/classify-result.sh"
+# shellcheck disable=SC1091
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 UDID="${IDEVICE_TEST_UDID:?set IDEVICE_TEST_UDID}"
@@ -34,12 +36,24 @@ run_example() {
   set -e
   cat "$log"
   echo "::endgroup::"
-  if [[ $code -eq 0 ]]; then
-    echo "PASS ${name}" | tee -a "$status_file"
-  else
-    echo "FAIL ${name} (exit ${code})" | tee -a "$status_file"
-    return "$code"
-  fi
+  local status
+  status="$(classify_check "$code" "$log")"
+  case "$status" in
+    pass)
+      echo "PASS ${name}" | tee -a "$status_file"
+      ;;
+    optional)
+      echo "OPTIONAL ${name}" | tee -a "$status_file"
+      ;;
+    fail)
+      echo "FAIL ${name} (exit ${code})" | tee -a "$status_file"
+      return 1
+      ;;
+    *)
+      echo "FAIL ${name} (unknown status ${status}, exit ${code})" | tee -a "$status_file"
+      return 1
+      ;;
+  esac
 }
 
 failed=0
@@ -78,12 +92,19 @@ ignored_code=$?
 set -e
 cat "$LOG_DIR/cargo-ignored.log"
 echo "::endgroup::"
-if [[ $ignored_code -eq 0 ]]; then
-  echo "PASS cargo-ignored" | tee -a "$status_file"
-else
-  echo "FAIL cargo-ignored (exit ${ignored_code})" | tee -a "$status_file"
-  failed=1
-fi
+ignored_status="$(classify_check "$ignored_code" "$LOG_DIR/cargo-ignored.log")"
+case "$ignored_status" in
+  pass)
+    echo "PASS cargo-ignored" | tee -a "$status_file"
+    ;;
+  optional)
+    echo "OPTIONAL cargo-ignored" | tee -a "$status_file"
+    ;;
+  *)
+    echo "FAIL cargo-ignored (exit ${ignored_code})" | tee -a "$status_file"
+    failed=1
+    ;;
+esac
 
 if [[ $failed -ne 0 ]]; then
   echo "device-rig: one or more harnesses failed for ${GENERATION}" >&2

@@ -74,5 +74,6 @@ async fn main() {
         println!("RESULT: PASS — every device has exactly one entry");
     } else {
         println!("RESULT: FAIL — a device appears more than once");
+        std::process::exit(1);
     }
 }

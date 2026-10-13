@@ -52,14 +52,14 @@ async fn main() {
             println!(
                 "Unlock the device and run the same command again; no device file was changed"
             );
-            return;
+            std::process::exit(1);
         }
         Err(_) => {
             println!("RESULT: BLOCKED — opening the crash-report service timed out");
             println!(
                 "Keep the device unlocked and run the same command again; no device file was changed"
             );
-            return;
+            std::process::exit(1);
         }
     };
 

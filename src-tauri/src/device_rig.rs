@@ -31,6 +31,26 @@ pub const IDEVICE_TEST_GENERATION: &str = "IDEVICE_TEST_GENERATION";
 
 const OP_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// How one usbmuxd record counts toward preflight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckStatus {
+    Pass,
+    Fail,
+    OptionalPass,
+    OptionalFail,
+}
+
+impl CheckStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+            Self::OptionalPass => "optional-pass",
+            Self::OptionalFail => "optional-fail",
+        }
+    }
+}
+
 /// One USB (or usbmuxd-visible) phone as preflight sees it.
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedDevice {
@@ -48,6 +68,8 @@ pub struct InspectedDevice {
     pub battery_percent: Option<u64>,
     pub charging: Option<bool>,
     pub issues: Vec<String>,
+    /// `pass`, `fail`, `optional-pass`, or `optional-fail`.
+    pub check: String,
 }
 
 impl InspectedDevice {
@@ -66,6 +88,9 @@ impl InspectedDevice {
     }
 
     pub fn blocking(&self) -> bool {
+        if self.optional() {
+            return false;
+        }
         self.issues.iter().any(|issue| {
             issue.contains("locked")
                 || issue.contains("untrusted")
@@ -73,6 +98,29 @@ impl InspectedDevice {
                 || issue.contains("no pair record")
                 || issue.contains("Developer Mode is off")
         })
+    }
+
+    /// Wi-Fi / Bonjour usbmuxd records are informational. The rig requires USB.
+    pub fn optional(&self) -> bool {
+        !self.usb
+    }
+
+    pub fn check_status(&self) -> CheckStatus {
+        if self.optional() {
+            if self.wifi_ready() {
+                CheckStatus::OptionalPass
+            } else {
+                CheckStatus::OptionalFail
+            }
+        } else if self.blocking() || self.generation.is_none() {
+            CheckStatus::Fail
+        } else {
+            CheckStatus::Pass
+        }
+    }
+
+    fn wifi_ready(&self) -> bool {
+        self.paired && self.trusted && self.issues.is_empty()
     }
 }
 
@@ -83,6 +131,8 @@ pub struct PreflightReport {
     pub devices: Vec<InspectedDevice>,
     pub by_generation: BTreeMap<String, Option<String>>,
     pub failures: Vec<String>,
+    /// Wi-Fi / network records that failed inspection. Never flips [`Self::ok`].
+    pub optional_failures: Vec<String>,
 }
 
 impl PreflightReport {
@@ -261,12 +311,8 @@ async fn inspect_one(udid: &str, connection: &Connection) -> InspectedDevice {
         battery_percent: None,
         charging: None,
         issues: Vec::new(),
+        check: String::new(),
     };
-    if !usb {
-        device
-            .issues
-            .push("not on USB; the unattended rig requires a USB cable".into());
-    }
 
     let mut mux = match bounded("usbmuxd reconnect", UsbmuxdConnection::default()).await {
         Ok(mux) => mux,
@@ -415,6 +461,15 @@ pub async fn inspect_attached_devices() -> CommandResult<PreflightReport> {
         devices.push(inspect_one(&record.udid, &record.connection_type).await);
     }
 
+    Ok(assemble_report(devices))
+}
+
+/// Assign generations and separate required USB failures from optional Wi-Fi ones.
+pub fn assemble_report(mut devices: Vec<InspectedDevice>) -> PreflightReport {
+    for device in &mut devices {
+        device.check = device.check_status().as_str().to_owned();
+    }
+
     let mut by_generation = BTreeMap::new();
     for generation in DeveloperGeneration::ALL {
         let udid = devices
@@ -427,21 +482,28 @@ pub async fn inspect_attached_devices() -> CommandResult<PreflightReport> {
 
     let mut failures: Vec<String> = devices
         .iter()
-        .filter(|device| device.blocking() || device.usb && device.generation.is_none())
+        .filter(|device| !device.optional() && (device.blocking() || device.generation.is_none()))
         .map(InspectedDevice::issue_summary)
         .collect();
+    let optional_failures: Vec<String> = devices
+        .iter()
+        .filter(|device| device.optional() && device.check_status() == CheckStatus::OptionalFail)
+        .map(|device| format!("OPTIONAL (Wi-Fi) {}", device.issue_summary()))
+        .collect();
+
     if devices.iter().filter(|device| device.usb).count() == 0 {
         failures
             .push("no USB devices reported by usbmuxd; check cables and the powered hub".into());
     }
 
     let ok = failures.is_empty();
-    Ok(PreflightReport {
+    PreflightReport {
         ok,
         devices,
         by_generation,
         failures,
-    })
+        optional_failures,
+    }
 }
 
 /// Fail when a required generation has no healthy USB phone.
@@ -486,7 +548,7 @@ pub fn format_human_report(report: &PreflightReport) -> String {
             generation = device.generation.as_deref().unwrap_or("unknown"),
         ));
         lines.push(format!(
-            "    paired={} trusted={} locked={} developer_mode={} battery={} charging={}",
+            "    paired={} trusted={} locked={} developer_mode={} battery={} charging={}  check={}",
             device.paired,
             device.trusted,
             display_option_bool(device.locked),
@@ -496,9 +558,18 @@ pub fn format_human_report(report: &PreflightReport) -> String {
                 .map(|value| format!("{value}%"))
                 .unwrap_or_else(|| "-".into()),
             display_option_bool(device.charging),
+            if device.check.is_empty() {
+                device.check_status().as_str()
+            } else {
+                device.check.as_str()
+            },
         ));
         for issue in &device.issues {
-            lines.push(format!("    ISSUE: {issue}"));
+            if device.optional() {
+                lines.push(format!("    OPTIONAL (Wi-Fi): {issue}"));
+            } else {
+                lines.push(format!("    ISSUE: {issue}"));
+            }
         }
     }
     lines.push(String::new());
@@ -511,6 +582,13 @@ pub fn format_human_report(report: &PreflightReport) -> String {
         lines.push(String::new());
         lines.push("failures:".into());
         for failure in &report.failures {
+            lines.push(format!("  - {failure}"));
+        }
+    }
+    if !report.optional_failures.is_empty() {
+        lines.push(String::new());
+        lines.push("optional (Wi-Fi; does not fail preflight):".into());
+        for failure in &report.optional_failures {
             lines.push(format!("  - {failure}"));
         }
     }
@@ -574,6 +652,7 @@ mod tests {
             devices: Vec::new(),
             by_generation,
             failures: Vec::new(),
+            optional_failures: Vec::new(),
         };
         let matrix = report.github_matrix();
         let include = matrix
@@ -599,6 +678,7 @@ mod tests {
             devices: Vec::new(),
             by_generation,
             failures: Vec::new(),
+            optional_failures: Vec::new(),
         };
         let error = require_generations(&report, &DeveloperGeneration::ALL).unwrap_err();
         assert!(error.contains("core-device-remote"));
@@ -618,6 +698,7 @@ mod tests {
             devices: Vec::new(),
             by_generation,
             failures: Vec::new(),
+            optional_failures: Vec::new(),
         };
         let mut buffer = Vec::new();
         report.write_github_output(&mut buffer).unwrap();
@@ -629,29 +710,115 @@ mod tests {
         assert!(text.contains(r#""generation":"legacy""#));
     }
 
-    #[test]
-    fn blocking_detects_lock_and_trust_issues() {
-        let mut device = InspectedDevice {
-            udid: "AAA".into(),
-            connection: "USB".into(),
-            usb: true,
+    fn sample_device(udid: &str, usb: bool, issues: &[&str]) -> InspectedDevice {
+        InspectedDevice {
+            udid: udid.into(),
+            connection: if usb {
+                "USB".into()
+            } else {
+                "Network · 10.0.0.8".into()
+            },
+            usb,
             name: None,
             product_type: None,
             ios: None,
-            generation: None,
-            paired: false,
-            trusted: false,
-            locked: Some(true),
+            generation: Some("legacy".into()),
+            paired: issues.is_empty(),
+            trusted: issues.is_empty(),
+            locked: Some(false),
             developer_mode: None,
             battery_percent: None,
             charging: None,
-            issues: vec!["locked; wake the phone".into()],
-        };
+            issues: issues.iter().map(|issue| (*issue).to_owned()).collect(),
+            check: String::new(),
+        }
+    }
+
+    #[test]
+    fn blocking_detects_lock_and_trust_issues() {
+        let mut device = sample_device("AAA", true, &["locked; wake the phone"]);
         assert!(device.blocking());
         device.issues = vec!["battery percent unknown".into()];
         assert!(!device.blocking());
         device.issues = vec!["Developer Mode is off".into()];
         assert!(device.blocking());
+    }
+
+    #[test]
+    fn wifi_records_are_optional_and_never_block() {
+        let wifi = sample_device("AAA", false, &["untrusted or session failed: timeout"]);
+        assert!(wifi.optional());
+        assert!(!wifi.blocking());
+        assert_eq!(wifi.check_status(), CheckStatus::OptionalFail);
+
+        let ready = sample_device("AAA", false, &[]);
+        assert_eq!(ready.check_status(), CheckStatus::OptionalPass);
+    }
+
+    #[test]
+    fn wifi_failure_does_not_fail_preflight_when_usb_is_ready() {
+        let usb = sample_device("USB-PHONE", true, &[]);
+        let wifi = sample_device("USB-PHONE", false, &["no pair record (timeout)"]);
+        let report = assemble_report(vec![usb, wifi]);
+        assert!(report.ok, "Wi-Fi optional-fail must not flip preflight ok");
+        assert!(report.failures.is_empty());
+        assert_eq!(report.devices[0].check, "pass");
+        assert_eq!(report.devices[1].check, "optional-fail");
+        assert_eq!(report.optional_failures.len(), 1);
+        assert!(report.optional_failures[0].contains("OPTIONAL (Wi-Fi)"));
+        let human = format_human_report(&report);
+        assert!(human.contains("OPTIONAL (Wi-Fi)"));
+        assert!(human.contains("does not fail preflight"));
+        assert!(!human.contains("\nfailures:"));
+    }
+
+    #[test]
+    fn usb_lock_still_fails_preflight() {
+        let usb = sample_device("USB-PHONE", true, &["locked; wake the phone"]);
+        let report = assemble_report(vec![usb]);
+        assert!(!report.ok);
+        assert_eq!(report.devices[0].check, "fail");
+        assert!(!report.failures.is_empty());
+        assert!(report.optional_failures.is_empty());
+    }
+
+    #[test]
+    fn unread_usb_device_fails_even_without_blocking_keywords() {
+        let mut usb = sample_device("USB-PHONE", true, &["could not read iOS version: timeout"]);
+        usb.generation = None;
+        let report = assemble_report(vec![usb]);
+        assert!(!report.ok);
+        assert_eq!(report.devices[0].check, "fail");
+    }
+
+    #[test]
+    fn wifi_only_inventory_still_fails_because_usb_is_required() {
+        let wifi = sample_device("WIFI-ONLY", false, &[]);
+        let report = assemble_report(vec![wifi]);
+        assert!(!report.ok);
+        assert!(
+            report
+                .failures
+                .iter()
+                .any(|failure| failure.contains("no USB devices"))
+        );
+        assert_eq!(report.devices[0].check, "optional-pass");
+    }
+
+    #[test]
+    fn classify_result_script_matches_documented_cases() {
+        let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../scripts/device-rig/classify-result.test.sh");
+        let output = std::process::Command::new("bash")
+            .arg(&script)
+            .output()
+            .expect("run classify-result tests");
+        assert!(
+            output.status.success(),
+            "classify-result.test.sh failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[tokio::test]

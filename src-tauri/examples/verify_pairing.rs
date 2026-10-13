@@ -43,9 +43,12 @@ async fn main() {
         .expect("get_devices");
     println!("== pairing verification: {} device(s) ==\n", devices.len());
 
+    let mut usb_failed = 0u32;
+    let mut wifi_failed = 0u32;
     for device in devices {
         let udid = device.udid.clone();
         let usb = device.connection_type == Connection::Usb;
+        let mut record_failed = false;
         println!("-- {udid}");
         println!(
             "   usbmuxd connection: {:?} (device_id {})",
@@ -55,7 +58,10 @@ async fn main() {
         // 1. Saved pair record.
         match mux.get_pair_record(&udid).await {
             Ok(record) => println!("   pair record: present (host_id {})", record.host_id),
-            Err(error) => println!("   pair record: MISSING ({error})"),
+            Err(error) => {
+                println!("   pair record: MISSING ({error})");
+                record_failed = true;
+            }
         }
 
         // 2. Route selection, then a real paired Lockdown session.
@@ -85,14 +91,26 @@ async fn main() {
                                     "   paired Lockdown session: ok (ProductVersion {version})"
                                 );
                             }
-                            Err(error) => println!("   paired Lockdown session: FAILED ({error})"),
+                            Err(error) => {
+                                println!("   paired Lockdown session: FAILED ({error})");
+                                record_failed = true;
+                            }
                         },
-                        Err(error) => println!("   pairing file: FAILED ({error})"),
+                        Err(error) => {
+                            println!("   pairing file: FAILED ({error})");
+                            record_failed = true;
+                        }
                     },
-                    Err(error) => println!("   Lockdown connect: FAILED ({error})"),
+                    Err(error) => {
+                        println!("   Lockdown connect: FAILED ({error})");
+                        record_failed = true;
+                    }
                 }
             }
-            Err(error) => println!("   routed_provider_for: FAILED ({error:?})"),
+            Err(error) => {
+                println!("   routed_provider_for: FAILED ({error:?})");
+                record_failed = true;
+            }
         }
 
         // 3. device_pair's transport guard. Only safe to call on a non-USB
@@ -101,11 +119,37 @@ async fn main() {
             println!("   device_pair guard: skipped (USB record; calling it would re-pair)");
         } else {
             match commands::device_pair(udid.clone(), Some("verify-harness".into())).await {
-                Ok(_) => println!("   device_pair guard: UNEXPECTED SUCCESS on a non-USB record"),
+                Ok(_) => {
+                    println!("   device_pair guard: UNEXPECTED SUCCESS on a non-USB record");
+                    record_failed = true;
+                }
                 Err(error) => println!("   device_pair guard: refused as expected ({error:?})"),
             }
         }
+        if record_failed {
+            if usb {
+                usb_failed += 1;
+                println!("   check: fail");
+            } else {
+                wifi_failed += 1;
+                println!("   OPTIONAL (Wi-Fi): fail (does not fail this run)");
+            }
+        } else if usb {
+            println!("   check: pass");
+        } else {
+            println!("   OPTIONAL (Wi-Fi): pass");
+        }
         println!();
+    }
+
+    if usb_failed > 0 {
+        println!("RESULT: FAIL — {usb_failed} USB device(s) failed pairing checks");
+        std::process::exit(1);
+    }
+    if wifi_failed > 0 {
+        println!("RESULT: PASS — USB pairing ok; {wifi_failed} Wi-Fi record(s) optional-fail");
+    } else {
+        println!("RESULT: PASS — pairing checks ok");
     }
 }
 

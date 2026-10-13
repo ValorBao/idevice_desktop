@@ -1,15 +1,22 @@
 name: Device tests
 
+# Self-hosted Mac mini with real iPhones. Untrusted code must never run here.
+#
+# `pull_request` is unsafe on self-hosted runners: GitHub uses the workflow YAML
+# from the PR head, so a fork can delete any job-level `if:` and execute on this
+# machine. `pull_request_target` uses the workflow from the base branch, so the
+# same-repo + label gate below cannot be stripped. Checkout is still refused
+# unless head.repo is this repository and not a fork. Schedule and
+# workflow_dispatch only run from this repo (forks cannot dispatch here).
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 16 * * *"
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: device-tests
@@ -21,11 +28,14 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'pull_request' &&
+      (github.event_name == 'pull_request_target' &&
        github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.repo.fork == false &&
        contains(github.event.pull_request.labels.*.name, 'device-test'))
     runs-on: [self-hosted, macOS, ios-devices]
     timeout-minutes: 20
+    permissions:
+      contents: read
     outputs:
       matrix: ${{ steps.preflight.outputs.matrix }}
       legacy: ${{ steps.preflight.outputs.legacy }}
@@ -33,10 +43,25 @@ jobs:
       core_device_lockdown: ${{ steps.preflight.outputs.core_device_lockdown }}
       ok: ${{ steps.preflight.outputs.ok }}
     steps:
+      - name: Refuse untrusted heads
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          if [[ "$EVENT" == "pull_request_target" ]]; then
+            if [[ "$HEAD_REPO" != "$BASE_REPO" || "$IS_FORK" == "true" ]]; then
+              echo "Refusing to run untrusted head ${HEAD_REPO:-unknown} on the device rig" >&2
+              exit 1
+            fi
+          fi
+
       - name: Check out the repository
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Run device preflight
         id: preflight
@@ -69,11 +94,14 @@ jobs:
       needs.preflight.result == 'success' &&
       (github.event_name == 'workflow_dispatch' ||
        github.event_name == 'schedule' ||
-       (github.event_name == 'pull_request' &&
+       (github.event_name == 'pull_request_target' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.repo.fork == false &&
         contains(github.event.pull_request.labels.*.name, 'device-test')))
     runs-on: [self-hosted, macOS, ios-devices]
     timeout-minutes: 60
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
@@ -82,11 +110,27 @@ jobs:
       IDEVICE_TEST_GENERATION: ${{ matrix.generation }}
       DEVICE_RIG_LOG_DIR: device-rig-logs/${{ matrix.generation }}
     steps:
+      - name: Refuse untrusted heads
+        if: matrix.udid != ''
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          if [[ "$EVENT" == "pull_request_target" ]]; then
+            if [[ "$HEAD_REPO" != "$BASE_REPO" || "$IS_FORK" == "true" ]]; then
+              echo "Refusing to run untrusted head ${HEAD_REPO:-unknown} on the device rig" >&2
+              exit 1
+            fi
+          fi
+
       - name: Check out the repository
         if: matrix.udid != ''
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Skip missing generation
         if: matrix.udid == ''
@@ -113,8 +157,9 @@ jobs:
     needs: [preflight, device-matrix]
     if: |
       always() &&
-      github.event_name == 'pull_request' &&
+      github.event_name == 'pull_request_target' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.fork == false &&
       contains(github.event.pull_request.labels.*.name, 'device-test')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -158,7 +203,9 @@ jobs:
                   ? 'skipped (no device)'
                   : result.includes('PASS')
                     ? 'pass'
-                    : (process.env.MATRIX_RESULT || 'unknown');
+                    : result.includes('OPTIONAL')
+                      ? 'optional'
+                      : (process.env.MATRIX_RESULT || 'unknown');
               rows.push(line(generation, status));
             }
 
@@ -178,7 +225,7 @@ jobs:
               '',
               '</details>',
               '',
-              `_Run ${{ github.run_id }} on ${{ github.sha }}_`,
+              `_Run ${{ github.run_id }} on ${{ github.event.pull_request.head.sha || github.sha }}_`,
             ].join('\n');
 
             const { owner, repo } = context.repo;

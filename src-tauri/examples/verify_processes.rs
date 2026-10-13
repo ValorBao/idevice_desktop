@@ -80,13 +80,14 @@ async fn main() {
         )
         .init();
 
-    let mut args = std::env::args().skip(1);
-    let udid = args
-        .next()
-        .expect("usage: verify_processes <udid> [bundle_id]");
-    let bundle_id = args.next();
-    if args.next().is_some() {
-        eprintln!("usage: verify_processes <udid> [bundle_id]");
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
+    let bundle_id = args
+        .first()
+        .cloned()
+        .filter(|value| !value.starts_with('-'));
+    if args.len() > 1 {
+        eprintln!("usage: verify_processes [udid] [bundle_id]  (or set IDEVICE_TEST_UDID)");
         std::process::exit(2);
     }
 

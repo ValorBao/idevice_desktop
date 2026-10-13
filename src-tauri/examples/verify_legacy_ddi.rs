@@ -254,10 +254,12 @@ async fn main() {
         .iter()
         .position(|value| value == "--developer-mode")
     {
-        let udid = arguments
+        let cli = arguments
             .get(index + 1)
-            .expect("usage: verify_legacy_ddi -- --developer-mode <udid> [--accept]");
-        developer_mode(udid, arguments.iter().any(|value| value == "--accept")).await;
+            .cloned()
+            .filter(|value| idevice_desktop_lib::device_rig::looks_like_udid(value));
+        let udid = idevice_desktop_lib::device_rig::udid_or_exit(cli);
+        developer_mode(&udid, arguments.iter().any(|value| value == "--accept")).await;
         return;
     }
 
@@ -266,11 +268,25 @@ async fn main() {
         // separate "the device refuses this image" from "the device refuses to
         // mount at all": pointing it at a version-matched image answers which
         // one a failure was.
-        let udid = arguments.get(index + 1).expect("udid");
-        let image = arguments.get(index + 2).expect("image path");
-        let signature = arguments.get(index + 3).expect("signature path");
+        let rest = &arguments[index + 1..];
+        let (udid, image, signature) = if rest
+            .first()
+            .is_some_and(|value| idevice_desktop_lib::device_rig::looks_like_udid(value))
+        {
+            (
+                idevice_desktop_lib::device_rig::udid_or_exit(rest.first().cloned()),
+                rest.get(1).expect("image path"),
+                rest.get(2).expect("signature path"),
+            )
+        } else {
+            (
+                idevice_desktop_lib::device_rig::udid_or_exit(None),
+                rest.first().expect("image path"),
+                rest.get(1).expect("signature path"),
+            )
+        };
         mount_against(
-            udid,
+            &udid,
             Some(legacy_ddi::LegacyDdi {
                 image: image.into(),
                 signature: signature.into(),
@@ -281,21 +297,31 @@ async fn main() {
     }
 
     if let Some(index) = arguments.iter().position(|value| value == "--mount") {
-        let udid = arguments
+        let cli = arguments
             .get(index + 1)
-            .expect("usage: verify_legacy_ddi -- --mount <udid>");
+            .cloned()
+            .filter(|value| idevice_desktop_lib::device_rig::looks_like_udid(value));
+        let udid = idevice_desktop_lib::device_rig::udid_or_exit(cli);
         report_install_state();
-        mount_against(udid, None).await;
+        mount_against(&udid, None).await;
         return;
     }
 
     if report_install_state().is_some() {
+        println!("RESULT: PASS — pinned Legacy DDI is installed");
         return;
     }
     if arguments.iter().any(|value| value == "--install") {
-        install().await;
+        if install().await.is_some() {
+            println!("RESULT: PASS — downloaded the pinned Legacy DDI");
+        } else {
+            println!("RESULT: FAIL — download or install failed");
+            std::process::exit(1);
+        }
     } else {
         println!("\n{}", legacy_ddi::missing_image_message());
         println!("Re-run with --install to download it.");
+        println!("RESULT: FAIL — pinned Legacy DDI is not installed");
+        std::process::exit(1);
     }
 }

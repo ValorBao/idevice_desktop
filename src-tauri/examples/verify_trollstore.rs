@@ -43,11 +43,8 @@ const PROBE_WAIT: Duration = Duration::from_secs(45);
 #[tokio::main]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    let Some(udid) = args.first().cloned() else {
-        eprintln!("usage: verify_trollstore <udid> [--probe-url]");
-        std::process::exit(2);
-    };
+    let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
     let probe = args.iter().any(|arg| arg == "--probe-url");
     let ipa = args
         .iter()

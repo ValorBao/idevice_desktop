@@ -21,9 +21,8 @@ use idevice_desktop_lib::{
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let udid = std::env::args()
-        .nth(1)
-        .expect("usage: verify_crash_transport <udid>");
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
     let provider = routed_provider_for(&udid, None).await.expect("provider");
     let version = ios_version(&provider).await.expect("version");
     let generation = version.developer_generation();
@@ -42,23 +41,39 @@ async fn main() {
     // Over usbmuxd the code stays on direct Lockdown regardless of version, so
     // reaching the CoreDeviceProxy branch means driving it explicitly.
     println!("\n== direct Lockdown (what a USB route selects) ==");
-    match tokio::time::timeout(
+    let lockdown_ok = match tokio::time::timeout(
         Duration::from_secs(30),
         CrashReportCopyMobileClient::connect(&provider),
     )
     .await
     {
         Ok(Ok(mut client)) => match client.ls(None).await {
-            Ok(entries) => println!("  connected, {} entries at the root", entries.len()),
-            Err(error) => println!("  connected but listing failed: {error}"),
+            Ok(entries) => {
+                println!("  connected, {} entries at the root", entries.len());
+                true
+            }
+            Err(error) => {
+                println!("  connected but listing failed: {error}");
+                false
+            }
         },
-        Ok(Err(error)) => println!("  FAILED: {error}"),
-        Err(_) => println!("  timed out"),
-    }
+        Ok(Err(error)) => {
+            println!("  FAILED: {error}");
+            false
+        }
+        Err(_) => {
+            println!("  timed out");
+            false
+        }
+    };
 
     if generation != DeveloperGeneration::CoreDeviceLockdown {
-        println!("\nThis device does not use the CoreDeviceProxy route.");
-        return;
+        if lockdown_ok {
+            println!("\nRESULT: PASS — direct Lockdown crash-report transport ok");
+            return;
+        }
+        println!("\nRESULT: FAIL — direct Lockdown crash-report transport failed");
+        std::process::exit(1);
     }
 
     println!("\n== CoreDeviceProxy -> RSD shim (the iOS 17.4+ network route) ==");
@@ -84,7 +99,13 @@ async fn main() {
 
     match result {
         Ok(Ok(count)) => println!("\nRESULT: PASS — listed {count} entries over CoreDeviceProxy"),
-        Ok(Err(error)) => println!("\nRESULT: FAIL — {error}"),
-        Err(_) => println!("\nRESULT: FAIL — timed out"),
+        Ok(Err(error)) => {
+            println!("\nRESULT: FAIL — {error}");
+            std::process::exit(1);
+        }
+        Err(_) => {
+            println!("\nRESULT: FAIL — timed out");
+            std::process::exit(1);
+        }
     }
 }

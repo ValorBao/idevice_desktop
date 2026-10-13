@@ -8,22 +8,27 @@
 //! function as the Tauri command, including generation selection, AppService
 //! versus DVT fallback, user-application classification, and result mapping.
 
+use std::time::Duration;
+
 use idevice_desktop_lib::commands::{
     process_launch_for_device, process_stop_for_device, processes_snapshot_for_device,
 };
 use idevice_desktop_lib::transport::DeviceContext;
 use idevice_desktop_lib::tunnel::discover_first_remote_pairing;
 
+const STEP_TIMEOUT: Duration = Duration::from_secs(45);
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let mut args = std::env::args().skip(1);
-    let udid = args
-        .next()
-        .expect("usage: verify_processes_command <udid> [bundle_id]");
-    let bundle_id = args.next();
-    if args.next().is_some() {
-        panic!("usage: verify_processes_command <udid> [bundle_id]");
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
+    let bundle_id = args
+        .first()
+        .cloned()
+        .filter(|value| !value.starts_with('-'));
+    if args.len() > 1 {
+        panic!("usage: verify_processes_command [udid] [bundle_id]  (or set IDEVICE_TEST_UDID)");
     }
     let pairing_path = std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
         .join("Library/Application Support/dev.idevice.desktop")
@@ -33,15 +38,26 @@ async fn main() {
     let remote_target = discover_first_remote_pairing().await.ok();
     let context = DeviceContext::standalone(udid, pairing_path, None, remote_target);
 
-    let snapshot = match processes_snapshot_for_device(context.clone()).await {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            println!("RESULT: BLOCKED — {error:?}");
-            println!(
-                "Wake or reconnect the selected device, then run the same read-only check again"
-            );
-            return;
+    let snapshot = match tokio::time::timeout(
+        STEP_TIMEOUT,
+        processes_snapshot_for_device(context.clone()),
+    )
+    .await
+    {
+        Err(_) => {
+            println!("RESULT: FAIL — listing processes timed out");
+            std::process::exit(1);
         }
+        Ok(result) => match result {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                println!("RESULT: BLOCKED — {error:?}");
+                println!(
+                    "Wake or reconnect the selected device, then run the same read-only check again"
+                );
+                std::process::exit(1);
+            }
+        },
     };
     println!("transport: {}", snapshot.transport);
     println!("available: {}", snapshot.available);

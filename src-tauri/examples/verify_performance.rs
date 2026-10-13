@@ -143,9 +143,8 @@ impl<'a, R: ReadWrite> DiagnosticSysmontapClient<'a, R> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let udid = std::env::args()
-        .nth(1)
-        .expect("usage: verify_performance <udid>");
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
 
     if let Err(error) = run(&udid).await {
         eprintln!("RESULT: FAIL — {error:?}");

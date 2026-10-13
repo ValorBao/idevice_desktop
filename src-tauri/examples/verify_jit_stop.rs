@@ -55,11 +55,12 @@ async fn attach(
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let mut args = std::env::args().skip(1);
-    let udid = args
-        .next()
-        .expect("usage: verify_jit_stop <udid> <bundle_id>");
-    let bundle_id = args.next().expect("bundle id");
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let udid = idevice_desktop_lib::device_rig::take_udid(&mut args);
+    let bundle_id = args.into_iter().next().unwrap_or_else(|| {
+        eprintln!("usage: verify_jit_stop [udid] <bundle_id>  (or set IDEVICE_TEST_UDID)");
+        std::process::exit(2);
+    });
 
     let provider = routed_provider_for(&udid, None).await.expect("provider");
     let version = ios_version(&provider).await.expect("version");

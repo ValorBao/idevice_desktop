@@ -27,11 +27,36 @@
 /* Base resets & Button press feedback (Emil Design Guidelines: scale 0.97, ease-out) */
 .device-lab button,
 .device-lab input,
-.device-lab select {
-  transition: transform 160ms var(--ease-out), color 160ms var(--ease-out), background 160ms var(--ease-out), border-color 160ms var(--ease-out);
+.device-lab select,
+.device-lab textarea {
+  transition:
+    transform 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    opacity 160ms var(--ease-out);
 }
-.device-lab button:active {
+.device-lab button:not(:disabled):active {
   transform: scale(0.97);
+}
+.device-lab button:disabled:active {
+  transform: none;
+}
+/* Wide list/table row buttons use a subtler press scale so wide rows do not jump horizontally */
+.device-lab .file-table > button:not(:disabled):active,
+.device-lab .app-list button:not(:disabled):active,
+.device-lab .crash-list > div > button:not(:disabled):active,
+.device-lab .performance-row:not(:disabled):active,
+.device-lab .profiles-list button:not(:disabled):active,
+.device-lab .test-lab-runners button:not(:disabled):active,
+.device-lab .signing-setup > button:not(.signing-export):not(:disabled):active,
+.device-lab .account-ipa-picker:not(:disabled):active,
+.device-lab .preset-list button:not(:disabled):active {
+  transform: scale(0.994);
+}
+.device-lab .traffic-lights button:active {
+  transform: scale(0.9);
 }
 
 /* Title bar */
@@ -182,6 +207,20 @@
   white-space: nowrap;
 }
 
+.device-card > svg {
+  color: #637380;
+  flex-shrink: 0;
+  transition: transform 200ms var(--ease-out), color 160ms var(--ease-out);
+}
+.device-card[aria-expanded="true"] {
+  border-color: rgba(78, 227, 255, 0.42);
+  box-shadow: 0 0 18px rgba(78, 227, 255, 0.14);
+}
+.device-card[aria-expanded="true"] > svg {
+  color: var(--accent);
+  transform: rotate(180deg);
+}
+
 .device-menu {
   position: absolute;
   z-index: 50;
@@ -193,6 +232,7 @@
   border: 1px solid rgba(78, 227, 255, 0.3);
   border-radius: var(--radius);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 24px rgba(78, 227, 255, 0.14);
+  transform-origin: top center;
   animation: pop-in 180ms var(--ease-out) both;
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
@@ -600,12 +640,43 @@
 
 /* Cards & UI elements in Void Style */
 .card {
-  background: rgba(10, 14, 20, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(13, 18, 26, 0.76), rgba(8, 11, 16, 0.72));
+  border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: var(--radius);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 16px 36px -8px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* Primary & Secondary Action Buttons in Void Style */
+.device-lab .primary-button,
+.device-lab .test-lab-validate,
+.device-lab .notifications-toolbar > button.primary-button {
+  color: var(--accent-contrast);
+  background: linear-gradient(180deg, #64e8ff 0%, #38d6f5 100%);
+  border: 1px solid rgba(130, 240, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 4px 16px rgba(78, 227, 255, 0.22);
+  font-weight: 700;
+}
+@media (hover: hover) and (pointer: fine) {
+  .device-lab .primary-button:hover:not(:disabled),
+  .device-lab .test-lab-validate:hover:not(:disabled),
+  .device-lab .notifications-toolbar > button.primary-button:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.52),
+      0 6px 22px rgba(78, 227, 255, 0.34);
+  }
+}
+.device-lab .primary-button:disabled,
+.device-lab .test-lab-validate:disabled,
+.device-lab .notifications-toolbar > button.primary-button:disabled {
+  box-shadow: none;
+  filter: none;
 }
 
 /* Overview - Void Hero 3D Stage */
@@ -619,9 +690,9 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: .22;
+  opacity: .26;
   background:
-    radial-gradient(ellipse 70% 50% at 50% 42%, rgba(78, 227, 255, 0.08), transparent 62%),
+    radial-gradient(ellipse 70% 50% at 50% 42%, rgba(78, 227, 255, 0.11), transparent 64%),
     repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.015) 2px, rgba(255, 255, 255, 0.015) 3px);
 }
 .cockpit-word {
@@ -673,6 +744,7 @@
   color: var(--accent);
   font: 700 9.5px var(--mono);
   letter-spacing: 0.16em;
+  box-shadow: 0 0 18px rgba(78, 227, 255, 0.12);
 }
 .cockpit-live i {
   width: 6px;
@@ -695,7 +767,7 @@
 }
 .cockpit-model > span,
 .cockpit-readout span {
-  color: rgba(244, 247, 250, 0.38);
+  color: rgba(244, 247, 250, 0.42);
   font: 700 9px var(--mono);
   letter-spacing: 0.18em;
 }
@@ -718,7 +790,7 @@
   width: 140px;
   height: 1px;
   margin: 20px 0 10px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(78, 227, 255, 0.38));
 }
 .cockpit-rule i {
   position: absolute;
@@ -728,13 +800,13 @@
   height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent);
+  box-shadow: 0 0 8px var(--accent);
 }
 .cockpit-model code {
   display: block;
   max-width: 160px;
   overflow: hidden;
-  color: #455462;
+  color: #546575;
   font: 9px var(--mono);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -757,29 +829,46 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  border: 1px solid rgba(78, 227, 255, 0.1);
+  border: 1px solid rgba(78, 227, 255, 0.11);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  transition: border-color 240ms var(--ease-out), transform 240ms var(--ease-out);
 }
-.cockpit-orbit-one { width: 320px; height: 320px; box-shadow: 0 0 40px rgba(78, 227, 255, 0.05); }
-.cockpit-orbit-two { width: 240px; height: 240px; border-color: rgba(255, 255, 255, 0.04); }
+.cockpit-orbit-one { width: 320px; height: 320px; box-shadow: 0 0 44px rgba(78, 227, 255, 0.06); }
+.cockpit-orbit-two { width: 240px; height: 240px; border-color: rgba(255, 255, 255, 0.045); }
+@media (hover: hover) and (pointer: fine) {
+  .cockpit-device:hover .cockpit-orbit-one {
+    border-color: rgba(78, 227, 255, 0.22);
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+}
 
 .device-lab .cockpit-phone {
   z-index: 2;
   width: 168px;
   height: 344px;
   overflow: hidden;
-  background: #050608;
-  border: 2px solid rgba(78, 227, 255, 0.4);
+  background: radial-gradient(circle at 50% 32%, #0d1722 0%, #050608 74%);
+  border: 2px solid rgba(78, 227, 255, 0.42);
   border-radius: 36px;
   box-shadow:
-    0 0 0 1px rgba(78, 227, 255, 0.2),
-    0 0 60px rgba(78, 227, 255, 0.18),
-    0 40px 80px rgba(0, 0, 0, 0.7);
+    inset 0 1px 1px rgba(255, 255, 255, 0.22),
+    0 0 0 1px rgba(78, 227, 255, 0.22),
+    0 0 60px rgba(78, 227, 255, 0.2),
+    0 40px 80px rgba(0, 0, 0, 0.72);
   transform: rotateX(var(--phone-rx, 0deg)) rotateY(var(--phone-ry, 0deg));
   transform-style: preserve-3d;
-  transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+  transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out), border-color 220ms var(--ease-out);
+}
+.device-lab .cockpit-phone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, transparent 42%, rgba(78, 227, 255, 0.04) 100%);
+  border-radius: inherit;
 }
 .cockpit-device.is-dragging .cockpit-phone { transition: none; }
 .device-lab .cockpit-phone .phone-notch {
@@ -787,16 +876,22 @@
   width: 52px;
   height: 11px;
   background: #000;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
 }
 .cockpit-screen {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   color: var(--accent);
 }
+.cockpit-screen svg {
+  filter: drop-shadow(0 0 10px rgba(78, 227, 255, 0.45));
+}
 .cockpit-screen small {
-  color: #637380;
+  color: #6d7f8e;
   font: 9px/1.45 var(--mono);
   text-align: center;
   white-space: pre-line;
@@ -808,11 +903,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
-  color: rgba(244, 247, 250, 0.6);
-  background: rgba(5, 8, 12, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 5px 11px;
+  color: rgba(244, 247, 250, 0.68);
+  background: rgba(5, 8, 12, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   font: 8.5px var(--mono);
 }
 .cockpit-signal i {
@@ -844,6 +942,7 @@
   color: #fff;
   letter-spacing: -0.04em;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .cockpit-readout strong sup {
   margin-left: 2px;
@@ -856,18 +955,21 @@
   margin-top: 4px;
   color: #637380;
   font: 10px var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 .cockpit-storage {
-  height: 2px;
+  height: 3px;
   margin-top: 4px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 1px;
+  border-radius: 2px;
+  overflow: hidden;
 }
 .cockpit-storage i {
   height: 100%;
   display: block;
   background: var(--accent);
   box-shadow: 0 0 10px var(--accent);
+  transition: width 320ms var(--ease-out);
 }
 
 /* Toast component in Void style */
@@ -886,8 +988,8 @@
   font-size: 12.5px;
   font-weight: 600;
   transform: translateX(-50%);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
-  animation: pop-in 180ms var(--ease-out) both;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 24px rgba(78, 227, 255, 0.2);
+  animation: toast-pop 200ms var(--ease-out) both;
 }
 .toast span {
   width: 16px;
@@ -900,12 +1002,26 @@
 }
 
 @keyframes pop-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toast-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.95) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+@keyframes subview-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .workbench-content {
   min-height: 0;
+}
+.workbench-content > section,
+.monitor-content > section {
+  animation: subview-enter 160ms var(--ease-out) both;
 }
 
 .device-lab .tabs {
@@ -923,6 +1039,13 @@
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+.device-lab .tabs button:hover {
+  color: #fff;
+}
+.device-lab .tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
 .device-lab .monitor-tabs {
   margin: 0 24px;
   padding-top: 10px;
@@ -932,6 +1055,236 @@
   background: rgba(10, 14, 20, 0.4);
 }
 
+/* Unified Summary Metric Cards Across Workbenches */
+.device-lab .performance-summary > .card,
+.device-lab .network-capture-summary > .card,
+.device-lab .notifications-summary > .card,
+.device-lab .profiles-summary > .card,
+.device-lab .pasteboard-summary > .card,
+.device-lab .test-lab-summary > .card,
+.device-lab .trollstore-summary > .card {
+  position: relative;
+  padding: 13px 15px 13px 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 24px -8px rgba(0, 0, 0, 0.45);
+  transition: border-color 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.device-lab .performance-summary > .card::before,
+.device-lab .network-capture-summary > .card::before,
+.device-lab .notifications-summary > .card::before,
+.device-lab .profiles-summary > .card::before,
+.device-lab .pasteboard-summary > .card::before,
+.device-lab .test-lab-summary > .card::before,
+.device-lab .trollstore-summary > .card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: rgba(78, 227, 255, 0.28);
+  border-radius: 2px;
+}
+.device-lab .profiles-summary > .card.valid::before,
+.device-lab .test-lab-summary > .card.ready::before {
+  background: #28c840;
+  box-shadow: 0 0 10px rgba(40, 200, 64, 0.4);
+}
+.device-lab .trollstore-summary > .card.allowed::before {
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(78, 227, 255, 0.45);
+}
+.device-lab .profiles-summary > .card.expiring::before,
+.device-lab .test-lab-summary > .card.attention::before {
+  background: #febc2e;
+  box-shadow: 0 0 10px rgba(254, 188, 46, 0.35);
+}
+.device-lab .profiles-summary > .card.expired::before,
+.device-lab .trollstore-summary > .card.refused::before {
+  background: #ff8d87;
+  box-shadow: 0 0 10px rgba(255, 95, 87, 0.35);
+}
+@media (hover: hover) and (pointer: fine) {
+  .device-lab .performance-summary > .card:hover,
+  .device-lab .network-capture-summary > .card:hover,
+  .device-lab .notifications-summary > .card:hover,
+  .device-lab .profiles-summary > .card:hover,
+  .device-lab .pasteboard-summary > .card:hover,
+  .device-lab .test-lab-summary > .card:hover,
+  .device-lab .trollstore-summary > .card:hover {
+    border-color: rgba(78, 227, 255, 0.25);
+  }
+}
+
+/* Tabular numerals for live telemetry, counters, and metrics */
+.device-lab .performance-summary b,
+.device-lab .performance-row code,
+.device-lab .performance-row strong,
+.device-lab .performance-metric-heading b,
+.device-lab .network-capture-summary b,
+.device-lab .notifications-summary b,
+.device-lab .notifications-event-row time,
+.device-lab .notifications-event-row > span,
+.device-lab .profiles-summary b,
+.device-lab .pasteboard-summary b,
+.device-lab .pasteboard-editor-count,
+.device-lab .test-lab-summary b,
+.device-lab .live-screen-inspector dd,
+.device-lab .recorder-clock,
+.device-lab .recorder-controls code,
+.device-lab .file-table > button > small,
+.device-lab .app-size,
+.device-lab .log-console time,
+.device-lab .process-row > code {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Unified Search Inputs, Selects & Toolbar Buttons */
+.device-lab .apps-toolbar label,
+.device-lab .crash-toolbar > label,
+.device-lab .log-search > label,
+.device-lab .process-toolbar > label,
+.device-lab .performance-toolbar > label,
+.device-lab .profiles-toolbar > label,
+.device-lab .test-lab-toolbar > label,
+.device-lab .notifications-events > header > label {
+  background: rgba(8, 11, 17, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+  transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+.device-lab .apps-toolbar label:focus-within,
+.device-lab .crash-toolbar > label:focus-within,
+.device-lab .log-search > label:focus-within,
+.device-lab .process-toolbar > label:focus-within,
+.device-lab .performance-toolbar > label:focus-within,
+.device-lab .profiles-toolbar > label:focus-within,
+.device-lab .test-lab-toolbar > label:focus-within,
+.device-lab .notifications-events > header > label:focus-within {
+  border-color: rgba(78, 227, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(78, 227, 255, 0.1), 0 0 16px rgba(78, 227, 255, 0.08);
+}
+
+.device-lab .file-actions > button:not(.primary-button),
+.device-lab .crash-refresh,
+.device-lab .log-toolbar button:not(.active),
+.device-lab .log-search > button:not(.active),
+.device-lab .process-toolbar > button,
+.device-lab .performance-toolbar > button,
+.device-lab .performance-toolbar select,
+.device-lab .notifications-toolbar > button:not(.primary-button),
+.device-lab .live-screen-toolbar > button:not(.primary-button),
+.device-lab .recorder-controls button,
+.device-lab .profiles-toolbar > button,
+.device-lab .profiles-toolbar select,
+.device-lab .test-lab-toolbar > button,
+.device-lab .developer-mode-actions button,
+.device-lab .pasteboard-device > header button,
+.device-lab .pasteboard-editor > header button,
+.device-lab .pasteboard-device > footer button {
+  background: rgba(10, 14, 20, 0.7);
+  border-color: rgba(255, 255, 255, 0.085);
+}
+@media (hover: hover) and (pointer: fine) {
+  .device-lab .file-actions > button:not(.primary-button):hover:not(:disabled),
+  .device-lab .crash-refresh:hover:not(:disabled),
+  .device-lab .log-toolbar button:not(.active):hover:not(:disabled),
+  .device-lab .log-search > button:not(.active):hover:not(:disabled),
+  .device-lab .process-toolbar > button:hover:not(:disabled),
+  .device-lab .performance-toolbar > button:hover:not(:disabled),
+  .device-lab .notifications-toolbar > button:not(.primary-button):hover:not(:disabled),
+  .device-lab .live-screen-toolbar > button:not(.primary-button):hover:not(:disabled),
+  .device-lab .recorder-controls button:hover:not(:disabled),
+  .device-lab .profiles-toolbar > button:hover:not(:disabled),
+  .device-lab .test-lab-toolbar > button:hover:not(:disabled),
+  .device-lab .developer-mode-actions button:hover:not(:disabled),
+  .device-lab .pasteboard-device > header button:hover:not(:disabled),
+  .device-lab .pasteboard-editor > header button:hover:not(:disabled),
+  .device-lab .pasteboard-device > footer button:hover:not(:disabled) {
+    color: #fff;
+    border-color: rgba(78, 227, 255, 0.35);
+    background: rgba(78, 227, 255, 0.06);
+  }
+}
+
+/* Segmented Controls & Pill Tabs */
+.device-lab .file-source-tabs,
+.device-lab .crash-kind-filter,
+.device-lab .pasteboard-tabs,
+.device-lab .signing-mode-tabs,
+.device-lab .live-screen-scale {
+  background: rgba(8, 11, 16, 0.75);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.device-lab .signing-mode-tabs button {
+  color: rgba(244, 247, 250, 0.5);
+  font-size: 11px;
+}
+.device-lab .file-source-tabs button.active,
+.device-lab .pasteboard-tabs button.active,
+.device-lab .signing-mode-tabs button.active,
+.device-lab .live-screen-scale button.active {
+  color: var(--accent);
+  background: rgba(78, 227, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(78, 227, 255, 0.25);
+}
+
+/* Consoles, Code Previews & Tables */
+.device-lab .log-console,
+.device-lab .debug-console,
+.device-lab .crash-preview pre {
+  background: rgba(3, 5, 8, 0.88);
+  border-color: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+.device-lab .file-head,
+.device-lab .crash-list > header,
+.device-lab .process-table > header,
+.device-lab .performance-table > header,
+.device-lab .notifications-event-heading,
+.device-lab .profiles-list > header,
+.device-lab .test-lab-runners > header {
+  background: rgba(5, 7, 11, 0.55);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+.device-lab .process-table > footer,
+.device-lab .performance-table > footer,
+.device-lab .notifications-events > footer,
+.device-lab .profiles-list > footer,
+.device-lab .test-lab-runners > footer,
+.device-lab .pasteboard-device > footer {
+  background: rgba(4, 6, 9, 0.55);
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Apps, Drop Zone & File Source Bar */
+.device-lab .file-source-bar {
+  background: linear-gradient(180deg, rgba(13, 18, 26, 0.72), rgba(8, 11, 16, 0.68));
+  border-color: rgba(255, 255, 255, 0.075);
+}
+.device-lab .drop-zone {
+  background: rgba(10, 14, 20, 0.55);
+  border-color: rgba(78, 227, 255, 0.24);
+}
+@media (hover: hover) and (pointer: fine) {
+  .device-lab .drop-zone:hover {
+    background: rgba(78, 227, 255, 0.06);
+    border-color: rgba(78, 227, 255, 0.48);
+  }
+  .device-lab .app-list button:hover:not(.active) {
+    border-color: rgba(78, 227, 255, 0.26);
+    background: rgba(14, 19, 27, 0.8);
+  }
+}
+.device-lab .app-list button {
+  background: rgba(10, 14, 20, 0.65);
+  border-color: rgba(255, 255, 255, 0.075);
+}
+.device-lab .app-list button.active {
+  border-color: rgba(78, 227, 255, 0.55);
+  background: linear-gradient(90deg, rgba(78, 227, 255, 0.12), rgba(10, 14, 20, 0.72));
+  box-shadow: inset 2px 0 0 var(--accent), 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* TrollStore & Signing Notices */
 .device-lab .trollstore-page {
   gap: 14px;
   padding: 20px 24px;
@@ -951,28 +1304,6 @@
   color: var(--accent-contrast);
   background: var(--accent);
   border-color: var(--accent);
-}
-.device-lab .trollstore-summary > .card {
-  position: relative;
-  padding: 14px 16px 14px 18px;
-  box-shadow: none;
-}
-.device-lab .trollstore-summary > .card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 2px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-}
-.device-lab .trollstore-summary > .card.allowed::before {
-  background: var(--accent);
-  box-shadow: 0 0 10px rgba(78, 227, 255, 0.45);
-}
-.device-lab .trollstore-summary > .card.refused::before {
-  background: #ff8d87;
 }
 .device-lab .trollstore-note,
 .device-lab .trollstore-apps {
@@ -997,19 +1328,6 @@
   text-align: center;
 }
 
-.device-lab .signing-mode-tabs {
-  background: rgba(10, 14, 20, 0.7);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-.device-lab .signing-mode-tabs button {
-  color: rgba(244, 247, 250, 0.5);
-  font-size: 11px;
-}
-.device-lab .signing-mode-tabs button.active {
-  color: var(--accent);
-  background: rgba(78, 227, 255, 0.12);
-  box-shadow: none;
-}
 .device-lab .account-signing-notice,
 .device-lab .signing-intro {
   border-color: rgba(78, 227, 255, 0.22);
@@ -1019,6 +1337,37 @@
   color: var(--accent);
   background: rgba(78, 227, 255, 0.08);
   border-color: rgba(78, 227, 255, 0.22);
+}
+
+/* Modals & Onboarding in Void Style */
+@keyframes modal-pop {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.device-lab .modal-backdrop,
+.device-lab .account-2fa-backdrop {
+  background: rgba(2, 4, 7, 0.68);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.device-lab .pair-modal,
+.device-lab .account-2fa-dialog {
+  background: linear-gradient(180deg, rgba(14, 19, 27, 0.96), rgba(8, 11, 16, 0.96));
+  border: 1px solid rgba(78, 227, 255, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 28px 70px rgba(0, 0, 0, 0.8),
+    0 0 32px rgba(78, 227, 255, 0.1);
+  animation: modal-pop 200ms var(--ease-out) both;
+}
+.device-lab .onboarding {
+  background:
+    radial-gradient(ellipse 55% 45% at 50% 42%, rgba(78, 227, 255, 0.1), transparent 65%),
+    #030406;
+}
+.device-lab .scan-icon span {
+  border: 1px solid rgba(78, 227, 255, 0.32);
+  box-shadow: 0 0 28px rgba(78, 227, 255, 0.18);
 }
 
 @media (max-width: 1180px), (max-height: 820px) {
@@ -1038,6 +1387,7 @@
     right: auto;
     left: 80px;
     width: 240px;
+    transform-origin: top left;
   }
   .session-probes { display: none; }
   .bench-nav-wrap { padding: 10px 8px; }
@@ -1060,7 +1410,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cockpit-phone, .toast, .device-menu { animation: none; transition: opacity 160ms ease; }
-  .mini-phone-frame { transition: none; }
-  .page-scroll { animation: none; }
+  .cockpit-phone, .toast, .device-menu, .pair-modal, .account-2fa-dialog { animation: none; transition: opacity 160ms ease; }
+  .mini-phone-frame, .cockpit-orbit, .cockpit-storage i { transition: none; }
+  .page-scroll, .workbench-content > section, .monitor-content > section { animation: none; }
 }

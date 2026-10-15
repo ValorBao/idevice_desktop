@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from './App'
-import { isTrollStoreCandidateIos } from './pages/AppsWorkbench'
 
 describe('App workbench UI', () => {
   it('renders LeftRail with all 4 primary workbenches', () => {
@@ -13,7 +12,7 @@ describe('App workbench UI', () => {
     expect(screen.getByRole('button', { name: 'WATCH' })).toBeInTheDocument()
   })
 
-  it('switches workbenches smoothly and flattens Watch instruments', async () => {
+  it('switches workbenches smoothly and exposes only core streamlined tabs', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -24,6 +23,9 @@ describe('App workbench UI', () => {
     expect(screen.getByRole('tab', { name: 'Monitor' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Processes & Performance' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Screen Studio' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Location' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Network Capture' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Notification Observation' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Processes & Performance' }))
     expect(screen.getByRole('tab', { name: /Live Telemetry/ })).toBeInTheDocument()
@@ -33,20 +35,17 @@ describe('App workbench UI', () => {
     expect(screen.getByRole('tab', { name: /Live Preview/ })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /USB Video Recorder/ })).toBeInTheDocument()
 
+    await user.click(screen.getByRole('button', { name: 'FILES' }))
+    expect(screen.getByRole('tab', { name: 'AFC & Sandboxes' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Pasteboard' })).toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'APPS' }))
     expect(screen.getByText('Applications & JIT')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Applications & Sideload' })).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'TrollStore' })).not.toBeInTheDocument()
-  })
-
-  it('gates TrollStore visibility to iOS 15.0 through 17.0', () => {
-    expect(isTrollStoreCandidateIos('14.2')).toBe(false)
-    expect(isTrollStoreCandidateIos('15.0')).toBe(true)
-    expect(isTrollStoreCandidateIos('16.6.1')).toBe(true)
-    expect(isTrollStoreCandidateIos('17.0')).toBe(true)
-    expect(isTrollStoreCandidateIos('17.0.1')).toBe(false)
-    expect(isTrollStoreCandidateIos('17.4')).toBe(false)
-    expect(isTrollStoreCandidateIos('17.5.1')).toBe(false)
-    expect(isTrollStoreCandidateIos('26.5')).toBe(false)
+    expect(screen.getByRole('tab', { name: 'Personal Sign' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'JIT & Debugger Tunnel' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'TrollStore' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Test Lab' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Provisioning Profiles' })).not.toBeInTheDocument()
   })
 })

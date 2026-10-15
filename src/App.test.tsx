@@ -38,12 +38,9 @@ vi.mock('./pages/Logs', () => ({ Logs: () => <div>Logs</div> }))
 vi.mock('./pages/Monitor', () => ({ Monitor: () => <div>Monitor</div> }))
 vi.mock('./pages/Developer', () => ({ Developer: () => <div>Developer</div> }))
 vi.mock('./pages/PersonalSigning', () => ({ PersonalSigning: ({ udid }: { udid: string }) => <div data-testid="personal-signing-page">Personal Signing · {udid}</div> }))
-vi.mock('./pages/Profiles', () => ({ Profiles: () => <div>Profiles</div> }))
+vi.mock('./pages/TrollStore', () => ({ TrollStore: ({ udid }: { udid: string }) => <div data-testid="trollstore-page">TrollStore · {udid}</div> }))
 vi.mock('./pages/Pasteboard', () => ({ Pasteboard: () => <div>Pasteboard</div> }))
 vi.mock('./pages/LiveScreen', () => ({ LiveScreen: () => <div>Live Screen</div> }))
-vi.mock('./pages/TestLab', () => ({
-  TestLab: ({ udid }: { udid: string }) => <div data-testid="test-lab-page">{udid}</div>,
-}))
 vi.mock('./pages/Location', () => ({
   Location: ({ udid }: { udid: string }) => <div data-testid="location-page">{udid}</div>,
 }))
@@ -115,16 +112,16 @@ describe('device page lifecycle', () => {
     expect(screen.getByTestId('location-page')).not.toBe(firstPage)
   })
 
-  it('opens Test Lab for the currently selected device', async () => {
+  it('opens TrollStore for the currently selected device', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     await screen.findByRole('button', { name: 'Select device' })
     await user.click(screen.getByRole('button', { name: 'APPS' }))
-    await user.click(screen.getByRole('tab', { name: 'Test Lab' }))
+    await user.click(screen.getByRole('tab', { name: 'TrollStore' }))
 
-    expect(screen.getByTestId('test-lab-page')).toHaveTextContent('udid-a')
-    expect(screen.getByRole('heading', { name: 'Test Lab' })).toBeInTheDocument()
+    expect(screen.getByTestId('trollstore-page')).toHaveTextContent('udid-a')
+    expect(screen.getByRole('heading', { name: 'TrollStore' })).toBeInTheDocument()
   })
 
   it('ends the backend session and unmounts the active page when every device disappears', async () => {

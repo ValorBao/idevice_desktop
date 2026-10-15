@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { Activity, Bell, Clapperboard, Cpu, MapPin, Network, ScreenShare, TerminalSquare } from 'lucide-react'
+import { Activity, Clapperboard, Cpu, MapPin, ScreenShare, TerminalSquare } from 'lucide-react'
 import type { Device } from '../data'
 import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
 import { Logs } from './Logs'
 import { Processes } from './Processes'
 import { Performance } from './Performance'
-import { NetworkCapture } from './NetworkCapture'
-import { Notifications } from './Notifications'
 import { Location } from './Location'
 import { LiveScreen } from './LiveScreen'
 import { ScreenRecorder } from './ScreenRecorder'
@@ -16,8 +14,6 @@ export type WatchInstrument =
   | 'processes'
   | 'screen'
   | 'location'
-  | 'network'
-  | 'notifications'
 
 type ProcessLens = 'performance' | 'processes'
 type ScreenMode = 'preview' | 'recorder'
@@ -55,22 +51,6 @@ export const watchTabs: readonly TabItem<WatchInstrument>[] = [
     icon: <MapPin size={14} />,
     title: 'Location',
     detail: 'com.apple.dt.simulatelocation',
-  },
-  {
-    id: 'network',
-    label: 'Network',
-    ariaLabel: 'Network Capture',
-    icon: <Network size={14} />,
-    title: 'Network Capture',
-    detail: 'Streaming Pcapd packet capture with process and interface filters',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    ariaLabel: 'Notification Observation',
-    icon: <Bell size={14} />,
-    title: 'Notification Observation',
-    detail: 'Explicit Darwin notification observer',
   },
 ]
 
@@ -169,12 +149,6 @@ export function WatchWorkbench({
         )}
         {activeInstrument === 'location' && (
           <Location desktop={desktop} udid={device.udid} onToast={onToast} />
-        )}
-        {activeInstrument === 'network' && (
-          <NetworkCapture desktop={desktop} udid={device.udid} onToast={onToast} />
-        )}
-        {activeInstrument === 'notifications' && (
-          <Notifications connected={connected} desktop={desktop} udid={device.udid} onToast={onToast} />
         )}
       </div>
     </div>

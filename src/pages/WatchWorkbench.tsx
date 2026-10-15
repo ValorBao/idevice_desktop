@@ -1,22 +1,48 @@
-import { Clapperboard, MapPin, ScreenShare, TerminalSquare } from 'lucide-react'
+import { useState } from 'react'
+import { Activity, Clapperboard, Cpu, MapPin, ScreenShare, TerminalSquare } from 'lucide-react'
 import type { Device } from '../data'
 import { WorkbenchTabs, type TabItem } from '../components/WorkbenchTabs'
-import { Monitor } from './Monitor'
+import { Logs } from './Logs'
+import { Processes } from './Processes'
+import { Performance } from './Performance'
 import { Location } from './Location'
 import { LiveScreen } from './LiveScreen'
 import { ScreenRecorder } from './ScreenRecorder'
 
-export type WatchInstrument = 'monitor' | 'location' | 'screen' | 'recorder'
+export type WatchInstrument =
+  | 'monitor'
+  | 'processes'
+  | 'screen'
+  | 'location'
+
+type ProcessLens = 'performance' | 'processes'
+type ScreenMode = 'preview' | 'recorder'
 
 export const watchTabs: readonly TabItem<WatchInstrument>[] = [
   {
     id: 'monitor',
-    label: 'Monitor',
+    label: 'Logs',
     ariaLabel: 'Monitor',
     icon: <TerminalSquare size={14} />,
     badge: <span className="live-chip"><i /> live</span>,
     title: 'Live Blackbox',
-    detail: 'Processes, performance, network capture, and live device logs',
+    detail: 'Real-time OS Trace and structured device syslog stream',
+  },
+  {
+    id: 'processes',
+    label: 'Processes',
+    ariaLabel: 'Processes & Performance',
+    icon: <Activity size={14} />,
+    title: 'Processes & Performance',
+    detail: 'Live CPU and memory telemetry, process table, and application control',
+  },
+  {
+    id: 'screen',
+    label: 'Screen',
+    ariaLabel: 'Screen Studio',
+    icon: <ScreenShare size={14} />,
+    title: 'Screen Studio',
+    detail: 'Live PNG preview, still frame capture, and 60 FPS USB screen recording',
   },
   {
     id: 'location',
@@ -25,22 +51,6 @@ export const watchTabs: readonly TabItem<WatchInstrument>[] = [
     icon: <MapPin size={14} />,
     title: 'Location',
     detail: 'com.apple.dt.simulatelocation',
-  },
-  {
-    id: 'screen',
-    label: 'Live Screen',
-    ariaLabel: 'Live Screen',
-    icon: <ScreenShare size={14} />,
-    title: 'Live Screen',
-    detail: 'Live PNG device preview and still-frame capture',
-  },
-  {
-    id: 'recorder',
-    label: 'Recorder',
-    ariaLabel: 'Screen Recorder',
-    icon: <Clapperboard size={14} />,
-    title: 'Screen Recorder',
-    detail: 'Record the iPhone screen over USB, cut it, and export MP4',
   },
 ]
 
@@ -59,6 +69,9 @@ export function WatchWorkbench({
   onInstrumentChange: (inst: WatchInstrument) => void
   onToast: (message: string) => void
 }) {
+  const [processLens, setProcessLens] = useState<ProcessLens>('performance')
+  const [screenMode, setScreenMode] = useState<ScreenMode>('preview')
+
   return (
     <div className="watch-workbench">
       <WorkbenchTabs
@@ -70,16 +83,72 @@ export function WatchWorkbench({
 
       <div className="workbench-content">
         {activeInstrument === 'monitor' && (
-          <Monitor connected={connected} desktop={desktop} udid={device.udid} onToast={onToast} />
+          <Logs connected={connected} desktop={desktop} udid={device.udid} onToast={onToast} />
+        )}
+        {activeInstrument === 'processes' && (
+          <div className="watch-merged-view">
+            <div className="watch-mode-switch" role="tablist" aria-label="Process view mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={processLens === 'performance'}
+                className={processLens === 'performance' ? 'active' : ''}
+                onClick={() => setProcessLens('performance')}
+              >
+                <Activity size={13} />
+                <span>Live Telemetry (CPU & Memory)</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={processLens === 'processes'}
+                className={processLens === 'processes' ? 'active' : ''}
+                onClick={() => setProcessLens('processes')}
+              >
+                <Cpu size={13} />
+                <span>Process Control (Launch & Stop)</span>
+              </button>
+            </div>
+            {processLens === 'performance' ? (
+              <Performance desktop={desktop} udid={device.udid} onToast={onToast} />
+            ) : (
+              <Processes desktop={desktop} udid={device.udid} onToast={onToast} />
+            )}
+          </div>
+        )}
+        {activeInstrument === 'screen' && (
+          <div className="watch-merged-view">
+            <div className="watch-mode-switch" role="tablist" aria-label="Screen capture mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={screenMode === 'preview'}
+                className={screenMode === 'preview' ? 'active' : ''}
+                onClick={() => setScreenMode('preview')}
+              >
+                <ScreenShare size={13} />
+                <span>Live Preview & Still Frame</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={screenMode === 'recorder'}
+                className={screenMode === 'recorder' ? 'active' : ''}
+                onClick={() => setScreenMode('recorder')}
+              >
+                <Clapperboard size={13} />
+                <span>USB Video Recorder (MP4)</span>
+              </button>
+            </div>
+            {screenMode === 'preview' ? (
+              <LiveScreen desktop={desktop} udid={device.udid} onToast={onToast} />
+            ) : (
+              <ScreenRecorder key={device.udid} desktop={desktop} deviceName={device.name} onToast={onToast} />
+            )}
+          </div>
         )}
         {activeInstrument === 'location' && (
           <Location desktop={desktop} udid={device.udid} onToast={onToast} />
-        )}
-        {activeInstrument === 'screen' && (
-          <LiveScreen desktop={desktop} udid={device.udid} onToast={onToast} />
-        )}
-        {activeInstrument === 'recorder' && (
-          <ScreenRecorder key={device.udid} desktop={desktop} deviceName={device.name} onToast={onToast} />
         )}
       </div>
     </div>

@@ -1065,10 +1065,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .jit-card p.jit-empty { max-width: 360px; margin-top: 12px; }
 .jit-card p.jit-empty code { padding: 1px 4px; background: var(--elev); border: 1px solid var(--border); border-radius: 4px; font: 11px var(--mono); }
 .jit-card > small { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--dim); font: 11.5px var(--mono); }
-.toggle { position: relative; width: 44px; height: 26px; padding: 0; cursor: pointer; background: var(--border2); border: 0; border-radius: 14px; transition: background 160ms var(--ease-out); }
+.toggle { position: relative; width: 44px; height: 26px; padding: 0; cursor: pointer; background: var(--border2); border: 0; border-radius: 14px; transition: background 160ms var(--ease-out), box-shadow 160ms var(--ease-out); }
 .toggle span { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform 160ms var(--ease-out); }
-.toggle.on { background: var(--accent); }
-.toggle.on span { left: 21px; }
+.toggle.on { background: var(--accent); box-shadow: 0 0 14px rgba(78, 227, 255, 0.32); }
+.toggle.on span { transform: translateX(18px); }
 .good-dot, .warn-dot, .jit-card small > i { width: 8px; height: 8px; display: inline-block; flex: none; border-radius: 50%; background: var(--faint); }
 .good-dot { background: #28c840 !important; }
 .warn-dot { background: #febc2e !important; }
